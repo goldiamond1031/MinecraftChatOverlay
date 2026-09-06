@@ -75,6 +75,21 @@ public sealed class AppSettings
     /// <summary>是否合并连续重复消息，避免刷屏。</summary>
     public bool MergeDuplicateMessages { get; set; }
 
+    /// <summary>是否启用自动 GG。</summary>
+    public bool EnableAutoGg { get; set; }
+
+    /// <summary>自动 GG 触发正则，默认匹配“恭喜! X队 获得胜利!”。</summary>
+    public string AutoGgTriggerPattern { get; set; } = @"恭喜! .+? 获得胜利!";
+
+    /// <summary>打开聊天栏的按键，例如 t 或 /。</summary>
+    public string AutoGgChatKey { get; set; } = "t";
+
+    /// <summary>自动发送的文字。</summary>
+    public string AutoGgText { get; set; } = "gg";
+
+    /// <summary>是否使用剪贴板粘贴方式发送，可避免中文输入法把字母吞掉。</summary>
+    public bool AutoGgUseClipboard { get; set; } = true;
+
     /// <summary>彩色渲染规则。</summary>
     public List<TextColorRule> ColorRules { get; set; } = new();
 

@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Text.Json;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Media;
 using Microsoft.Win32;
@@ -16,10 +17,13 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<TextColorRule> _colorRules = new();
     private readonly ObservableCollection<TextReplaceRule> _replaceRules = new();
     private readonly ObservableCollection<string> _blockKeywords = new();
+    private readonly List<FontItem> _fontItems = new();
     private OverlayWindow? _overlay;
     private bool _loading = true;
     private string _colorRuleColor = "#FFFF0000";
     private string _colorRuleMatchColor = "";
+    private bool _autoGgSending;
+    private DateTime _lastAutoGgAt = DateTime.MinValue;
 
     public MainWindow()
     {
@@ -44,13 +48,22 @@ public partial class MainWindow : Window
 
     private void InitializeComboBoxes()
     {
-        FontFamilyComboBox.Items.Add("Microsoft YaHei UI");
-        FontFamilyComboBox.Items.Add("微软雅黑");
-        FontFamilyComboBox.Items.Add("Microsoft JhengHei UI");
-        FontFamilyComboBox.Items.Add("SimHei");
-        FontFamilyComboBox.Items.Add("NSimSun");
-        FontFamilyComboBox.Items.Add("Consolas");
-        FontFamilyComboBox.Items.Add("Arial");
+        // 列出当前 Windows 已安装的所有系统字体。
+        // 很多中文字体有中文显示名（例如“印品鸿蒙体”），这里同时显示中文名和英文内部名。
+        _fontItems.Clear();
+        foreach (var family in Fonts.SystemFontFamilies)
+        {
+            var source = family.Source;
+            var localized = GetLocalizedFontName(family);
+            var display = string.IsNullOrEmpty(localized) || string.Equals(localized, source, StringComparison.OrdinalIgnoreCase)
+                ? source
+                : $"{localized} ({source})";
+            _fontItems.Add(new FontItem(display, source));
+        }
+
+        _fontItems.Sort((a, b) => string.Compare(a.Display, b.Display, StringComparison.CurrentCultureIgnoreCase));
+        FontFamilyComboBox.ItemsSource = _fontItems;
+        FontFamilyComboBox.DisplayMemberPath = nameof(FontItem.Display);
 
         FontWeightComboBox.Items.Add("Normal");
         FontWeightComboBox.Items.Add("SemiBold");
@@ -107,7 +120,16 @@ public partial class MainWindow : Window
         ClickThroughCheckBox.IsChecked = _settings.ClickThrough;
         ShowTimestampCheckBox.IsChecked = _settings.ShowTimestamp;
         ShadowCheckBox.IsChecked = _settings.TextShadow;
-        FontFamilyComboBox.Text = _settings.FontFamily;
+        var fontItem = _fontItems.FirstOrDefault(x => string.Equals(x.Source, _settings.FontFamily, StringComparison.OrdinalIgnoreCase));
+        if (fontItem != null)
+        {
+            FontFamilyComboBox.SelectedItem = fontItem;
+        }
+        else
+        {
+            FontFamilyComboBox.Text = _settings.FontFamily;
+        }
+
         FontSizeTextBox.Text = _settings.FontSize.ToString("0.#");
         FontWeightComboBox.Text = _settings.FontWeight;
         TextColorPreview.Background = ParseBrush(_settings.TextColor, Brushes.White);
@@ -122,6 +144,11 @@ public partial class MainWindow : Window
         EnableDebugLogCheckBox.IsChecked = _settings.EnableDebugLog;
         EnableTextSelectionCheckBox.IsChecked = _settings.EnableTextSelection;
         MergeDuplicateMessagesCheckBox.IsChecked = _settings.MergeDuplicateMessages;
+        EnableAutoGgCheckBox.IsChecked = _settings.EnableAutoGg;
+        AutoGgTriggerTextBox.Text = _settings.AutoGgTriggerPattern;
+        AutoGgChatKeyTextBox.Text = _settings.AutoGgChatKey;
+        AutoGgTextTextBox.Text = _settings.AutoGgText;
+        AutoGgUseClipboardCheckBox.IsChecked = _settings.AutoGgUseClipboard;
         UpdateDebugLogVisibility();
     }
 
@@ -139,6 +166,13 @@ public partial class MainWindow : Window
         EnableTextSelectionCheckBox.Unchecked += (_, _) => SaveSettingsFromUi(false);
         MergeDuplicateMessagesCheckBox.Checked += (_, _) => SaveSettingsFromUi(false);
         MergeDuplicateMessagesCheckBox.Unchecked += (_, _) => SaveSettingsFromUi(false);
+        EnableAutoGgCheckBox.Checked += (_, _) => SaveSettingsFromUi(false);
+        EnableAutoGgCheckBox.Unchecked += (_, _) => SaveSettingsFromUi(false);
+        AutoGgTriggerTextBox.LostFocus += (_, _) => SaveSettingsFromUi(false);
+        AutoGgChatKeyTextBox.LostFocus += (_, _) => SaveSettingsFromUi(false);
+        AutoGgTextTextBox.LostFocus += (_, _) => SaveSettingsFromUi(false);
+        AutoGgUseClipboardCheckBox.Checked += (_, _) => SaveSettingsFromUi(false);
+        AutoGgUseClipboardCheckBox.Unchecked += (_, _) => SaveSettingsFromUi(false);
 
         LogPathTextBox.LostFocus += (_, _) => SaveSettingsFromUi(false);
         OverlayWidthTextBox.LostFocus += (_, _) => SaveSettingsFromUi(false);
@@ -174,12 +208,24 @@ public partial class MainWindow : Window
         _settings.ClickThrough = ClickThroughCheckBox.IsChecked == true;
         _settings.ShowTimestamp = ShowTimestampCheckBox.IsChecked == true;
         _settings.TextShadow = ShadowCheckBox.IsChecked == true;
-        _settings.FontFamily = string.IsNullOrWhiteSpace(FontFamilyComboBox.Text) ? "Microsoft YaHei UI" : FontFamilyComboBox.Text.Trim();
+        if (FontFamilyComboBox.SelectedItem is FontItem selectedFont)
+        {
+            _settings.FontFamily = selectedFont.Source;
+        }
+        else
+        {
+            _settings.FontFamily = string.IsNullOrWhiteSpace(FontFamilyComboBox.Text) ? "Microsoft YaHei UI" : FontFamilyComboBox.Text.Trim();
+        }
         _settings.FontSize = ParseDouble(FontSizeTextBox.Text, 16, 8, 96);
         _settings.FontWeight = string.IsNullOrWhiteSpace(FontWeightComboBox.Text) ? "Normal" : FontWeightComboBox.Text.Trim();
         _settings.EnableDebugLog = EnableDebugLogCheckBox.IsChecked == true;
         _settings.EnableTextSelection = EnableTextSelectionCheckBox.IsChecked == true;
         _settings.MergeDuplicateMessages = MergeDuplicateMessagesCheckBox.IsChecked == true;
+        _settings.EnableAutoGg = EnableAutoGgCheckBox.IsChecked == true;
+        _settings.AutoGgTriggerPattern = AutoGgTriggerTextBox.Text.Trim();
+        _settings.AutoGgChatKey = AutoGgChatKeyTextBox.Text.Trim();
+        _settings.AutoGgText = AutoGgTextTextBox.Text;
+        _settings.AutoGgUseClipboard = AutoGgUseClipboardCheckBox.IsChecked == true;
         _settings.ColorRules = _colorRules.ToList();
         _settings.ReplaceRules = _replaceRules.ToList();
         _settings.BlockKeywords = _blockKeywords.ToList();
@@ -281,9 +327,133 @@ public partial class MainWindow : Window
                 return;
             }
 
+            TryAutoGg(chatMessage);
             ShowOverlay();
             _overlay?.AddMessage(chatMessage);
         });
+    }
+
+    private void TryAutoGg(string message)
+    {
+        if (!_settings.EnableAutoGg || string.IsNullOrWhiteSpace(_settings.AutoGgTriggerPattern))
+        {
+            return;
+        }
+
+        // 防止同一条/短时间内重复触发导致反复输入发送。
+        if (_autoGgSending)
+        {
+            return;
+        }
+
+        if ((DateTime.Now - _lastAutoGgAt).TotalSeconds < 5)
+        {
+            return;
+        }
+
+        try
+        {
+            if (!System.Text.RegularExpressions.Regex.IsMatch(
+                    message,
+                    _settings.AutoGgTriggerPattern,
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+            {
+                return;
+            }
+        }
+        catch (ArgumentException)
+        {
+            AppendDebugLog("[自动GG] 触发正则不合法，已跳过");
+            return;
+        }
+
+        _autoGgSending = true;
+        _lastAutoGgAt = DateTime.Now;
+        _ = SendAutoGgAsync();
+    }
+
+    private async Task SendAutoGgAsync()
+    {
+        string? oldClipboardText = null;
+        var useClipboardPaste = false;
+
+        try
+        {
+            AppendDebugLog("[自动GG] 检测到胜利消息，准备发送 gg...");
+            await Task.Delay(200);
+
+            // 如果启用剪贴板粘贴，先把要发送的文字放到剪贴板。
+            if (_settings.AutoGgUseClipboard)
+            {
+                try
+                {
+                    oldClipboardText = Clipboard.ContainsText() ? Clipboard.GetText() : null;
+                    Clipboard.SetText(_settings.AutoGgText);
+                    useClipboardPaste = true;
+                    AppendDebugLog("[自动GG] 已使用剪贴板模式，避免中文输入法干扰");
+                }
+                catch
+                {
+                    useClipboardPaste = false;
+                    AppendDebugLog("[自动GG] 剪贴板暂不可用，自动改用直接输入模式");
+                }
+            }
+
+            var chatKey = _settings.AutoGgChatKey.Trim();
+            if (string.Equals(chatKey, "enter", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(chatKey, "回车", StringComparison.Ordinal))
+            {
+                System.Windows.Forms.SendKeys.SendWait("{ENTER}");
+            }
+            else if (!string.IsNullOrEmpty(chatKey))
+            {
+                System.Windows.Forms.SendKeys.SendWait(chatKey);
+            }
+
+            await Task.Delay(250);
+
+            if (useClipboardPaste)
+            {
+                // Ctrl+V 粘贴，不经过中文输入法，不会把 gg 变成拼音。
+                System.Windows.Forms.SendKeys.SendWait("^v");
+            }
+            else
+            {
+                System.Windows.Forms.SendKeys.SendWait(_settings.AutoGgText);
+            }
+
+            await Task.Delay(100);
+            System.Windows.Forms.SendKeys.SendWait("{ENTER}");
+            AppendDebugLog("[自动GG] 已发送：" + _settings.AutoGgText);
+        }
+        catch (Exception ex)
+        {
+            AppendDebugLog("[自动GG] 发送失败：" + ex.Message);
+        }
+        finally
+        {
+            // 尽量恢复用户原来的剪贴板内容。
+            if (useClipboardPaste)
+            {
+                try
+                {
+                    if (oldClipboardText != null)
+                    {
+                        Clipboard.SetText(oldClipboardText);
+                    }
+                    else
+                    {
+                        Clipboard.Clear();
+                    }
+                }
+                catch
+                {
+                    // 恢复失败不影响游戏内发送。
+                }
+            }
+
+            _autoGgSending = false;
+        }
     }
 
     private void Watcher_StatusChanged(string status)
@@ -859,5 +1029,32 @@ public partial class MainWindow : Window
         }
 
         return fallback;
+    }
+
+    private static string? GetLocalizedFontName(FontFamily family)
+    {
+        foreach (var pair in family.FamilyNames)
+        {
+            var tag = pair.Key.IetfLanguageTag;
+            if (tag.StartsWith("zh", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(pair.Value))
+            {
+                return pair.Value;
+            }
+        }
+
+        return null;
+    }
+
+    private sealed class FontItem
+    {
+        public string Display { get; }
+
+        public string Source { get; }
+
+        public FontItem(string display, string source)
+        {
+            Display = display;
+            Source = source;
+        }
     }
 }

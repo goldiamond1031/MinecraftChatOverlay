@@ -197,6 +197,41 @@
                     </Grid>
                 </GroupBox>
 
+                <GroupBox Header="自动 GG" Padding="8" Margin="0,8,0,0">
+                    <StackPanel>
+                        <CheckBox x:Name="EnableAutoGgCheckBox"
+                                  Content="启用自动 GG：检测到胜利消息后自动打开聊天栏并发送 gg"
+                                  Margin="0,0,0,6"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <TextBlock Text="触发正则" VerticalAlignment="Center" Margin="0,4,6,4"/>
+                            <TextBox x:Name="AutoGgTriggerTextBox" Grid.Column="1" Margin="0,4" Padding="2" Text="恭喜! .+? 获得胜利!"/>
+
+                            <TextBlock Grid.Column="2" Text="打开聊天栏按键" VerticalAlignment="Center" Margin="8,4,6,4"/>
+                            <TextBox x:Name="AutoGgChatKeyTextBox" Grid.Column="3" Margin="0,4" Padding="2" Text="t"/>
+
+                            <TextBlock Grid.Row="1" Text="自动发送文字" VerticalAlignment="Center" Margin="0,4,6,4"/>
+                            <TextBox x:Name="AutoGgTextTextBox" Grid.Row="1" Grid.Column="1" Margin="0,4" Padding="2" Text="gg"/>
+                            <TextBlock Grid.Row="1" Grid.Column="2" Text="" Margin="0,4,6,4"/>
+                        </Grid>
+                        <CheckBox x:Name="AutoGgUseClipboardCheckBox"
+                                  Content="使用剪贴板粘贴方式发送（推荐，可避免中文输入法导致字母被吞/回车不发送）"
+                                  Margin="0,4,0,4"/>
+                        <TextBlock Text="注意：触发时需要 Minecraft 窗口处于前台，程序会模拟按键。请先在小游戏/测试环境验证。" Foreground="Gray" TextWrapping="Wrap"/>
+                    </StackPanel>
+                </GroupBox>
+
                 <GroupBox Header="文本彩色渲染规则" Padding="8" Margin="0,8,0,0">
                     <StackPanel>
                         <TextBlock Text="让指定文字变成指定颜色/字重，例如：红队 → 红色 Light 细体；也可勾选“使用正则”并用“高亮第几组”只染捕获组。" Foreground="Gray" Margin="0,0,0,6"/>
