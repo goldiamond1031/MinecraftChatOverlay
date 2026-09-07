@@ -28,6 +28,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        LoadWindowIcon();
         _settings = SettingsService.Load();
         InitializeComboBoxes();
         LoadRuleCollections();
@@ -43,6 +44,22 @@ public partial class MainWindow : Window
         if (!_watcher.IsRunning && !string.IsNullOrWhiteSpace(_settings.LogPath))
         {
             StartListening();
+        }
+    }
+
+    private void LoadWindowIcon()
+    {
+        try
+        {
+            var iconPath = Path.Combine(AppContext.BaseDirectory, "MinecraftChatOverlay.ico");
+            if (File.Exists(iconPath))
+            {
+                Icon = new System.Windows.Media.Imaging.BitmapImage(new Uri(iconPath));
+            }
+        }
+        catch
+        {
+            // 图标加载失败不影响程序运行。
         }
     }
 

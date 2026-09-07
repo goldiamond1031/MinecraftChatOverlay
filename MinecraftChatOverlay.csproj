@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -10,7 +10,12 @@
     <AssemblyName>MinecraftChatOverlay</AssemblyName>
     <RootNamespace>MinecraftChatOverlay</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+      <ApplicationIcon>MinecraftChatOverlay.ico</ApplicationIcon>
   </PropertyGroup>
+
+    <ItemGroup>
+      <Resource Include="MinecraftChatOverlay.ico" />
+    </ItemGroup>
 
   <ItemGroup>
     <Using Remove="System.Drawing" />
@@ -18,3 +23,5 @@
   </ItemGroup>
 
 </Project>
+
+
