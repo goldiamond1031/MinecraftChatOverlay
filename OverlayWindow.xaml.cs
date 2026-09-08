@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
 using MinecraftChatOverlay.Models;
 using MinecraftChatOverlay.Services;
@@ -112,6 +113,7 @@ public partial class OverlayWindow : Window
         // 鼠标不在悬浮窗上时始终自动跟随最新消息；
         // 鼠标在悬浮窗上时，只有原本在底部附近才自动跟随，方便查看历史。
         var autoScroll = !_isMouseOverOverlay || IsNearBottom();
+        var previousHeight = ActualHeight;
         var vm = new ChatMessageViewModel
         {
             Timestamp = now,
@@ -136,6 +138,51 @@ public partial class OverlayWindow : Window
         if (autoScroll)
         {
             ChatScroll.ScrollToEnd();
+        }
+
+        // 让悬浮窗保持底部位置不变，新消息加入后整体向上扩展。
+        ChatList.UpdateLayout();
+        var newHeight = ActualHeight;
+        if (newHeight > previousHeight && !double.IsNaN(Top))
+        {
+            Top -= newHeight - previousHeight;
+        }
+
+        AnimateNewMessage(vm);
+    }
+
+    private void AnimateNewMessage(ChatMessageViewModel message)
+    {
+        if (!_settings.EnableMessageAnimation)
+        {
+            return;
+        }
+
+        try
+        {
+            ChatList.UpdateLayout();
+            if (ChatList.ItemContainerGenerator.ContainerFromItem(message) is not FrameworkElement container)
+            {
+                return;
+            }
+
+            var translate = new TranslateTransform(0, 24);
+            container.RenderTransform = translate;
+            container.Opacity = 0;
+
+            // 从下往上滑入，使用曲线缓动。
+            var slide = new DoubleAnimation(24, 0, TimeSpan.FromMilliseconds(280))
+            {
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+            };
+            translate.BeginAnimation(TranslateTransform.YProperty, slide);
+
+            var fade = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200));
+            container.BeginAnimation(UIElement.OpacityProperty, fade);
+        }
+        catch
+        {
+            // 动画失败不应影响消息显示。
         }
     }
 

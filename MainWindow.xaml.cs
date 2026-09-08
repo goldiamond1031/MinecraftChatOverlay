@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows;
@@ -24,6 +25,9 @@ public partial class MainWindow : Window
     private string _colorRuleMatchColor = "";
     private bool _autoGgSending;
     private DateTime _lastAutoGgAt = DateTime.MinValue;
+    private IntPtr _keyboardHookId = IntPtr.Zero;
+    private HookProc? _keyboardHookProc;
+    private readonly HashSet<int> _keysDownBeforeBlock = new();
 
     public MainWindow()
     {
@@ -130,7 +134,7 @@ public partial class MainWindow : Window
         LogEncodingComboBox.Text = _settings.LogEncoding;
         OverlayWidthTextBox.Text = _settings.OverlayWidth.ToString("0.#");
         OpacitySlider.Value = Math.Clamp(_settings.OverlayOpacity, 0.1, 1.0);
-        BackgroundOpacitySlider.Value = Math.Clamp(_settings.BackgroundOpacity, 0.1, 1.0);
+        BackgroundOpacitySlider.Value = Math.Clamp(_settings.BackgroundOpacity, 0.0, 1.0);
         OverlayMaxHeightTextBox.Text = _settings.OverlayMaxHeight.ToString("0.#");
         WrapLengthTextBox.Text = _settings.WrapLength.ToString();
         MaxMessagesTextBox.Text = _settings.MaxMessages.ToString();
@@ -148,7 +152,9 @@ public partial class MainWindow : Window
         }
 
         FontSizeTextBox.Text = _settings.FontSize.ToString("0.#");
-        FontWeightComboBox.Text = _settings.FontWeight;
+        FontWeightComboBox.SelectedItem = FontWeightComboBox.Items
+            .Cast<string>()
+            .FirstOrDefault(x => string.Equals(x, _settings.FontWeight, StringComparison.OrdinalIgnoreCase));
         TextColorPreview.Background = ParseBrush(_settings.TextColor, Brushes.White);
         BackgroundColorPreview.Background = ParseBrush(_settings.BackgroundColor, new SolidColorBrush(Color.FromArgb(0x99, 0, 0, 0)));
         PlayerContentColorPreview.Background = string.IsNullOrWhiteSpace(_settings.PlayerContentColor)
@@ -161,6 +167,7 @@ public partial class MainWindow : Window
         EnableDebugLogCheckBox.IsChecked = _settings.EnableDebugLog;
         EnableTextSelectionCheckBox.IsChecked = _settings.EnableTextSelection;
         MergeDuplicateMessagesCheckBox.IsChecked = _settings.MergeDuplicateMessages;
+        EnableMessageAnimationCheckBox.IsChecked = _settings.EnableMessageAnimation;
         EnableAutoGgCheckBox.IsChecked = _settings.EnableAutoGg;
         AutoGgTriggerTextBox.Text = _settings.AutoGgTriggerPattern;
         AutoGgChatKeyTextBox.Text = _settings.AutoGgChatKey;
@@ -183,6 +190,8 @@ public partial class MainWindow : Window
         EnableTextSelectionCheckBox.Unchecked += (_, _) => SaveSettingsFromUi(false);
         MergeDuplicateMessagesCheckBox.Checked += (_, _) => SaveSettingsFromUi(false);
         MergeDuplicateMessagesCheckBox.Unchecked += (_, _) => SaveSettingsFromUi(false);
+        EnableMessageAnimationCheckBox.Checked += (_, _) => SaveSettingsFromUi(false);
+        EnableMessageAnimationCheckBox.Unchecked += (_, _) => SaveSettingsFromUi(false);
         EnableAutoGgCheckBox.Checked += (_, _) => SaveSettingsFromUi(false);
         EnableAutoGgCheckBox.Unchecked += (_, _) => SaveSettingsFromUi(false);
         AutoGgTriggerTextBox.LostFocus += (_, _) => SaveSettingsFromUi(false);
@@ -234,10 +243,11 @@ public partial class MainWindow : Window
             _settings.FontFamily = string.IsNullOrWhiteSpace(FontFamilyComboBox.Text) ? "Microsoft YaHei UI" : FontFamilyComboBox.Text.Trim();
         }
         _settings.FontSize = ParseDouble(FontSizeTextBox.Text, 16, 8, 96);
-        _settings.FontWeight = string.IsNullOrWhiteSpace(FontWeightComboBox.Text) ? "Normal" : FontWeightComboBox.Text.Trim();
+        _settings.FontWeight = FontWeightComboBox.SelectedItem as string ?? "Normal";
         _settings.EnableDebugLog = EnableDebugLogCheckBox.IsChecked == true;
         _settings.EnableTextSelection = EnableTextSelectionCheckBox.IsChecked == true;
         _settings.MergeDuplicateMessages = MergeDuplicateMessagesCheckBox.IsChecked == true;
+        _settings.EnableMessageAnimation = EnableMessageAnimationCheckBox.IsChecked == true;
         _settings.EnableAutoGg = EnableAutoGgCheckBox.IsChecked == true;
         _settings.AutoGgTriggerPattern = AutoGgTriggerTextBox.Text.Trim();
         _settings.AutoGgChatKey = AutoGgChatKeyTextBox.Text.Trim();
@@ -389,6 +399,98 @@ public partial class MainWindow : Window
         _ = SendAutoGgAsync();
     }
 
+    private void StartKeyboardBlock()
+    {
+        if (_keyboardHookId != IntPtr.Zero)
+        {
+            return;
+        }
+
+        // 记录屏蔽前已经按下的键，这样屏蔽期间用户松开它们时能放行 key-up，
+        // 避免发送完 gg 后游戏/系统认为按键还卡住。
+        _keysDownBeforeBlock.Clear();
+        for (var key = 0x08; key <= 0xFE; key++)
+        {
+            if ((GetAsyncKeyState(key) & 0x8000) != 0)
+            {
+                _keysDownBeforeBlock.Add(key);
+            }
+        }
+
+        _keyboardHookProc = KeyboardHookCallback;
+        _keyboardHookId = SetWindowsHookEx(WH_KEYBOARD_LL, _keyboardHookProc, GetModuleHandle(null), 0);
+    }
+
+    private void StopKeyboardBlock()
+    {
+        if (_keyboardHookId != IntPtr.Zero)
+        {
+            UnhookWindowsHookEx(_keyboardHookId);
+            _keyboardHookId = IntPtr.Zero;
+        }
+
+        _keyboardHookProc = null;
+        _keysDownBeforeBlock.Clear();
+    }
+
+    private IntPtr KeyboardHookCallback(int nCode, IntPtr wParam, IntPtr lParam)
+    {
+        if (nCode >= 0)
+        {
+            var hook = Marshal.PtrToStructure<KeyboardLowLevelHookStruct>(lParam);
+            var isInjected = (hook.Flags & LlkhfInjected) != 0;
+
+            // 只屏蔽玩家真实键盘输入，放行程序自己 SendKeys/SendInput 产生的注入按键。
+            if (!isInjected)
+            {
+                var isKeyUp = wParam == (IntPtr)WM_KEYUP || wParam == (IntPtr)WM_SYSKEYUP;
+
+                // 如果这个键在屏蔽前就已经被按住，现在用户松手时要放行 key-up，
+                // 否则发送完 gg 后游戏/系统会以为这个键还一直卡着。
+                if (isKeyUp && _keysDownBeforeBlock.Remove(hook.VirtualKeyCode))
+                {
+                    return CallNextHookEx(_keyboardHookId, nCode, wParam, lParam);
+                }
+
+                return (IntPtr)1;
+            }
+        }
+
+        return CallNextHookEx(_keyboardHookId, nCode, wParam, lParam);
+    }
+
+    private delegate IntPtr HookProc(int nCode, IntPtr wParam, IntPtr lParam);
+
+    private const int WH_KEYBOARD_LL = 13;
+    private const int LlkhfInjected = 0x00000010;
+    private const int WM_KEYUP = 0x0101;
+    private const int WM_SYSKEYUP = 0x0105;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct KeyboardLowLevelHookStruct
+    {
+        public int VirtualKeyCode;
+        public int ScanCode;
+        public int Flags;
+        public int Time;
+        public IntPtr DwExtraInfo;
+    }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern IntPtr SetWindowsHookEx(int idHook, HookProc lpfn, IntPtr hMod, uint dwThreadId);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool UnhookWindowsHookEx(IntPtr hhk);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Auto)]
+    private static extern IntPtr GetModuleHandle(string? lpModuleName);
+
+    [DllImport("user32.dll")]
+    private static extern short GetAsyncKeyState(int vKey);
+
     private async Task SendAutoGgAsync()
     {
         string? oldClipboardText = null;
@@ -415,6 +517,9 @@ public partial class MainWindow : Window
                     AppendDebugLog("[自动GG] 剪贴板暂不可用，自动改用直接输入模式");
                 }
             }
+
+            // 发送期间暂时屏蔽玩家真实键盘输入，只允许程序注入的按键。
+            StartKeyboardBlock();
 
             var chatKey = _settings.AutoGgChatKey.Trim();
             if (string.Equals(chatKey, "enter", StringComparison.OrdinalIgnoreCase) ||
@@ -449,6 +554,8 @@ public partial class MainWindow : Window
         }
         finally
         {
+            StopKeyboardBlock();
+
             // 尽量恢复用户原来的剪贴板内容。
             if (useClipboardPaste)
             {
@@ -566,6 +673,20 @@ public partial class MainWindow : Window
     private void ClearDebugLogButton_Click(object sender, RoutedEventArgs e)
     {
         DebugLogTextBox.Clear();
+    }
+
+    private void SendManualMessageButton_Click(object sender, RoutedEventArgs e)
+    {
+        var text = ManualMessageTextBox.Text;
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return;
+        }
+
+        ShowOverlay();
+        _overlay?.AddMessage(text);
+        ManualMessageTextBox.Clear();
+        LogStatus("已发送到悬浮窗");
     }
 
     private void AppendDebugLog(string line)
