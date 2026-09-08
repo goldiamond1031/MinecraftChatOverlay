@@ -75,6 +75,9 @@ public sealed class AppSettings
     /// <summary>是否合并连续重复消息，避免刷屏。</summary>
     public bool MergeDuplicateMessages { get; set; }
 
+    /// <summary>是否启用新消息滑入动画。</summary>
+    public bool EnableMessageAnimation { get; set; } = true;
+
     /// <summary>是否启用自动 GG。</summary>
     public bool EnableAutoGg { get; set; }
 
