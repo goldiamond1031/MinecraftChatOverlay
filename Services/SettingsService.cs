@@ -30,7 +30,7 @@ public static class SettingsService
                 {
                     settings.ColorRules ??= new List<Models.TextColorRule>();
                     settings.ReplaceRules ??= new List<Models.TextReplaceRule>();
-                    settings.BlockKeywords ??= new List<string>();
+                    settings.BlockKeywords ??= new List<BlockKeywordItem>();
                     return settings;
                 }
             }

@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -20,6 +20,19 @@
   <ItemGroup>
     <Using Remove="System.Drawing" />
     <Using Remove="System.Windows.Forms" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 保留旧版 MainWindow.xaml 作为备份，但不参与编译。 -->
+    <Page Remove="MainWindow.xaml" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 新版 Logo 与 Ciallo 素材：复制到输出目录，运行时按物理文件加载。 -->
+    <None Update="LOGO256x.png" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="res\ciallo.mp3" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="res\ciallo.ogg" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="res\ciallo.png" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

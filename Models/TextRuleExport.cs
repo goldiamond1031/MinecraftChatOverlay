@@ -7,5 +7,5 @@ public sealed class TextRuleExport
 
     public List<TextReplaceRule> ReplaceRules { get; set; } = new();
 
-    public List<string> BlockKeywords { get; set; } = new();
+    public List<BlockKeywordItem> BlockKeywords { get; set; } = new();
 }

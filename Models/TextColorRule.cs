@@ -19,18 +19,22 @@ public sealed class TextColorRule
     /// <summary>正则模式下要高亮的捕获组序号，0 表示整个匹配。</summary>
     public int RegexGroup { get; set; }
 
+    /// <summary>是否启用此规则。</summary>
+    public bool IsEnabled { get; set; } = true;
+
     public string DisplayText
     {
         get
         {
+            var enabledMark = IsEnabled ? "✅" : "⛔";
             if (string.IsNullOrWhiteSpace(Text))
             {
-                return "(未设置文字)";
+                return $"{enabledMark} (未设置文字)";
             }
 
             var mode = UseRegex ? $"正则(组{RegexGroup})" : "普通";
             var matchPart = string.IsNullOrWhiteSpace(MatchColor) ? "" : $" 整句={MatchColor}";
-            return $"{Text}  [{mode} {Color} {FontWeight}{matchPart}]";
+            return $"{enabledMark} {Text}  [{mode} {Color} {FontWeight}{matchPart}]";
         }
     }
 }

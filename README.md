@@ -62,7 +62,9 @@ dotnet run --project MinecraftChatOverlay.csproj
 ```
 MinecraftChatOverlay.csproj
 App.xaml / App.xaml.cs
-MainWindow.xaml / MainWindow.xaml.cs     # 配置界面
+MainWindow.Modern.xaml / MainWindow.xaml.cs # 新版配置界面（实际编译）
+ModernControls.xaml                        # 新版界面样式与控件模板
+MainWindow.xaml                            # 旧版界面备份（不参与编译）
 OverlayWindow.xaml / OverlayWindow.xaml.cs # 置顶透明悬浮窗
 Models/
   AppSettings.cs

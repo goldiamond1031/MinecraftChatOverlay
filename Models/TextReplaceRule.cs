@@ -13,7 +13,20 @@ public sealed class TextReplaceRule
     /// <summary>是否把 FindText 当作正则表达式使用，ReplaceText 中可使用 $1 等。</summary>
     public bool UseRegex { get; set; }
 
-    public string DisplayText => string.IsNullOrWhiteSpace(FindText)
-        ? "(未设置查找文字)"
-        : $"{FindText}  →  {ReplaceText}{(UseRegex ? "  [正则]" : "")}{(OnlyPlayerContent ? "  [仅玩家内容]" : "")}";
+    /// <summary>是否启用此规则。</summary>
+    public bool IsEnabled { get; set; } = true;
+
+    public string DisplayText
+    {
+        get
+        {
+            var enabledMark = IsEnabled ? "✅" : "⛔";
+            if (string.IsNullOrWhiteSpace(FindText))
+            {
+                return $"{enabledMark} (未设置查找文字)";
+            }
+
+            return $"{enabledMark} {FindText}  →  {ReplaceText}{(UseRegex ? "  [正则]" : "")}{(OnlyPlayerContent ? "  [仅玩家内容]" : "")}";
+        }
+    }
 }

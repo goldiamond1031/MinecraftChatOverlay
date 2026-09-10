@@ -19,7 +19,7 @@ public static class ChatTextProcessor
 
         foreach (var rule in rules)
         {
-            if (string.IsNullOrEmpty(rule.FindText))
+            if (!rule.IsEnabled || string.IsNullOrEmpty(rule.FindText))
             {
                 continue;
             }
@@ -132,7 +132,7 @@ public static class ChatTextProcessor
         var colorMatches = new List<ColorMatch>();
         foreach (var rule in rules)
         {
-            if (string.IsNullOrEmpty(rule.Text))
+            if (!rule.IsEnabled || string.IsNullOrEmpty(rule.Text))
             {
                 continue;
             }

@@ -12,6 +12,9 @@ public sealed class AppSettings
     /// <summary>日志编码：Auto / UTF-8 / GBK。部分网易/国服启动器会把中文写成 GBK。</summary>
     public string LogEncoding { get; set; } = "Auto";
 
+    /// <summary>主题开关</summary>
+    public bool IsDarkMode { get; set; }
+
     /// <summary>悬浮窗最大宽度（像素）。</summary>
     public double OverlayWidth { get; set; } = 420;
 
@@ -100,7 +103,25 @@ public sealed class AppSettings
     public List<TextReplaceRule> ReplaceRules { get; set; } = new();
 
     /// <summary>屏蔽关键词：只要聊天内容包含其中任意一个，就不显示到悬浮窗，但后端日志仍会输出。</summary>
-    public List<string> BlockKeywords { get; set; } = new();
+    public List<BlockKeywordItem> BlockKeywords { get; set; } = new();
+
+    /// <summary>玩家查询：是否记住 API KEY。</summary>
+    public bool PlayerQueryRememberKey { get; set; } = true;
+
+    /// <summary>玩家查询：上次使用的 API KEY（仅在 PlayerQueryRememberKey 为 true 时保存）。</summary>
+    public string PlayerQueryApiKey { get; set; } = "";
+
+    /// <summary>玩家查询：上次查询的玩家 ID。</summary>
+    public string PlayerQueryPlayerId { get; set; } = "";
+
+    /// <summary>玩家查询：上次选择的游戏类型 bedwars / skywars。</summary>
+    public string PlayerQueryGameType { get; set; } = "bedwars";
+
+    /// <summary>玩家查询：上次选择的模式显示名。</summary>
+    public string PlayerQueryMode { get; set; } = "总览";
+
+    /// <summary>玩家查询：自定义显示字段。</summary>
+    public List<PlayerQueryField> PlayerQueryFields { get; set; } = new();
 
     public AppSettings Clone() => (AppSettings)MemberwiseClone();
 
