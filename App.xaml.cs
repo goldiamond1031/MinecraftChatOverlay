@@ -19,12 +19,12 @@ public partial class App : Application
 
     private void App_DispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
-        MessageBox.Show($"发生未处理异常：\n{e.Exception}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+        MessageBox.Show(Copy.Unhandled(e.Exception), Copy.UnhandledTitle, MessageBoxButton.OK, MessageBoxImage.Error);
         e.Handled = true; // 阻止程序崩溃退出
     }
 
     private void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
     {
-        MessageBox.Show($"发生未处理异常：\n{e.ExceptionObject}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+        MessageBox.Show(Copy.Unhandled(e.ExceptionObject), Copy.UnhandledTitle, MessageBoxButton.OK, MessageBoxImage.Error);
     }
 }

@@ -82,7 +82,7 @@ public sealed class MinecraftLogWatcher : IDisposable
 
     private void Loop()
     {
-        NotifyStatus("日志监听线程已启动");
+        NotifyStatus(Copy.ListeningStarted);
 
         var buffer = new byte[8192];
         while (!_cts.Token.IsCancellationRequested)
@@ -115,7 +115,7 @@ public sealed class MinecraftLogWatcher : IDisposable
             }
             catch (Exception ex)
             {
-                NotifyStatus("监听异常：" + ex.Message);
+                NotifyStatus(Copy.WatchError + ex.Message);
                 CloseStream();
                 Thread.Sleep(500);
             }
@@ -133,14 +133,14 @@ public sealed class MinecraftLogWatcher : IDisposable
 
         if (string.IsNullOrWhiteSpace(_logPath))
         {
-            NotifyStatus("未设置日志文件路径");
+            NotifyStatus(Copy.NoLogPathSet);
             Thread.Sleep(300);
             return;
         }
 
         if (!File.Exists(_logPath))
         {
-            NotifyStatus("等待日志文件出现：" + _logPath);
+            NotifyStatus(Copy.WaitingForLog + _logPath);
             return;
         }
 
@@ -149,11 +149,11 @@ public sealed class MinecraftLogWatcher : IDisposable
             _stream = new FileStream(_logPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
             _stream.Seek(0, SeekOrigin.End);
             _pendingBytes.Clear();
-            NotifyStatus("正在监听：" + _logPath);
+            NotifyStatus(Copy.ListeningTo + _logPath);
         }
         catch (Exception ex)
         {
-            NotifyStatus("无法打开日志文件：" + ex.Message);
+            NotifyStatus(Copy.CannotOpenLog + ex.Message);
         }
     }
 
@@ -265,7 +265,7 @@ public sealed class MinecraftLogWatcher : IDisposable
             {
                 _reopenRequested = false;
                 CloseStream();
-                NotifyStatus("检测到日志文件变化，重新打开...");
+                NotifyStatus(Copy.LogChanged);
             }
         }
     }
@@ -280,7 +280,7 @@ public sealed class MinecraftLogWatcher : IDisposable
         if (!File.Exists(_logPath))
         {
             CloseStream();
-            NotifyStatus("日志文件已删除/尚未重建，等待重新出现...");
+            NotifyStatus(Copy.LogGone);
             return;
         }
 
@@ -290,7 +290,7 @@ public sealed class MinecraftLogWatcher : IDisposable
             if (currentLength < _stream.Length)
             {
                 CloseStream();
-                NotifyStatus("日志文件已重置/轮转，重新打开...");
+                NotifyStatus(Copy.LogRotated);
             }
         }
         catch

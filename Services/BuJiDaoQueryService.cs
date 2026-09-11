@@ -27,12 +27,12 @@ public static class BuJiDaoQueryService
     {
         if (string.IsNullOrWhiteSpace(apiKey))
         {
-            return new BuJiDaoQueryResult { Success = false, Error = "请输入 API KEY" };
+            return new BuJiDaoQueryResult { Success = false, Error = Copy.NeedApiKey };
         }
 
         if (string.IsNullOrWhiteSpace(playerId))
         {
-            return new BuJiDaoQueryResult { Success = false, Error = "请输入玩家 ID" };
+            return new BuJiDaoQueryResult { Success = false, Error = Copy.NeedPlayerId };
         }
 
         try
@@ -74,7 +74,7 @@ public static class BuJiDaoQueryService
 
             if (string.IsNullOrWhiteSpace(body))
             {
-                return new BuJiDaoQueryResult { Success = false, Error = "接口返回为空" };
+                return new BuJiDaoQueryResult { Success = false, Error = Copy.QueryEmptyResponse };
             }
 
             using var document = JsonDocument.Parse(body);
@@ -85,14 +85,14 @@ public static class BuJiDaoQueryService
                 var code = ReadString(root, "code");
                 if (!string.IsNullOrWhiteSpace(code) && code != "200")
                 {
-                    var message = ReadString(root, "message") ?? ReadString(root, "msg") ?? "接口返回错误";
+                    var message = ReadString(root, "message") ?? ReadString(root, "msg") ?? Copy.QueryBadCode;
                     return new BuJiDaoQueryResult { Success = false, Error = $"code={code}：{message}" };
                 }
 
                 var success = ReadString(root, "success");
                 if (string.Equals(success, "false", StringComparison.OrdinalIgnoreCase))
                 {
-                    var message = ReadString(root, "message") ?? ReadString(root, "msg") ?? "接口返回失败";
+                    var message = ReadString(root, "message") ?? ReadString(root, "msg") ?? Copy.QueryRejected;
                     return new BuJiDaoQueryResult { Success = false, Error = message };
                 }
             }
@@ -101,7 +101,7 @@ public static class BuJiDaoQueryService
         }
         catch (TaskCanceledException)
         {
-            return new BuJiDaoQueryResult { Success = false, Error = "请求超时，请检查网络后重试" };
+            return new BuJiDaoQueryResult { Success = false, Error = Copy.QueryTimeout };
         }
         catch (Exception ex)
         {
@@ -137,7 +137,7 @@ public static class BuJiDaoQueryService
     {
         if (string.IsNullOrWhiteSpace(body))
         {
-            return "无返回内容";
+            return Copy.NoContent;
         }
 
         try

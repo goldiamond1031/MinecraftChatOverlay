@@ -51,9 +51,38 @@
          阴影 / 效果
          ========================================================= -->
     <DropShadowEffect x:Key="CardShadow" BlurRadius="14" ShadowDepth="3" Opacity="0.07" Color="#1E1E28"/>
-    <DropShadowEffect x:Key="CardHoverShadow" BlurRadius="28" ShadowDepth="10" Opacity="0.13" Color="#1E1E28"/>
+    <DropShadowEffect x:Key="CardHoverShadow" BlurRadius="24" ShadowDepth="6" Opacity="0.11" Color="#1E1E28"/>
     <DropShadowEffect x:Key="HoverShadow" BlurRadius="16" ShadowDepth="4" Opacity="0.15" Color="#000000"/>
     <DropShadowEffect x:Key="GlowShadow" BlurRadius="16" ShadowDepth="0" Opacity="0.35" Color="#7C6CF0"/>
+
+    <!-- 玩家查询字段下拉的候选项：中文名 + 路径 + 来源标注（库里的显示"推荐"，从数据里扫出来的显示"实测"） -->
+    <DataTemplate x:Key="FieldOptionItemTemplate">
+        <StackPanel Orientation="Horizontal" Margin="0,2">
+            <Border x:Name="Badge" Padding="5,0" Margin="0,0,9,0" CornerRadius="4" VerticalAlignment="Center"
+                    Background="{DynamicResource PrimarySoftBrush}">
+                <TextBlock x:Name="BadgeText" Text="推荐" FontSize="10" Foreground="{DynamicResource PrimaryBrush}"/>
+            </Border>
+            <TextBlock Text="{Binding Label}" FontSize="12.5" FontWeight="SemiBold" MinWidth="92"
+                       Foreground="{DynamicResource TextPrimaryBrush}" TextTrimming="CharacterEllipsis"
+                       VerticalAlignment="Center"/>
+            <TextBlock Text="{Binding Path}" FontSize="11" FontFamily="Consolas, Cascadia Mono, monospace"
+                       Foreground="{DynamicResource TextTertiaryBrush}" Margin="10,0,0,0"
+                       TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+        </StackPanel>
+        <DataTemplate.Triggers>
+            <DataTrigger Binding="{Binding Source}" Value="FromData">
+                <Setter TargetName="Badge" Property="Background" Value="{DynamicResource MintSoftBrush}"/>
+                <Setter TargetName="BadgeText" Property="Text" Value="实测"/>
+                <Setter TargetName="BadgeText" Property="Foreground" Value="{DynamicResource MintBrush}"/>
+            </DataTrigger>
+        </DataTemplate.Triggers>
+    </DataTemplate>
+
+    <!-- TextSearch.Text 绑到 Path：选中之后编辑框里显示的就是路径本身 -->
+    <Style x:Key="FieldOptionContainerStyle" TargetType="ComboBoxItem">
+        <Setter Property="TextSearch.Text" Value="{Binding Path}"/>
+        <Setter Property="Padding" Value="8,4"/>
+    </Style>
 
     <BooleanToVisibilityConverter x:Key="BoolToVis"/>
     <local:HexToBrushConverter x:Key="HexToBrushConverter"/>
@@ -139,10 +168,11 @@
                 <Trigger.EnterActions>
                     <BeginStoryboard>
                         <Storyboard>
+                            <!-- 含蓄轻快：只浮 2px，200ms 快速起步后极缓收尾 -->
                             <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
-                                             To="-3" Duration="0:0:0.28">
+                                             To="-2" Duration="0:0:0.2">
                                 <DoubleAnimation.EasingFunction>
-                                    <CubicEase EasingMode="EaseOut"/>
+                                    <QuinticEase EasingMode="EaseOut"/>
                                 </DoubleAnimation.EasingFunction>
                             </DoubleAnimation>
                         </Storyboard>
@@ -151,10 +181,11 @@
                 <Trigger.ExitActions>
                     <BeginStoryboard>
                         <Storyboard>
+                            <!-- 离开略慢于进入，避免"啪"地弹回去 -->
                             <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
-                                             To="0" Duration="0:0:0.22">
+                                             To="0" Duration="0:0:0.24">
                                 <DoubleAnimation.EasingFunction>
-                                    <CubicEase EasingMode="EaseOut"/>
+                                    <QuinticEase EasingMode="EaseOut"/>
                                 </DoubleAnimation.EasingFunction>
                             </DoubleAnimation>
                         </Storyboard>
@@ -183,7 +214,10 @@
                 <ControlTemplate TargetType="Button">
                     <Grid x:Name="root" RenderTransformOrigin="0.5,0.5" SnapsToDevicePixels="True">
                         <Grid.RenderTransform>
-                            <ScaleTransform x:Name="scale" ScaleX="1" ScaleY="1"/>
+                            <TransformGroup>
+                                <ScaleTransform x:Name="scale" ScaleX="1" ScaleY="1"/>
+                                <TranslateTransform x:Name="sink" Y="0"/>
+                            </TransformGroup>
                         </Grid.RenderTransform>
                         <Border x:Name="border"
                                 Background="{TemplateBinding Background}"
@@ -225,9 +259,9 @@
                                         <DoubleAnimation Storyboard.TargetName="shineBrushTransform"
                                                          Storyboard.TargetProperty="X"
                                                          From="-1.4" To="1.4"
-                                                         Duration="0:0:0.65">
+                                                         Duration="0:0:0.82">
                                             <DoubleAnimation.EasingFunction>
-                                                <CubicEase EasingMode="EaseOut"/>
+                                                <QuinticEase EasingMode="EaseOut"/>
                                             </DoubleAnimation.EasingFunction>
                                         </DoubleAnimation>
                                     </Storyboard>
@@ -262,24 +296,56 @@
                             <Trigger.EnterActions>
                                 <BeginStoryboard>
                                     <Storyboard>
+                                        <!-- 含蓄轻快：按下不是"缩小"而是"轻微下沉"，90ms 跟手 -->
                                         <DoubleAnimation Storyboard.TargetName="scale"
                                                          Storyboard.TargetProperty="ScaleX"
-                                                         To="0.96" Duration="0:0:0.06"/>
+                                                         To="0.985" Duration="0:0:0.09">
+                                            <DoubleAnimation.EasingFunction>
+                                                <QuinticEase EasingMode="EaseOut"/>
+                                            </DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
                                         <DoubleAnimation Storyboard.TargetName="scale"
                                                          Storyboard.TargetProperty="ScaleY"
-                                                         To="0.96" Duration="0:0:0.06"/>
+                                                         To="0.985" Duration="0:0:0.09">
+                                            <DoubleAnimation.EasingFunction>
+                                                <QuinticEase EasingMode="EaseOut"/>
+                                            </DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                        <DoubleAnimation Storyboard.TargetName="sink"
+                                                         Storyboard.TargetProperty="Y"
+                                                         To="1" Duration="0:0:0.09">
+                                            <DoubleAnimation.EasingFunction>
+                                                <QuinticEase EasingMode="EaseOut"/>
+                                            </DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
                                     </Storyboard>
                                 </BeginStoryboard>
                             </Trigger.EnterActions>
                             <Trigger.ExitActions>
                                 <BeginStoryboard>
                                     <Storyboard>
+                                        <!-- 回弹刻意比按下慢（260ms vs 90ms），手感才柔 -->
                                         <DoubleAnimation Storyboard.TargetName="scale"
                                                          Storyboard.TargetProperty="ScaleX"
-                                                         To="1" Duration="0:0:0.12"/>
+                                                         To="1" Duration="0:0:0.26">
+                                            <DoubleAnimation.EasingFunction>
+                                                <QuinticEase EasingMode="EaseOut"/>
+                                            </DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
                                         <DoubleAnimation Storyboard.TargetName="scale"
                                                          Storyboard.TargetProperty="ScaleY"
-                                                         To="1" Duration="0:0:0.12"/>
+                                                         To="1" Duration="0:0:0.26">
+                                            <DoubleAnimation.EasingFunction>
+                                                <QuinticEase EasingMode="EaseOut"/>
+                                            </DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                        <DoubleAnimation Storyboard.TargetName="sink"
+                                                         Storyboard.TargetProperty="Y"
+                                                         To="0" Duration="0:0:0.26">
+                                            <DoubleAnimation.EasingFunction>
+                                                <QuinticEase EasingMode="EaseOut"/>
+                                            </DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
                                     </Storyboard>
                                 </BeginStoryboard>
                             </Trigger.ExitActions>
@@ -441,12 +507,24 @@
                                         BorderBrush="{DynamicResource BorderBrush}"
                                         BorderThickness="1"
                                         CornerRadius="12.5"/>
+                                <!-- 轨道填充层：用透明度做柔和变色，并故意比滑块晚 40ms 跟上 —— "被带动"的跟随感。
+                                     用独立图层而不是直接在 track 上做 ColorAnimation，是因为 track 的 Background
+                                     是 DynamicResource 共享画刷，动画它会污染所有开关。 -->
+                                <Border x:Name="trackFill"
+                                        Background="{DynamicResource PrimaryBrush}"
+                                        Margin="1"
+                                        CornerRadius="11.5"
+                                        Opacity="0"/>
                                 <Ellipse x:Name="thumb"
                                          Width="19" Height="19"
                                          Fill="{DynamicResource SwitchThumbBrush}"
                                          HorizontalAlignment="Left"
                                          VerticalAlignment="Center"
                                          Margin="3,0,0,0">
+                                    <Ellipse.RenderTransform>
+                                        <!-- 用位移代替 Margin 动画：动画 Margin 会每帧触发布局重算 -->
+                                        <TranslateTransform x:Name="thumbShift" X="0"/>
+                                    </Ellipse.RenderTransform>
                                     <Ellipse.Effect>
                                         <DropShadowEffect BlurRadius="5" ShadowDepth="0" Opacity="0.28" Color="#000000"/>
                                     </Ellipse.Effect>
@@ -457,34 +535,46 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsChecked" Value="True">
-                            <Setter TargetName="track" Property="Background" Value="{DynamicResource PrimaryBrush}"/>
                             <Setter TargetName="track" Property="BorderBrush" Value="{DynamicResource PrimaryBrush}"/>
-                            <Setter TargetName="thumb" Property="Margin" Value="22,0,0,0"/>
                             <Trigger.EnterActions>
                                 <BeginStoryboard>
                                     <Storyboard>
-                                        <ThicknessAnimation Storyboard.TargetName="thumb"
-                                                            Storyboard.TargetProperty="Margin"
-                                                            To="22,0,0,0"
-                                                            Duration="0:0:0.32">
-                                            <ThicknessAnimation.EasingFunction>
-                                                <CubicEase EasingMode="EaseOut"/>
-                                            </ThicknessAnimation.EasingFunction>
-                                        </ThicknessAnimation>
+                                        <!-- 滑块 260ms 带轻微过冲弹到位（BackEase 0.4 ≈ 15% 过冲）—— 这一下就是"雀跃" -->
+                                        <DoubleAnimation Storyboard.TargetName="thumbShift"
+                                                         Storyboard.TargetProperty="X"
+                                                         To="19" Duration="0:0:0.26">
+                                            <DoubleAnimation.EasingFunction>
+                                                <BackEase Amplitude="0.4" EasingMode="EaseOut"/>
+                                            </DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                        <!-- 轨道填充晚 40ms 跟上：滑块先到、颜色后到，产生"被带动"的跟随感 -->
+                                        <DoubleAnimation Storyboard.TargetName="trackFill"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         To="1" Duration="0:0:0.22" BeginTime="0:0:0.04">
+                                            <DoubleAnimation.EasingFunction>
+                                                <QuinticEase EasingMode="EaseOut"/>
+                                            </DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
                                     </Storyboard>
                                 </BeginStoryboard>
                             </Trigger.EnterActions>
                             <Trigger.ExitActions>
                                 <BeginStoryboard>
                                     <Storyboard>
-                                        <ThicknessAnimation Storyboard.TargetName="thumb"
-                                                            Storyboard.TargetProperty="Margin"
-                                                            To="3,0,0,0"
-                                                            Duration="0:0:0.26">
-                                            <ThicknessAnimation.EasingFunction>
-                                                <CubicEase EasingMode="EaseOut"/>
-                                            </ThicknessAnimation.EasingFunction>
-                                        </ThicknessAnimation>
+                                        <DoubleAnimation Storyboard.TargetName="thumbShift"
+                                                         Storyboard.TargetProperty="X"
+                                                         To="0" Duration="0:0:0.26">
+                                            <DoubleAnimation.EasingFunction>
+                                                <BackEase Amplitude="0.4" EasingMode="EaseOut"/>
+                                            </DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                        <DoubleAnimation Storyboard.TargetName="trackFill"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         To="0" Duration="0:0:0.2" BeginTime="0:0:0.04">
+                                            <DoubleAnimation.EasingFunction>
+                                                <QuinticEase EasingMode="EaseOut"/>
+                                            </DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
                                     </Storyboard>
                                 </BeginStoryboard>
                             </Trigger.ExitActions>
@@ -498,9 +588,9 @@
                                     <Storyboard>
                                         <DoubleAnimation Storyboard.TargetName="card"
                                                          Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
-                                                         To="-2" Duration="0:0:0.25">
+                                                         To="-2" Duration="0:0:0.15">
                                             <DoubleAnimation.EasingFunction>
-                                                <CubicEase EasingMode="EaseOut"/>
+                                                <QuinticEase EasingMode="EaseOut"/>
                                             </DoubleAnimation.EasingFunction>
                                         </DoubleAnimation>
                                     </Storyboard>
@@ -511,9 +601,9 @@
                                     <Storyboard>
                                         <DoubleAnimation Storyboard.TargetName="card"
                                                          Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
-                                                         To="0" Duration="0:0:0.2">
+                                                         To="0" Duration="0:0:0.22">
                                             <DoubleAnimation.EasingFunction>
-                                                <CubicEase EasingMode="EaseOut"/>
+                                                <QuinticEase EasingMode="EaseOut"/>
                                             </DoubleAnimation.EasingFunction>
                                         </DoubleAnimation>
                                     </Storyboard>
@@ -540,12 +630,20 @@
                                     BorderBrush="{DynamicResource BorderBrush}"
                                     BorderThickness="1"
                                     CornerRadius="10"/>
+                            <Border x:Name="trackFill"
+                                    Background="{DynamicResource PrimaryBrush}"
+                                    Margin="1"
+                                    CornerRadius="9"
+                                    Opacity="0"/>
                             <Ellipse x:Name="thumb"
                                      Width="14" Height="14"
                                      Fill="{DynamicResource SwitchThumbBrush}"
                                      HorizontalAlignment="Left"
                                      VerticalAlignment="Center"
                                      Margin="3,0,0,0">
+                                <Ellipse.RenderTransform>
+                                    <TranslateTransform x:Name="thumbShift" X="0"/>
+                                </Ellipse.RenderTransform>
                                 <Ellipse.Effect>
                                     <DropShadowEffect BlurRadius="4" ShadowDepth="0" Opacity="0.24" Color="#000000"/>
                                 </Ellipse.Effect>
@@ -555,34 +653,44 @@
                     </StackPanel>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsChecked" Value="True">
-                            <Setter TargetName="track" Property="Background" Value="{DynamicResource PrimaryBrush}"/>
                             <Setter TargetName="track" Property="BorderBrush" Value="{DynamicResource PrimaryBrush}"/>
-                            <Setter TargetName="thumb" Property="Margin" Value="17,0,0,0"/>
                             <Trigger.EnterActions>
                                 <BeginStoryboard>
                                     <Storyboard>
-                                        <ThicknessAnimation Storyboard.TargetName="thumb"
-                                                            Storyboard.TargetProperty="Margin"
-                                                            To="17,0,0,0"
-                                                            Duration="0:0:0.28">
-                                            <ThicknessAnimation.EasingFunction>
-                                                <CubicEase EasingMode="EaseOut"/>
-                                            </ThicknessAnimation.EasingFunction>
-                                        </ThicknessAnimation>
+                                        <DoubleAnimation Storyboard.TargetName="thumbShift"
+                                                         Storyboard.TargetProperty="X"
+                                                         To="14" Duration="0:0:0.26">
+                                            <DoubleAnimation.EasingFunction>
+                                                <BackEase Amplitude="0.4" EasingMode="EaseOut"/>
+                                            </DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                        <DoubleAnimation Storyboard.TargetName="trackFill"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         To="1" Duration="0:0:0.22" BeginTime="0:0:0.04">
+                                            <DoubleAnimation.EasingFunction>
+                                                <QuinticEase EasingMode="EaseOut"/>
+                                            </DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
                                     </Storyboard>
                                 </BeginStoryboard>
                             </Trigger.EnterActions>
                             <Trigger.ExitActions>
                                 <BeginStoryboard>
                                     <Storyboard>
-                                        <ThicknessAnimation Storyboard.TargetName="thumb"
-                                                            Storyboard.TargetProperty="Margin"
-                                                            To="3,0,0,0"
-                                                            Duration="0:0:0.22">
-                                            <ThicknessAnimation.EasingFunction>
-                                                <CubicEase EasingMode="EaseOut"/>
-                                            </ThicknessAnimation.EasingFunction>
-                                        </ThicknessAnimation>
+                                        <DoubleAnimation Storyboard.TargetName="thumbShift"
+                                                         Storyboard.TargetProperty="X"
+                                                         To="0" Duration="0:0:0.26">
+                                            <DoubleAnimation.EasingFunction>
+                                                <BackEase Amplitude="0.4" EasingMode="EaseOut"/>
+                                            </DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                        <DoubleAnimation Storyboard.TargetName="trackFill"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         To="0" Duration="0:0:0.2" BeginTime="0:0:0.04">
+                                            <DoubleAnimation.EasingFunction>
+                                                <QuinticEase EasingMode="EaseOut"/>
+                                            </DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
                                     </Storyboard>
                                 </BeginStoryboard>
                             </Trigger.ExitActions>
@@ -703,6 +811,14 @@
                                           ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
                                           ContentStringFormat="{TemplateBinding SelectionBoxItemStringFormat}"
                                           IsHitTestVisible="False"/>
+                        <TextBox x:Name="PART_EditableTextBox"
+                                 Grid.Column="0"
+                                 Margin="{TemplateBinding Padding}"
+                                 Style="{StaticResource ComboBoxEditableTextBoxStyle}"
+                                 IsReadOnly="{TemplateBinding IsReadOnly}"
+                                 Text="{Binding Text, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                 Visibility="Collapsed"/>
+
                         <Popup x:Name="PART_Popup"
                                Grid.ColumnSpan="2"
                                AllowsTransparency="True"
@@ -727,6 +843,15 @@
                         </Popup>
                     </Grid>
                     <ControlTemplate.Triggers>
+                        <Trigger Property="IsEditable" Value="True">
+                            <Setter TargetName="ContentSite" Property="Visibility" Value="Collapsed"/>
+                            <Setter TargetName="PART_EditableTextBox" Property="Visibility" Value="Visible"/>
+                        </Trigger>
+                        <Trigger Property="IsEditable" Value="False">
+                            <Setter TargetName="ContentSite" Property="Visibility" Value="Visible"/>
+                            <Setter TargetName="PART_EditableTextBox" Property="Visibility" Value="Collapsed"/>
+                        </Trigger>
+
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="MainBorder" Property="Background" Value="{DynamicResource SurfaceBrush}"/>
                             <Setter TargetName="MainBorder" Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>

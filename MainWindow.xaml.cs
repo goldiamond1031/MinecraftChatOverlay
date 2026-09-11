@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -27,6 +28,31 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<TextReplaceRule> _replaceRules = new();
     private readonly ObservableCollection<BlockKeywordItem> _blockKeywords = new();
     private readonly ObservableCollection<PlayerQueryField> _playerQueryFields = new();
+
+    // 上一次成功查询的返回数据。可以为空（还没查过）—— 此时字段选择器只给内置字段库。
+    // JsonElement 在服务里已经 Clone 过，和原 JsonDocument 解耦，可以安全长期持有。
+    private JsonElement? _lastPlayerQueryRoot;
+    private List<PlayerQueryFieldCandidate> _fieldPickerCandidates = new();
+
+    // 字段列表拖拽排序
+    private Point _fieldDragOrigin;
+    private PlayerQueryField? _draggedField;
+    private int _draggedIndex = -1;
+
+    /// <summary>空位插在"把被拖行拿掉之后"的序列的第几个位置。</summary>
+    private int _gapIndex = -1;
+
+    // 拖到列表顶部/底部时自动滚动（Win32 定时器：DoDragDrop 模态循环里也能触发）
+    private IntPtr _fieldAutoScrollTimerId = IntPtr.Zero;
+    private TimerProc? _fieldAutoScrollTimerProc;
+    private double _fieldAutoScrollDelta;
+
+    private delegate void TimerProc(IntPtr hWnd, uint uMsg, IntPtr nIDEvent, uint dwTime);
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern IntPtr SetTimer(IntPtr hWnd, IntPtr nIDEvent, uint uElapse, TimerProc lpTimerFunc);
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool KillTimer(IntPtr hWnd, IntPtr uIDEvent);
+
     private readonly List<FontItem> _fontItems = new();
     private OverlayWindow? _overlay;
     private bool _loading = true;
@@ -73,10 +99,14 @@ public partial class MainWindow : Window
         InitializePlayerQueryUi();
         LoadRuleCollections();
         LoadUiFromSettings();
+
+        // 先把字段下拉填好，否则第一次打开"玩家查询"时下拉是空的
+        RebuildFieldPickerOptions();
+
         _loading = false;
         SubscribeImmediateApply();
         Loaded += MainWindow_Loaded;
-        LogStatus("配置已加载：" + SettingsService.ConfigPath);
+        LogStatus(Copy.ConfigLoaded + SettingsService.ConfigPath);
     }
 
 private void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -240,10 +270,14 @@ private void MainWindow_Loaded(object sender, RoutedEventArgs e)
         PlayerQueryGameTypeComboBox.SelectedIndex = 0;
         UpdatePlayerQueryModeOptions();
         PlayerQueryFieldItemsControl.ItemsSource = _playerQueryFields;
+
+
     }
 
     private void PlayerQueryGameTypeComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        RebuildFieldPickerOptions();
+
         UpdatePlayerQueryModeOptions();
         if (!_loading)
         {
@@ -286,15 +320,15 @@ private void MainWindow_Loaded(object sender, RoutedEventArgs e)
 
         if (string.IsNullOrWhiteSpace(apiKey))
         {
-            PlayerQueryStatusText.Text = "请输入 API KEY";
-            ShowToast("请输入 API KEY");
+            PlayerQueryStatusText.Text = Copy.NeedApiKey;
+            ShowToast(Copy.NeedApiKey);
             return;
         }
 
         if (string.IsNullOrWhiteSpace(playerId))
         {
-            PlayerQueryStatusText.Text = "请输入玩家 ID 或 UUID";
-            ShowToast("请输入玩家 ID 或 UUID");
+            PlayerQueryStatusText.Text = Copy.NeedPlayerId;
+            ShowToast(Copy.NeedPlayerId);
             return;
         }
 
@@ -307,15 +341,15 @@ private void MainWindow_Loaded(object sender, RoutedEventArgs e)
 
         if (fields.Count == 0)
         {
-            PlayerQueryStatusText.Text = "请至少添加一个显示字段";
-            ShowToast("请至少添加一个显示字段");
+            PlayerQueryStatusText.Text = Copy.NeedQueryField;
+            ShowToast(Copy.NeedQueryField);
             return;
         }
 
         CapturePlayerQuerySettings();
         PlayerQueryButton.IsEnabled = false;
-        PlayerQueryButton.Content = "查询中…";
-        PlayerQueryStatusText.Text = "正在请求布吉岛 API…";
+        PlayerQueryButton.Content = Copy.QueryingButton;
+        PlayerQueryStatusText.Text = Copy.Querying;
         ClearPlayerQueryResultPanel();
 
         try
@@ -323,59 +357,58 @@ private void MainWindow_Loaded(object sender, RoutedEventArgs e)
             var result = await BuJiDaoQueryService.QueryPlayerAsync(apiKey, playerId, gametype, "all");
             if (!result.Success)
             {
-                PlayerQueryStatusText.Text = "查询失败";
+                PlayerQueryStatusText.Text = Copy.QueryFailedShort;
                 ShowPlayerQueryError(result.Error);
-                ShowToast("查询失败：" + result.Error);
+                ShowToast(Copy.QueryFailed + result.Error);
                 return;
             }
+
+            // 留下这次的数据，供"从数据里选字段"枚举可用路径。
+            // 放在字段匹配检查之前是有意的：即使当前字段一个都没匹配上，用户也能从真实数据里挑。
+            _lastPlayerQueryRoot = result.Root;
+
+            // 查过之后下拉里会多出"本次查询发现"的字段
+            RebuildFieldPickerOptions();
 
             var stats = BuildPlayerQueryStats(result.Root, gametype, modeKey, fields);
             if (stats.Count == 0)
             {
-                PlayerQueryStatusText.Text = "没有可展示的数据";
-                ShowPlayerQueryError("接口请求成功，但当前字段路径没有匹配到数据，请检查字段路径");
+                PlayerQueryStatusText.Text = Copy.NoDisplayData;
+                ShowPlayerQueryError(Copy.NoMatchingFieldData);
                 return;
             }
 
-            PlayerQueryHintText.Text = $"查询对象：{playerId} · {PlayerQueryGameTypeComboBox.SelectedItem} · {PlayerQueryModeComboBox.SelectedItem}";
+            PlayerQueryHintText.Text = Copy.QueryTarget(
+                playerId,
+                PlayerQueryGameTypeComboBox.SelectedItem?.ToString() ?? "",
+                PlayerQueryModeComboBox.SelectedItem?.ToString() ?? "");
             RenderPlayerStats(stats);
-            PlayerQueryStatusText.Text = $"查询完成 · {stats.Count} 项数据";
-            ShowToast("玩家数据查询完成");
+            PlayerQueryStatusText.Text = Copy.QueryDoneWithCount(stats.Count);
+            ShowToast(Copy.QueryDone);
         }
         catch (Exception ex)
         {
             PlayerQueryStatusText.Text = "查询异常";
             ShowPlayerQueryError(ex.Message);
-            ShowToast("查询异常：" + ex.Message);
+            ShowToast(Copy.QueryError + ex.Message);
         }
         finally
         {
             PlayerQueryButton.IsEnabled = true;
-            PlayerQueryButton.Content = "开始查询";
+            PlayerQueryButton.Content = Copy.QueryStartButton;
         }
     }
 
     private void ClearPlayerQueryButton_Click(object sender, RoutedEventArgs e)
     {
         ClearPlayerQueryResultPanel();
-        PlayerQueryStatusText.Text = "已清空查询结果";
-        PlayerQueryHintText.Text = "输入 API KEY 和玩家 ID 后开始查询";
+        PlayerQueryStatusText.Text = Copy.QueryCleared;
+        PlayerQueryHintText.Text = Copy.QueryIdleHint;
     }
 
     private void AddPlayerQueryFieldButton_Click(object sender, RoutedEventArgs e)
     {
         _playerQueryFields.Add(new PlayerQueryField { Label = "新字段", Path = "" });
-        SavePlayerQuerySettings(false);
-    }
-
-    private void AddWinRatePlayerQueryFieldButton_Click(object sender, RoutedEventArgs e)
-    {
-        var isSkywars = PlayerQueryGameTypeComboBox.SelectedIndex == 1;
-        var path = isSkywars
-            ? "winrate:win=data.skywars.{mode}.win;lose=data.skywars.{mode}.lose"
-            : "winrate:win=data.bedwars.{mode}.win;lose=data.bedwars.{mode}.lose";
-
-        _playerQueryFields.Add(new PlayerQueryField { Label = "胜率", Path = path });
         SavePlayerQuerySettings(false);
     }
 
@@ -385,6 +418,7 @@ private void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
             _playerQueryFields.Remove(field);
             SavePlayerQuerySettings(false);
+            RebuildFieldPickerOptions();
         }
     }
 
@@ -503,8 +537,626 @@ private void MainWindow_Loaded(object sender, RoutedEventArgs e)
 
         if (log)
         {
-            LogStatus("玩家查询设置已保存");
+            LogStatus(Copy.QuerySettingsSaved);
         }
+    }
+
+    // ==================== 字段列表：路径下拉 ====================
+    //
+    // 每一行的路径输入框是一个"可编辑下拉框"：
+    //   下拉内容 = 内置字段库（任何时候都有）+ 本次查询数据里额外发现的字段（查过才有）
+    //   同时保留手敲路径的能力 —— 万一接口变了用户还能自己救急
+    //
+    // FieldPickerOptions 是 ObservableCollection，所有行绑定到**同一个实例**，
+    // 所以重新填一遍内容，界面上所有行会一起更新，不用逐行去改 ItemsSource。
+
+    public ObservableCollection<PlayerQueryFieldCandidate> FieldPickerOptions { get; } = new();
+
+    private void RebuildFieldPickerOptions()
+    {
+        var gametype = PlayerQueryGameTypeComboBox.SelectedIndex == 1 ? "skywars" : "bedwars";
+        var modeKey = GetPlayerQueryModeKey(gametype);
+
+        var existing = _playerQueryFields
+            .Select(field => field.Path)
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .ToList();
+
+        var options = PlayerQueryFieldCatalog.Build(_lastPlayerQueryRoot, gametype, modeKey, existing);
+
+        // 关键：重建 ItemsSource 会让 WPF 把每个可编辑框的 Text 清空，
+        // 而且顺着双向绑定把 field.Path 也写成空串 —— 用户配好的路径会被抹掉。
+        // 所以先记下各行的路径，排到 WPF 处理完之后再恢复（Path 有 INPC，恢复时界面会跟着刷回来）。
+        var restore = _playerQueryFields.Select(field => field.Path).ToList();
+
+        FieldPickerOptions.Clear();
+        foreach (var option in options)
+        {
+            FieldPickerOptions.Add(option);
+        }
+
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
+        {
+            for (var i = 0; i < _playerQueryFields.Count && i < restore.Count; i++)
+            {
+                if (_playerQueryFields[i].Path != restore[i])
+                {
+                    _playerQueryFields[i].Path = restore[i];
+                }
+            }
+        }));
+    }
+
+    private void PlayerQueryFieldPathComboBox_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is not ComboBox { DataContext: PlayerQueryField field } combo)
+        {
+            return;
+        }
+
+        // 必须排到 Loaded 之后：设置 ItemsSource 时 WPF 会自己动一次 Text，
+        // 立刻赋值会被它那一下覆盖掉，表现为"框里什么都没有"。
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
+        {
+            combo.Text = field.Path;
+        }));
+    }
+
+    /// <summary>
+    /// 手敲的路径在失焦时才提交。
+    /// ComboBox 没有 TextChanged 事件（那是 TextBox 的），而每敲一个字符就写一次模型也没必要 ——
+    /// 点"开始查询"会让输入框失焦，所以这个时机足够可靠。
+    /// </summary>
+    private void PlayerQueryFieldPathComboBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (sender is not ComboBox { DataContext: PlayerQueryField field } combo)
+        {
+            return;
+        }
+
+        var typed = combo.Text ?? "";
+        if (!string.Equals(field.Path, typed, StringComparison.Ordinal))
+        {
+            field.Path = typed;
+        }
+
+        SavePlayerQuerySettings(false);
+    }
+
+    private void PlayerQueryFieldPathComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (sender is not ComboBox { DataContext: PlayerQueryField field } combo ||
+            combo.SelectedItem is not PlayerQueryFieldCandidate candidate)
+        {
+            return;
+        }
+
+        field.Path = candidate.Path;
+
+        // 显示名还是空的、或者还是新行的默认值，就顺手填上建议的中文名；用户自己写过的名字不动。
+        if (string.IsNullOrWhiteSpace(field.Label) || field.Label == "新字段")
+        {
+            field.Label = candidate.Label;
+        }
+
+        // 关键：可编辑 ComboBox 在选中项之后，WPF 自己还会再改一次 Text
+        // （用的是 ItemTemplate / TextSearch 那边的文字）。这个改动发生在 SelectionChanged
+        // **之后**，如果在这里直接赋值就会被覆盖，表现为"选了但框里不显示"。
+        // 所以必须排到 WPF 那一下后面再写。
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
+        {
+            combo.Text = field.Path;
+            SavePlayerQuerySettings(false);
+        }));
+    }
+
+    // ==================== 字段列表：拖拽排序 ====================
+    //
+    // 三件事一起做，才有"抓住一条拖过去、其他条目让开"的感觉：
+    //   1. 残影：拖动时给这一行拍一张静态图，做成浮层跟着鼠标走
+    //   2. 原行变淡：表示"它被拿起来了"
+    //   3. 空位：在目标位置撑开一条空位，其他行被布局自动推开（带动画）
+    //
+    // 松手才真正重排 —— 拖动过程中列表顺序不变，这样"会落到哪里"始终看得清。
+
+    private Popup? _dragGhost;
+    private DispatcherTimer? _dragGhostTimer;
+
+    private void PlayerQueryFieldDragHandle_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        _fieldDragOrigin = e.GetPosition(null);
+    }
+
+    private void PlayerQueryFieldDragHandle_PreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (e.LeftButton != MouseButtonState.Pressed)
+        {
+            return;
+        }
+
+        var moved = _fieldDragOrigin - e.GetPosition(null);
+        if (Math.Abs(moved.X) < SystemParameters.MinimumHorizontalDragDistance &&
+            Math.Abs(moved.Y) < SystemParameters.MinimumVerticalDragDistance)
+        {
+            return;
+        }
+
+        if (sender is not FrameworkElement { DataContext: PlayerQueryField field } handle)
+        {
+            return;
+        }
+
+        _draggedField = field;
+        _draggedIndex = _playerQueryFields.IndexOf(field);
+
+        // 残影要在这时候拍：先拍快照，再让原行变淡，否则残影里也会是淡的
+        ShowDragGhost(handle);
+        field.IsDragging = true;
+
+        try
+        {
+            // DoDragDrop 内部跑一个嵌套消息循环，所以拖动期间的界面更新能正常渲染
+            DragDrop.DoDragDrop((DependencyObject)handle, field, DragDropEffects.Move);
+        }
+        finally
+        {
+            field.IsDragging = false;
+            ClearFieldDropFeedback();
+            HideDragGhost();
+            StopFieldAutoScroll();
+
+            _draggedField = null;
+            _draggedIndex = -1;
+        }
+    }
+
+    private void PlayerQueryFieldList_DragOver(object sender, DragEventArgs e)
+    {
+        if (_draggedField == null)
+        {
+            e.Effects = DragDropEffects.None;
+            e.Handled = true;
+            return;
+        }
+
+        e.Effects = DragDropEffects.Move;
+        e.Handled = true;
+        UpdateFieldAutoScroll(e);
+
+
+        // 找光标落在哪一行（被拖的那一行除外 —— 它已经"拿起来"了）
+        var host = PlayerQueryFieldItemsControl;
+        var cursor = e.GetPosition(host);
+
+        PlayerQueryField? target = null;
+        var before = false;
+
+        for (var i = 0; i < _playerQueryFields.Count; i++)
+        {
+            if (ReferenceEquals(_playerQueryFields[i], _draggedField)) continue;
+            if (host.ItemContainerGenerator.ContainerFromIndex(i) is not FrameworkElement container) continue;
+
+            var topLeft = container.TranslatePoint(new Point(0, 0), host);
+            var rowBottom = topLeft.Y + container.ActualHeight;
+
+            if (cursor.Y < topLeft.Y)
+            {
+                target = _playerQueryFields[i];
+                before = true;
+                break;
+            }
+
+            if (cursor.Y <= rowBottom)
+            {
+                target = _playerQueryFields[i];
+                before = cursor.Y < topLeft.Y + container.ActualHeight / 2;
+                break;
+            }
+        }
+
+        if (target == null)
+        {
+            // 光标不在任何一行上：把所有反馈收掉。
+            // 之前紫线残留的根因就在这 —— 事件挂在行上，拖到行与行之间/列表外面时
+            // 根本不会有行来清它，于是那条线就一直留着。
+            ClearFieldDropFeedback();
+            return;
+        }
+
+        // 插入槽位按"把被拖的行从序列里拿掉"之后的坐标算，这样落位才是准的
+        var draggedIndex = _playerQueryFields.IndexOf(_draggedField);
+        var targetIndex = _playerQueryFields.IndexOf(target);
+        var targetSlot = targetIndex < draggedIndex ? targetIndex : targetIndex - 1;
+        _gapIndex = before ? targetSlot : targetSlot + 1;
+
+        foreach (var item in _playerQueryFields)
+        {
+            item.DropTarget = ReferenceEquals(item, target)
+                ? (before ? PlayerQueryFieldDropTarget.Before : PlayerQueryFieldDropTarget.After)
+                : PlayerQueryFieldDropTarget.None;
+        }
+
+        SetFieldGap(target, before);
+    }
+
+    private void PlayerQueryFieldList_Drop(object sender, DragEventArgs e)
+    {
+        e.Handled = true;
+
+        // 先把状态读出来再清 —— ClearFieldDropFeedback 会把 _gapIndex 归 -1
+        var draggedIndex = _draggedIndex;
+        var gapIndex = _gapIndex;
+        StopFieldAutoScroll();
+
+        ClearFieldDropFeedback();
+
+        if (_draggedField == null || draggedIndex < 0 || gapIndex < 0)
+        {
+            _draggedField = null;
+            _draggedIndex = -1;
+            return;
+        }
+
+        // 按空位槽位重排：先把被拖的行从序列里拿掉，再插进空位
+        var others = new List<PlayerQueryField>();
+        for (var i = 0; i < _playerQueryFields.Count; i++)
+        {
+            if (i != draggedIndex)
+            {
+                others.Add(_playerQueryFields[i]);
+            }
+        }
+
+        others.Insert(Math.Min(gapIndex, others.Count), _draggedField);
+
+        _playerQueryFields.Clear();
+        foreach (var item in others)
+        {
+            _playerQueryFields.Add(item);
+        }
+
+        _draggedField = null;
+        _draggedIndex = -1;
+        SavePlayerQuerySettings(false);
+        ShowToast(Copy.OrderUpdated);
+    }
+
+    private ScrollViewer? GetPlayerQueryScrollViewer()
+    {
+        // 直接使用命名元素，比从 ItemsControl 往上摸视觉树可靠得多。
+        if (PlayerQueryPanel != null)
+        {
+            return PlayerQueryPanel;
+        }
+
+        DependencyObject? current = PlayerQueryFieldItemsControl;
+        while (current != null)
+        {
+            if (current is ScrollViewer scrollViewer)
+            {
+                return scrollViewer;
+            }
+
+            current = VisualTreeHelper.GetParent(current);
+        }
+
+        return null;
+    }
+
+    private void UpdateFieldAutoScroll(DragEventArgs e)
+    {
+        var scrollViewer = GetPlayerQueryScrollViewer();
+        if (scrollViewer == null || _draggedField == null)
+        {
+            StopFieldAutoScroll();
+            return;
+        }
+
+        var position = e.GetPosition(scrollViewer);
+        const double edge = 44.0;
+        const double minSpeed = 6.0;
+        const double maxSpeed = 26.0;
+
+        if (position.Y < edge)
+        {
+            var intensity = Math.Clamp((edge - position.Y) / edge, 0.0, 1.0);
+            _fieldAutoScrollDelta = -Math.Min(maxSpeed, minSpeed + intensity * (maxSpeed - minSpeed));
+        }
+        else if (position.Y > scrollViewer.ActualHeight - edge)
+        {
+            var intensity = Math.Clamp((position.Y - (scrollViewer.ActualHeight - edge)) / edge, 0.0, 1.0);
+            _fieldAutoScrollDelta = Math.Min(maxSpeed, minSpeed + intensity * (maxSpeed - minSpeed));
+        }
+        else
+        {
+            StopFieldAutoScroll();
+            return;
+        }
+
+        StartFieldAutoScrollTimer();
+    }
+
+    private void StopFieldAutoScroll()
+    {
+        _fieldAutoScrollDelta = 0;
+        if (_fieldAutoScrollTimerId != IntPtr.Zero)
+        {
+            KillTimer(IntPtr.Zero, _fieldAutoScrollTimerId);
+            _fieldAutoScrollTimerId = IntPtr.Zero;
+        }
+    }
+
+    private void StartFieldAutoScrollTimer()
+    {
+        if (_fieldAutoScrollTimerId != IntPtr.Zero)
+        {
+            return;
+        }
+
+        _fieldAutoScrollTimerProc ??= FieldAutoScrollTimerCallback;
+        _fieldAutoScrollTimerId = SetTimer(IntPtr.Zero, IntPtr.Zero, 30, _fieldAutoScrollTimerProc!);
+    }
+
+    private void FieldAutoScrollTimerCallback(IntPtr hWnd, uint uMsg, IntPtr nIDEvent, uint dwTime)
+    {
+        if (Math.Abs(_fieldAutoScrollDelta) < 0.1)
+        {
+            StopFieldAutoScroll();
+            return;
+        }
+
+        var scrollViewer = GetPlayerQueryScrollViewer();
+        if (scrollViewer == null)
+        {
+            StopFieldAutoScroll();
+            return;
+        }
+
+        scrollViewer.ScrollToVerticalOffset(scrollViewer.VerticalOffset + _fieldAutoScrollDelta);
+        UpdateFieldDropTargetFromCursor();
+    }
+
+    private void UpdateFieldDropTargetFromCursor()
+    {
+        if (_draggedField == null)
+        {
+            return;
+        }
+
+        var host = PlayerQueryFieldItemsControl;
+        var cursor = Mouse.GetPosition(host);
+
+        PlayerQueryField? target = null;
+        var before = false;
+
+        for (var i = 0; i < _playerQueryFields.Count; i++)
+        {
+            if (ReferenceEquals(_playerQueryFields[i], _draggedField)) continue;
+            if (host.ItemContainerGenerator.ContainerFromIndex(i) is not FrameworkElement container) continue;
+
+            var topLeft = container.TranslatePoint(new Point(0, 0), host);
+            var rowBottom = topLeft.Y + container.ActualHeight;
+
+            if (cursor.Y < topLeft.Y)
+            {
+                target = _playerQueryFields[i];
+                before = true;
+                break;
+            }
+
+            if (cursor.Y <= rowBottom)
+            {
+                target = _playerQueryFields[i];
+                before = cursor.Y < topLeft.Y + container.ActualHeight / 2;
+                break;
+            }
+        }
+
+        if (target == null)
+        {
+            ClearFieldDropFeedback();
+            return;
+        }
+
+        var draggedIndex = _playerQueryFields.IndexOf(_draggedField);
+        var targetIndex = _playerQueryFields.IndexOf(target);
+        var targetSlot = targetIndex < draggedIndex ? targetIndex : targetIndex - 1;
+        _gapIndex = before ? targetSlot : targetSlot + 1;
+
+        foreach (var item in _playerQueryFields)
+        {
+            item.DropTarget = ReferenceEquals(item, target)
+                ? (before ? PlayerQueryFieldDropTarget.Before : PlayerQueryFieldDropTarget.After)
+                : PlayerQueryFieldDropTarget.None;
+        }
+
+        SetFieldGap(target, before);
+    }
+    private void PlayerQueryFieldList_DragLeave(object sender, DragEventArgs e)
+    {
+        StopFieldAutoScroll();
+    }
+
+
+
+    private void PlayerQueryFieldItemsControl_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        // 只有正在拖拽条目时才手动滚外层，避免抢走路径下拉框弹出层的滚轮。
+        if (_draggedField == null)
+        {
+            return;
+        }
+
+        var scrollViewer = GetPlayerQueryScrollViewer();
+        if (scrollViewer == null)
+        {
+            return;
+        }
+
+        scrollViewer.ScrollToVerticalOffset(scrollViewer.VerticalOffset - e.Delta / 3.0);
+        e.Handled = true;
+    }
+
+
+    /// <summary>清掉所有拖拽反馈：插入线 + 空位。所有退出路径（换目标/拖出列表/松手/取消）都必须走这里。</summary>
+    private void ClearFieldDropFeedback()
+    {
+        foreach (var item in _playerQueryFields)
+        {
+            item.DropTarget = PlayerQueryFieldDropTarget.None;
+        }
+
+        ClearFieldGap();
+        _gapIndex = -1;
+    }
+
+    // ---------- 残影 ----------
+
+    private void ShowDragGhost(FrameworkElement source)
+    {
+        HideDragGhost();
+
+        var ghost = new Border
+        {
+            Width = source.ActualWidth,
+            Height = source.ActualHeight,
+            Background = SnapshotVisual(source),
+            CornerRadius = new CornerRadius(10),
+            Opacity = 0.94,
+            IsHitTestVisible = false,
+            Effect = new DropShadowEffect
+            {
+                BlurRadius = 20,
+                ShadowDepth = 5,
+                Direction = 270,
+                Opacity = 0.30,
+                Color = Colors.Black
+            }
+        };
+
+        _dragGhost = new Popup
+        {
+            AllowsTransparency = true,
+            IsHitTestVisible = false,
+            StaysOpen = true,
+            PlacementTarget = this,
+            Placement = PlacementMode.Relative,
+            Child = ghost
+        };
+        _dragGhost.IsOpen = true;
+
+        // DoDragDrop 期间普通鼠标事件到不了控件，所以用定时器主动跟随鼠标位置
+        _dragGhostTimer = new DispatcherTimer(DispatcherPriority.Render)
+        {
+            Interval = TimeSpan.FromMilliseconds(16)
+        };
+        _dragGhostTimer.Tick += (_, _) => MoveDragGhost(ghost);
+        _dragGhostTimer.Start();
+
+        MoveDragGhost(ghost);
+    }
+
+    private void MoveDragGhost(FrameworkElement ghost)
+    {
+        if (_dragGhost == null)
+        {
+            return;
+        }
+
+        var position = Mouse.GetPosition(this);
+        _dragGhost.HorizontalOffset = position.X - ghost.Width / 2;
+        _dragGhost.VerticalOffset = position.Y - ghost.Height / 2;
+    }
+
+    private void HideDragGhost()
+    {
+        _dragGhostTimer?.Stop();
+        _dragGhostTimer = null;
+
+        if (_dragGhost != null)
+        {
+            _dragGhost.IsOpen = false;
+            _dragGhost.Child = null;
+            _dragGhost = null;
+        }
+    }
+
+    /// <summary>
+    /// 给残影拍一张静态快照。
+    /// 用 RenderTargetBitmap 而不是 VisualBrush：VisualBrush 是实时的，
+    /// 会把原行"变淡"的效果一起画进残影里。
+    /// </summary>
+    private static ImageBrush SnapshotVisual(FrameworkElement element)
+    {
+        var dpi = VisualTreeHelper.GetDpi(element);
+        var width = Math.Max(1, (int)Math.Ceiling(element.ActualWidth * dpi.DpiScaleX));
+        var height = Math.Max(1, (int)Math.Ceiling(element.ActualHeight * dpi.DpiScaleY));
+
+        var bitmap = new RenderTargetBitmap(width, height, 96 * dpi.DpiScaleX, 96 * dpi.DpiScaleY, PixelFormats.Pbgra32);
+        bitmap.Render(element);
+        bitmap.Freeze();
+
+        var brush = new ImageBrush(bitmap)
+        {
+            Stretch = Stretch.None,
+            AlignmentX = AlignmentX.Left,
+            AlignmentY = AlignmentY.Top
+        };
+        brush.Freeze();
+        return brush;
+    }
+
+    // ---------- 空位 ----------
+
+    /// <summary>空位高度，约等于一行（含行间距）。和字段行的高度保持视觉一致即可。</summary>
+    private const double FieldRowGapHeight = 42;
+
+    private PlayerQueryField? _gapRow;
+    private bool _gapBefore;
+
+    /// <summary>
+    /// 在目标行上边或下边撑开一条空位。
+    ///
+    /// 做法是给这个行的容器加一个带动画的 Margin —— 而不是往列表里插一个占位项。
+    /// 好处是"其他条目闪开"是布局自然产生的结果，不用手工算谁该位移多少、位移多少像素。
+    /// 代价是动画期间每帧要走一次布局；字段列表只有十几行，可以忽略。
+    /// </summary>
+    private void SetFieldGap(PlayerQueryField row, bool before)
+    {
+        if (ReferenceEquals(_gapRow, row) && _gapBefore == before)
+        {
+            return;
+        }
+
+        ClearFieldGap();
+
+        if (PlayerQueryFieldItemsControl.ItemContainerGenerator.ContainerFromItem(row) is not FrameworkElement container)
+        {
+            return;
+        }
+
+        _gapRow = row;
+        _gapBefore = before;
+
+        var target = before
+            ? new Thickness(0, FieldRowGapHeight, 0, 0)
+            : new Thickness(0, 0, 0, FieldRowGapHeight);
+
+        container.BeginAnimation(FrameworkElement.MarginProperty,
+            new ThicknessAnimation(target, TimeSpan.FromMilliseconds(180)) { EasingFunction = Motion.Soft() });
+    }
+
+    private void ClearFieldGap()
+    {
+        if (_gapRow != null &&
+            PlayerQueryFieldItemsControl.ItemContainerGenerator.ContainerFromItem(_gapRow) is FrameworkElement container)
+        {
+            container.BeginAnimation(FrameworkElement.MarginProperty,
+                new ThicknessAnimation(new Thickness(0), TimeSpan.FromMilliseconds(150)) { EasingFunction = Motion.Soft() });
+        }
+
+        _gapRow = null;
+        _gapBefore = false;
     }
 
     private List<(string Label, string Value)> BuildPlayerQueryStats(
@@ -1222,7 +1874,7 @@ private void ThemeToggleButton_Click(object sender, RoutedEventArgs e)
     ApplyTheme(_isDarkMode);
     UpdateListeningIndicator(_watcher.IsRunning);
     SaveThemePreference(_isDarkMode);
-    LogStatus(_isDarkMode ? "已切换到夜间模式" : "已切换到日间模式");
+    LogStatus(_isDarkMode ? Copy.SwitchedToDark : Copy.SwitchedToLight);
 }
 
 private void ApplyTheme(bool darkMode)
@@ -1997,7 +2649,7 @@ private void SaveThemePreference(bool darkMode)
             AppendDebugLog("[编码] 已切换为 " + _settings.LogEncoding + "，已清空悬浮窗旧消息");
         }
 
-        if (log) LogStatus("配置已保存");
+        if (log) LogStatus(Copy.ConfigSaved);
     }
 
     private void BrowseButton_Click(object sender, RoutedEventArgs e)
@@ -2030,7 +2682,16 @@ private void SaveThemePreference(bool darkMode)
         SaveSettingsFromUi();
         if (string.IsNullOrWhiteSpace(_settings.LogPath))
         {
-            MessageBox.Show(this, "请先选择 Minecraft 日志文件。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+            // 先让按钮晃一下表示"不行哦"，再弹原因 —— 比直接弹框温柔，也更符合轻声提醒的语气。
+            // MessageBox 会阻塞 UI 线程，所以必须等晃动播完再弹，否则动画根本渲染不出来。
+            Motion.Shake(ToggleListenButton);
+            var prompt = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(Motion.ShakeMs + 40) };
+            prompt.Tick += (_, _) =>
+            {
+                prompt.Stop();
+                MessageBox.Show(this, Copy.NeedLogPath, "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+            };
+            prompt.Start();
             return;
         }
 
@@ -2041,7 +2702,7 @@ private void SaveThemePreference(bool darkMode)
         ToggleListenButton.Content = "停止监听";
         UpdateListeningIndicator(true);
         ShowOverlay();
-        LogStatus("开始监听：" + _settings.LogPath);
+        LogStatus(Copy.WatchStarted + _settings.LogPath);
         AppendDebugLog("== 开始监听 ==");
         AppendDebugLog("日志文件: " + _settings.LogPath);
         AppendDebugLog("日志编码: " + _settings.LogEncoding);
@@ -2055,7 +2716,7 @@ private void SaveThemePreference(bool darkMode)
         _watcher.Stop();
         ToggleListenButton.Content = "开始监听";
         UpdateListeningIndicator(false);
-        LogStatus("已停止监听");
+        LogStatus(Copy.ListeningStopped);
         AppendDebugLog("== 已停止监听 ==");
     }
 
@@ -2338,24 +2999,26 @@ private void SaveThemePreference(bool darkMode)
         if (_overlay?.IsVisible == true)
         {
             HideOverlay();
-            LogStatus("悬浮窗已隐藏");
+            LogStatus(Copy.OverlayHidden);
         }
         else
         {
             ShowOverlay();
-            LogStatus("悬浮窗已显示");
+            LogStatus(Copy.OverlayShown);
         }
     }
 
     private void ClearButton_Click(object sender, RoutedEventArgs e)
     {
         _overlay?.ClearMessages();
-        LogStatus("已清空悬浮窗显示");
+        LogStatus(Copy.OverlayCleared);
     }
 
     private void SaveButton_Click(object sender, RoutedEventArgs e)
     {
         SaveSettingsFromUi();
+        // 成功后轻轻"跳"一下就行，不需要任何文字提示
+        Motion.Heartbeat(SaveButton);
     }
 
     private void ResetOverlayButton_Click(object sender, RoutedEventArgs e)
@@ -2390,7 +3053,7 @@ private void SaveThemePreference(bool darkMode)
         PlayerNameColorHexText.Text = FormatHex(_settings.PlayerNameColor);
 
         SaveSettingsFromUi(false);
-        LogStatus("已恢复默认外观设置");
+        LogStatus(Copy.ResetOverlay);
     }
 
     private void AutoGgResetButton_Click(object sender, RoutedEventArgs e)
@@ -2400,7 +3063,7 @@ private void SaveThemePreference(bool darkMode)
         AutoGgTextTextBox.Text = "gg";
         AutoGgUseClipboardCheckBox.IsChecked = true;
         SaveSettingsFromUi(false);
-        LogStatus("已恢复默认自动 GG 设置");
+        LogStatus(Copy.ResetAutoGg);
     }
 
     private void CialloButton_Click(object sender, RoutedEventArgs e)
@@ -2509,11 +3172,11 @@ private void SaveThemePreference(bool darkMode)
         try
         {
             Clipboard.SetText(DebugLogTextBox.Text);
-            LogStatus("调试日志已复制到剪贴板");
+            LogStatus(Copy.DebugCopied);
         }
         catch
         {
-            LogStatus("复制失败");
+            LogStatus(Copy.CopyFailed);
         }
     }
 
@@ -2521,7 +3184,7 @@ private void SaveThemePreference(bool darkMode)
     {
         DebugLogTextBox.Clear();
         UpdateDebugLogCount();
-        LogStatus("已清空后端日志");
+        LogStatus(Copy.DebugCleared);
     }
 
     private void SendManualMessageButton_Click(object sender, RoutedEventArgs e)
@@ -2535,7 +3198,7 @@ private void SaveThemePreference(bool darkMode)
         ShowOverlay();
         _overlay?.AddMessage(text);
         ManualMessageTextBox.Clear();
-        LogStatus("已发送到悬浮窗");
+        LogStatus(Copy.OverlaySentTo);
     }
 
     private void AppendDebugLog(string line)
@@ -2576,11 +3239,11 @@ private void SaveThemePreference(bool darkMode)
         try
         {
             File.WriteAllText(dialog.FileName, JsonSerializer.Serialize(export, new JsonSerializerOptions { WriteIndented = true }));
-            LogStatus("规则已导出：" + dialog.FileName);
+            LogStatus(Copy.RulesExported + dialog.FileName);
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, "导出失败：" + ex.Message, "提示", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show(this, Copy.ExportFailed + ex.Message, "提示", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
@@ -2607,7 +3270,7 @@ private void SaveThemePreference(bool darkMode)
             });
             if (export == null)
             {
-                MessageBox.Show(this, "文件内容为空或格式不正确。", "提示", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show(this, Copy.ImportEmpty, "提示", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
@@ -2633,11 +3296,11 @@ private void SaveThemePreference(bool darkMode)
             }
 
             SaveSettingsFromUi(false);
-            LogStatus("规则已导入：" + dialog.FileName);
+            LogStatus(Copy.RulesImported + dialog.FileName);
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, "导入失败：" + ex.Message, "提示", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show(this, Copy.ImportFailed + ex.Message, "提示", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
@@ -2825,7 +3488,7 @@ private void SaveThemePreference(bool darkMode)
         var text = ColorRuleTextTextBox.Text.Trim();
         if (string.IsNullOrEmpty(text))
         {
-            MessageBox.Show(this, "请输入需要染色的文字。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(this, Copy.NeedColorText, "提示", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -2848,7 +3511,7 @@ private void SaveThemePreference(bool darkMode)
     {
         if (ColorRuleListBox.SelectedItem is not TextColorRule rule)
         {
-            MessageBox.Show(this, "请先在列表中选中一条规则。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(this, Copy.PickColorRule, "提示", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -2903,7 +3566,7 @@ private void SaveThemePreference(bool darkMode)
         var find = ReplaceFindTextBox.Text;
         if (string.IsNullOrEmpty(find))
         {
-            MessageBox.Show(this, "请输入需要查找的文字。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(this, Copy.NeedFindText, "提示", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -2924,7 +3587,7 @@ private void SaveThemePreference(bool darkMode)
     {
         if (ReplaceRuleListBox.SelectedItem is not TextReplaceRule rule)
         {
-            MessageBox.Show(this, "请先在列表中选中一条替换规则。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(this, Copy.PickReplaceRule, "提示", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -2989,14 +3652,14 @@ private void SaveThemePreference(bool darkMode)
     {
         if (BlockKeywordListBox.SelectedItem is not BlockKeywordItem item)
         {
-            MessageBox.Show(this, "请先在列表中选中一个关键词。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(this, Copy.PickKeyword, "提示", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
         var keyword = BlockKeywordTextBox.Text.Trim();
         if (string.IsNullOrEmpty(keyword))
         {
-            MessageBox.Show(this, "请输入关键词。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(this, Copy.NeedKeyword, "提示", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -3083,11 +3746,9 @@ private void SaveThemePreference(bool darkMode)
         var animation = new DoubleAnimation
         {
             To = targetY,
-            Duration = TimeSpan.FromMilliseconds(200),
-            EasingFunction = new CubicEase
-            {
-                EasingMode = EasingMode.EaseOut
-            }
+            Duration = TimeSpan.FromMilliseconds(Motion.IndicatorMs),
+            // 带一点惯性的落位：轻轻过冲再收回来，而不是硬生生停住
+            EasingFunction = Motion.Settle()
         };
 
         IndicatorTranslate.BeginAnimation(TranslateTransform.YProperty, animation);
@@ -3110,6 +3771,15 @@ private void SaveThemePreference(bool darkMode)
 
         Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
         {
+            // 样板阶段：只在"悬浮窗显示"这一个面板上启用错峰浮入，方便和其它面板对比观感。
+            // 验收满意后把这段判断删掉，五个面板就都走新动效。
+            if (ReferenceEquals(activePanel, OverlayPanel))
+            {
+                Motion.StaggerIn(activePanel, TryFindResource("CardStyle") as Style);
+                return;
+            }
+
+            // 旧行为：整个面板当一个单位动（没有错峰，观感偏"整体平移"）
             activePanel.Opacity = 0;
             var translate = new TranslateTransform(0, 18);
             activePanel.RenderTransform = translate;
