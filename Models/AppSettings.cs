@@ -39,6 +39,12 @@ public sealed class AppSettings
     /// <summary>记忆的悬浮窗位置。</summary>
     public double? OverlayTop { get; set; }
 
+    /// <summary>
+    /// 记忆的悬浮窗"停靠底边"（DIP）。悬浮窗只向上生长的位置补偿靠它还原，
+    /// 重启后悬浮窗会回到用户放置的位置，而不是长高之后的顶边。
+    /// </summary>
+    public double? OverlayAnchorBottom { get; set; }
+
     /// <summary>显示字体名称。</summary>
     public string FontFamily { get; set; } = "Microsoft YaHei UI";
 

@@ -3014,6 +3014,24 @@ private void SaveThemePreference(bool darkMode)
         LogStatus(Copy.OverlayCleared);
     }
 
+    private void ResetOverlayPositionButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_overlay == null)
+        {
+            // 悬浮窗还没创建过，清掉记忆位置即可，下次显示就是默认位置。
+            _settings.OverlayLeft = null;
+            _settings.OverlayTop = null;
+            _settings.OverlayAnchorBottom = null;
+            SettingsService.Save(_settings);
+        }
+        else
+        {
+            _overlay.ResetPosition();
+        }
+
+        LogStatus(Copy.OverlayPositionReset);
+    }
+
     private void SaveButton_Click(object sender, RoutedEventArgs e)
     {
         SaveSettingsFromUi();

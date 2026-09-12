@@ -299,8 +299,13 @@
                                         <TextBlock Text="悬浮窗显示" Style="{StaticResource PanelTitleStyle}"/>
                                         <TextBlock Text="调整游戏内聊天悬浮窗的外观与行为" Style="{StaticResource PanelDescStyle}"/>
                                     </StackPanel>
-                                    <Button Grid.Column="1" Content="恢复默认" Click="ResetOverlayButton_Click"
-                                            Style="{StaticResource SmallButtonStyle}" VerticalAlignment="Top"/>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
+                                        <Button Content="重置位置" Click="ResetOverlayPositionButton_Click"
+                                                Style="{StaticResource SmallButtonStyle}"
+                                                Margin="0,0,8,0"/>
+                                        <Button Content="恢复默认" Click="ResetOverlayButton_Click"
+                                                Style="{StaticResource SmallButtonStyle}"/>
+                                    </StackPanel>
                                 </Grid>
 
                                 <StackPanel>

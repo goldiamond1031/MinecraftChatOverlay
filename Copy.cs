@@ -61,6 +61,7 @@ public static class Copy
     public const string DebugCopied = "日志复制好了，可以直接粘贴";
     public const string DebugCleared = "后端日志清空了";
     public const string OverlayCleared = "悬浮窗清空了";
+    public const string OverlayPositionReset = "悬浮窗回到右下角了";
     public const string ResetOverlay = "外观设置恢复默认了";
     public const string ResetAutoGg = "自动 GG 设置恢复默认了";
     public const string ConfigSaved = "配置保存好了";
