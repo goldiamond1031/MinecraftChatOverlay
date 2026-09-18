@@ -1,4 +1,4 @@
-namespace MinecraftChatOverlay;
+﻿namespace MinecraftChatOverlay;
 
 /// <summary>
 /// 所有面向用户的文案集中在这里。
@@ -86,6 +86,34 @@ public static class Copy
 
     public const string OverlayHidden = "悬浮窗收起来了";
     public const string OverlayShown = "悬浮窗出来了";
+
+    // ==================== 版本与更新 ====================
+
+    /// <summary>当前版本号。只改这一处，界面标题和更新检查都用它。</summary>
+    public const string AppVersion = "1.0.4";
+
+    /// <summary>界面上版本号的前缀（应用名单独一行显示，所以这里只剩 v）。</summary>
+    public const string AppVersionPrefix = "v";
+    public const string CheckUpdate = "检查更新";
+    public const string GetUpdate = "获取更新";
+    public const string CheckingUpdate = "正在检查…";
+    public const string AlreadyLatest = "已经是最新版本了";
+    public const string UpdateAvailable = "有新版本：";
+    public const string CheckUpdateFailed = "检查更新失败了：";
+    public const string ReleasesOpened = "已经在浏览器里打开 Releases 页面";
+    public const string BrowserFailed = "打不开浏览器：";
+
+    /// <summary>失败提示弹窗的标题。</summary>
+    public const string CheckUpdateTitle = "检查更新";
+
+    // ==================== B站弹幕模块 ====================
+
+    public const string BiliConfigLoaded = "B站弹幕配置读取好了：";
+    public const string BiliLogCopied = "B站连接日志复制好了，可以直接粘贴";
+    public const string BiliOverlayHidden = "B站弹幕窗收起来了";
+    public const string BiliOverlayShown = "B站弹幕窗出来了";
+    public const string BiliGiftNameEmpty = "先填一个礼物名称或关键词";
+    public const string BiliGiftNotSelected = "先在列表里选一行";
     public const string OverlaySentTo = "已经发到悬浮窗了";
 
     // ==================== 玩家查询 ====================

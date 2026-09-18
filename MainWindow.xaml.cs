@@ -1,6 +1,7 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
+using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -55,6 +56,21 @@ public partial class MainWindow : Window
 
     private readonly List<FontItem> _fontItems = new();
     private OverlayWindow? _overlay;
+
+    // ---------- B站弹幕模块（独立弹幕窗，与游戏聊天窗口互不干扰） ----------
+    private readonly BiliSettings _biliSettings;
+    private readonly ObservableCollection<GiftColorItem> _biliGiftColors = new();
+    private readonly List<string> _biliLogBuffer = new();
+    private ILiveClient? _biliClient;
+    private BiliOverlayWindow? _biliOverlay;
+    private FaceCache? _biliFaceCache;
+    private string _biliLastRoomSnapshot = "";
+    private int _biliRealOnline;
+    private RoomInfo? _biliCurrentRoom;
+    private string _biliGiftEditColor = "#FFFFFF";
+
+    /// <summary>B站面板正在从配置回填控件时为 true，避免回填过程触发一次无谓的保存。</summary>
+    private bool _biliLoading = true;
     private bool _loading = true;
     private string _colorRuleColor = "#FFFF0000";
     private string _colorRuleMatchColor = "";
@@ -105,6 +121,14 @@ public partial class MainWindow : Window
 
         _loading = false;
         SubscribeImmediateApply();
+
+        // B站弹幕模块：独立配置文件 + 独立悬浮窗
+        _biliSettings = BiliSettingsService.Load();
+        BiliGiftColorListBox.ItemsSource = _biliGiftColors;
+        LoadBiliUiFromSettings();
+        SubscribeBiliImmediateApply();
+        BiliLog(Copy.BiliConfigLoaded + BiliSettingsService.ConfigPath);
+
         Loaded += MainWindow_Loaded;
         LogStatus(Copy.ConfigLoaded + SettingsService.ConfigPath);
     }
@@ -112,6 +136,14 @@ public partial class MainWindow : Window
 private void MainWindow_Loaded(object sender, RoutedEventArgs e)
 {
     MoveIndicatorToSelected();
+
+        AppVersionText.Text = Copy.AppVersionPrefix + Copy.AppVersion;
+
+        // 每次打开软件顺手查一次更新（失败不弹窗）
+        _ = AutoCheckUpdateAsync();
+
+        // 启动时检查 B站登录态：Cookie 会过期，早提醒比连不上才发现好
+        _ = CheckBiliLoginStateAsync();
     
     // 加载主题
     _isDarkMode = _settings.IsDarkMode;
@@ -3749,6 +3781,7 @@ private void SaveThemePreference(bool darkMode)
         else if (NavAutoGG.IsChecked == true) selected = NavAutoGG;
         else if (NavTextRules.IsChecked == true) selected = NavTextRules;
         else if (NavPlayerQuery.IsChecked == true) selected = NavPlayerQuery;
+        else if (NavBili.IsChecked == true) selected = NavBili;
         else if (NavDebug.IsChecked == true) selected = NavDebug;
 
         if (selected == null || NavIndicator == null || IndicatorTranslate == null)
@@ -3780,6 +3813,7 @@ private void SaveThemePreference(bool darkMode)
         else if (NavAutoGG.IsChecked == true) activePanel = AutoGgPanel;
         else if (NavTextRules.IsChecked == true) activePanel = RulesPanel;
         else if (NavPlayerQuery.IsChecked == true) activePanel = PlayerQueryPanel;
+        else if (NavBili.IsChecked == true) activePanel = BiliPanel;
         else if (NavDebug.IsChecked == true) activePanel = DebugPanel;
 
         if (activePanel == null)
@@ -3821,6 +3855,34 @@ private void SaveThemePreference(bool darkMode)
         SaveSettingsFromUi(false);
         StopListening();
         _overlay?.Close();
+
+        // B站模块：先存配置，再断开连接、关掉悬浮窗
+        try
+        {
+            SaveBiliSettingsFromUi(false);
+        }
+        catch
+        {
+        }
+
+        _biliOverlay?.Close();
+        _biliOverlay = null;
+
+        if (_biliClient != null)
+        {
+            var client = _biliClient;
+            _biliClient = null;
+            try
+            {
+                client.Dispose();
+            }
+            catch
+            {
+            }
+        }
+
+        _biliFaceCache?.Dispose();
+        _biliFaceCache = null;
     }
 
     private void UpdateListeningIndicator(bool listening)
@@ -4058,6 +4120,908 @@ private void SaveThemePreference(bool darkMode)
         }
 
         public override string ToString() => Display;
+    }
+
+    // ==================== B站弹幕模块 ====================
+
+    /// <summary>把 B站配置回填到界面控件上。</summary>
+    private void LoadBiliUiFromSettings()
+    {
+        _biliLoading = true;
+        try
+        {
+            BiliRoomIdTextBox.Text = _biliSettings.RoomId;
+            BiliOverlayWidthSlider.Value = Math.Clamp(_biliSettings.OverlayWidth, 320, 900);
+            BiliOverlayHeightSlider.Value = Math.Clamp(_biliSettings.DanmakuMaxHeight, 120, 1200);
+            BiliOpacitySlider.Value = Math.Clamp(_biliSettings.OverlayOpacity, 0.1, 1.0);
+            BiliBackgroundOpacitySlider.Value = Math.Clamp(_biliSettings.BackgroundOpacity, 0.0, 1.0);
+            BiliFontSizeSlider.Value = Math.Clamp(_biliSettings.FontSize, 10, 30);
+            BiliWrapLengthTextBox.Text = _biliSettings.DanmakuWrapLength.ToString();
+            BiliMaxDanmakuTextBox.Text = _biliSettings.MaxDanmakuLines.ToString();
+            BiliSuperChatMaxTextBox.Text = _biliSettings.MaxSuperChatLines.ToString();
+            BiliSuperChatVisibleTextBox.Text = _biliSettings.MaxSuperChatVisibleLines.ToString();
+            BiliSuperChatFontSizeTextBox.Text = _biliSettings.SuperChatFontSize.ToString("0.#");
+            BiliGiftMaxTextBox.Text = _biliSettings.MaxGiftLines.ToString();
+            BiliGiftVisibleTextBox.Text = _biliSettings.MaxGiftVisibleLines.ToString();
+            BiliGiftFontSizeTextBox.Text = _biliSettings.GiftFontSize.ToString("0.#");
+            BiliEntryMaxTextBox.Text = _biliSettings.MaxEntryLines.ToString();
+            BiliEntryVisibleTextBox.Text = _biliSettings.MaxEntryVisibleLines.ToString();
+            BiliEntryFontSizeTextBox.Text = _biliSettings.EntryFontSize.ToString("0.#");
+            BiliNameScaleTextBox.Text = _biliSettings.NameFontScale.ToString("0.##");
+            BiliHeaderFontSizeSlider.Value = Math.Clamp(_biliSettings.HeaderFontSize, 8, 30);
+            BiliDanmakuOriginalColorCheckBox.IsChecked = _biliSettings.ShowDanmakuOriginalColor;
+            LoadBiliFontCombo();
+            BiliClickThroughCheckBox.IsChecked = _biliSettings.ClickThrough;
+            BiliShowRoomTitleCheckBox.IsChecked = _biliSettings.ShowRoomTitle;
+            BiliShowOnlineCheckBox.IsChecked = _biliSettings.ShowOnline;
+            BiliShadowCheckBox.IsChecked = _biliSettings.DanmakuShadow;
+            BiliOnlineModeComboBox.SelectedIndex = Math.Clamp(_biliSettings.OnlineDisplayMode, 0, 5);
+            BiliGiftNoticeCheckBox.IsChecked = _biliSettings.ShowGiftNotice;
+            BiliSuperChatNoticeCheckBox.IsChecked = _biliSettings.ShowSuperChatNotice;
+            BiliGuardNoticeCheckBox.IsChecked = _biliSettings.ShowGuardNotice;
+            BiliEntryNoticeCheckBox.IsChecked = _biliSettings.ShowEntryNotice;
+
+            _biliGiftColors.Clear();
+            foreach (var pair in _biliSettings.GiftColors)
+            {
+                _biliGiftColors.Add(new GiftColorItem(pair.Key, pair.Value));
+            }
+
+            UpdateBiliColorPreviews();
+        }
+        finally
+        {
+            _biliLoading = false;
+        }
+    }
+
+    /// <summary>面板上的设置一改就立即保存并应用到 B站悬浮窗，不需要点保存按钮。</summary>
+    private void SubscribeBiliImmediateApply()
+    {
+        BiliOverlayWidthSlider.ValueChanged += (_, _) => SaveBiliSettingsFromUi(false);
+        BiliOverlayHeightSlider.ValueChanged += (_, _) => SaveBiliSettingsFromUi(false);
+        BiliOpacitySlider.ValueChanged += (_, _) => SaveBiliSettingsFromUi(false);
+        BiliBackgroundOpacitySlider.ValueChanged += (_, _) => SaveBiliSettingsFromUi(false);
+        BiliFontSizeSlider.ValueChanged += (_, _) => SaveBiliSettingsFromUi(false);
+        BiliOnlineModeComboBox.SelectionChanged += (_, _) => SaveBiliSettingsFromUi(false);
+        BiliWrapLengthTextBox.LostFocus += (_, _) => SaveBiliSettingsFromUi(false);
+        BiliMaxDanmakuTextBox.LostFocus += (_, _) => SaveBiliSettingsFromUi(false);
+        BiliSuperChatMaxTextBox.LostFocus += (_, _) => SaveBiliSettingsFromUi(false);
+        BiliSuperChatVisibleTextBox.LostFocus += (_, _) => SaveBiliSettingsFromUi(false);
+        BiliSuperChatFontSizeTextBox.LostFocus += (_, _) => SaveBiliSettingsFromUi(false);
+        BiliGiftMaxTextBox.LostFocus += (_, _) => SaveBiliSettingsFromUi(false);
+        BiliGiftVisibleTextBox.LostFocus += (_, _) => SaveBiliSettingsFromUi(false);
+        BiliGiftFontSizeTextBox.LostFocus += (_, _) => SaveBiliSettingsFromUi(false);
+        BiliEntryMaxTextBox.LostFocus += (_, _) => SaveBiliSettingsFromUi(false);
+        BiliEntryVisibleTextBox.LostFocus += (_, _) => SaveBiliSettingsFromUi(false);
+        BiliEntryFontSizeTextBox.LostFocus += (_, _) => SaveBiliSettingsFromUi(false);
+        BiliNameScaleTextBox.LostFocus += (_, _) => SaveBiliSettingsFromUi(false);
+        BiliHeaderFontSizeSlider.ValueChanged += (_, _) => SaveBiliSettingsFromUi(false);
+        BiliFontFamilyComboBox.SelectionChanged += (_, _) => SaveBiliSettingsFromUi(false);
+        BiliRoomIdTextBox.LostFocus += (_, _) => SaveBiliSettingsFromUi(false);
+    }
+
+    /// <summary>B站弹幕窗的字体下拉：复用主界面已经枚举好的系统字体列表。</summary>
+    private void LoadBiliFontCombo()
+    {
+        BiliFontFamilyComboBox.ItemsSource = _fontItems;
+
+        var item = _fontItems.FirstOrDefault(
+            x => string.Equals(x.Source, _biliSettings.FontFamily, StringComparison.OrdinalIgnoreCase));
+
+        if (item == null && !string.IsNullOrWhiteSpace(_biliSettings.FontFamily))
+        {
+            // 配置里的字体不在系统列表里（换机器/删字体），补一项让下拉能显示出来
+            item = new FontItem(_biliSettings.FontFamily, _biliSettings.FontFamily);
+            _fontItems.Insert(0, item);
+            BiliFontFamilyComboBox.ItemsSource = _fontItems;
+        }
+
+        BiliFontFamilyComboBox.SelectedItem = item ?? _fontItems.FirstOrDefault();
+    }
+
+    /// <summary>XAML 里 CheckBox 的 Checked/Unchecked 统一走这里。</summary>
+    private void BiliImmediate_Changed(object sender, RoutedEventArgs e) => SaveBiliSettingsFromUi(false);
+
+    private void SaveBiliSettingsFromUi(bool log)
+    {
+        if (_biliLoading)
+        {
+            return;
+        }
+
+        _biliSettings.RoomId = BiliRoomIdTextBox.Text.Trim();
+        _biliSettings.OverlayWidth = Math.Clamp(BiliOverlayWidthSlider.Value, 320, 900);
+        _biliSettings.DanmakuMaxHeight = Math.Clamp(BiliOverlayHeightSlider.Value, 120, 1200);
+        _biliSettings.OverlayOpacity = Math.Clamp(BiliOpacitySlider.Value, 0.1, 1.0);
+        _biliSettings.BackgroundOpacity = Math.Clamp(BiliBackgroundOpacitySlider.Value, 0.0, 1.0);
+        _biliSettings.FontSize = Math.Clamp(BiliFontSizeSlider.Value, 10, 30);
+        _biliSettings.DanmakuWrapLength = ParseInt(BiliWrapLengthTextBox.Text, 40, 5, 200);
+        _biliSettings.MaxDanmakuLines = ParseInt(BiliMaxDanmakuTextBox.Text, 200, 1, 500);
+        _biliSettings.MaxSuperChatLines = ParseInt(BiliSuperChatMaxTextBox.Text, 200, 1, 2000);
+        _biliSettings.MaxSuperChatVisibleLines = ParseInt(BiliSuperChatVisibleTextBox.Text, 2, 1, 50);
+        _biliSettings.SuperChatFontSize = ParseDouble(BiliSuperChatFontSizeTextBox.Text, 12, 8, 30);
+        _biliSettings.MaxGiftLines = ParseInt(BiliGiftMaxTextBox.Text, 200, 1, 2000);
+        _biliSettings.MaxGiftVisibleLines = ParseInt(BiliGiftVisibleTextBox.Text, 2, 1, 50);
+        _biliSettings.GiftFontSize = ParseDouble(BiliGiftFontSizeTextBox.Text, 12, 8, 30);
+        _biliSettings.MaxEntryLines = ParseInt(BiliEntryMaxTextBox.Text, 200, 1, 2000);
+        _biliSettings.MaxEntryVisibleLines = ParseInt(BiliEntryVisibleTextBox.Text, 1, 1, 50);
+        _biliSettings.EntryFontSize = ParseDouble(BiliEntryFontSizeTextBox.Text, 11, 8, 30);
+        _biliSettings.NameFontScale = double.TryParse(BiliNameScaleTextBox.Text, out var nameFontScale)
+            ? Math.Clamp(nameFontScale, 0.5, 1.5)
+            : 0.8;
+        _biliSettings.HeaderFontSize = Math.Clamp(BiliHeaderFontSizeSlider.Value, 8, 30);
+        _biliSettings.ShowDanmakuOriginalColor = BiliDanmakuOriginalColorCheckBox.IsChecked == true;
+        if (BiliFontFamilyComboBox.SelectedItem is FontItem biliFont)
+        {
+            _biliSettings.FontFamily = biliFont.Source;
+        }
+        _biliSettings.ClickThrough = BiliClickThroughCheckBox.IsChecked == true;
+        _biliSettings.ShowRoomTitle = BiliShowRoomTitleCheckBox.IsChecked == true;
+        _biliSettings.ShowOnline = BiliShowOnlineCheckBox.IsChecked == true;
+        _biliSettings.DanmakuShadow = BiliShadowCheckBox.IsChecked == true;
+        _biliSettings.OnlineDisplayMode = Math.Clamp(BiliOnlineModeComboBox.SelectedIndex, 0, 5);
+        _biliSettings.ShowGiftNotice = BiliGiftNoticeCheckBox.IsChecked == true;
+        _biliSettings.ShowSuperChatNotice = BiliSuperChatNoticeCheckBox.IsChecked == true;
+        _biliSettings.ShowGuardNotice = BiliGuardNoticeCheckBox.IsChecked == true;
+        _biliSettings.ShowEntryNotice = BiliEntryNoticeCheckBox.IsChecked == true;
+        _biliSettings.GiftColors = _biliGiftColors
+            .Where(x => !string.IsNullOrWhiteSpace(x.GiftName))
+            .GroupBy(x => x.GiftName.Trim(), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => string.IsNullOrWhiteSpace(g.Last().Color) ? "#FFFFFF" : g.Last().Color.Trim(), StringComparer.OrdinalIgnoreCase);
+
+        BiliSettingsService.Save(_biliSettings);
+        _biliOverlay?.ApplySettings();
+        if (log)
+        {
+            BiliLog("B站配置保存完成");
+        }
+    }
+
+    private void UpdateBiliColorPreviews()
+    {
+        BiliBackgroundColorPreview.Background = ParseBrush(_biliSettings.BackgroundColor, Brushes.Black);
+        BiliShadowColorPreview.Background = ParseBrush(_biliSettings.ShadowColor, Brushes.Black);
+        BiliDanmakuColorPreview.Background = ParseBrush(_biliSettings.DanmakuTextColor, Brushes.White);
+        BiliNoticeColorPreview.Background = ParseBrush(_biliSettings.NoticeColor, Brushes.White);
+        BiliGiftTextColorPreview.Background = ParseBrush(_biliSettings.GiftTextColor, Brushes.White);
+        BiliOnlineColorPreview.Background = ParseBrush(_biliSettings.OnlineColor, Brushes.White);
+        BiliGiftColorPreview.Background = ParseBrush(_biliGiftEditColor, Brushes.White);
+    }
+
+    // ---------- 颜色选色 ----------
+
+    private void BiliChooseBackgroundColorButton_Click(object sender, RoutedEventArgs e) =>
+        ApplyBiliColor(PickColorHex(_biliSettings.BackgroundColor), hex => _biliSettings.BackgroundColor = hex, "背景颜色");
+
+    private void BiliChooseShadowColorButton_Click(object sender, RoutedEventArgs e) =>
+        ApplyBiliColor(PickColorHex(_biliSettings.ShadowColor), hex => _biliSettings.ShadowColor = hex, "阴影颜色");
+
+    private void BiliChooseDanmakuColorButton_Click(object sender, RoutedEventArgs e) =>
+        ApplyBiliColor(PickColorHex(_biliSettings.DanmakuTextColor), hex => _biliSettings.DanmakuTextColor = hex, "弹幕文字颜色");
+
+    private void BiliChooseNoticeColorButton_Click(object sender, RoutedEventArgs e) =>
+        ApplyBiliColor(PickColorHex(_biliSettings.NoticeColor), hex => _biliSettings.NoticeColor = hex, "通知文字颜色");
+
+    private void BiliChooseGiftTextColorButton_Click(object sender, RoutedEventArgs e) =>
+        ApplyBiliColor(PickColorHex(_biliSettings.GiftTextColor), hex => _biliSettings.GiftTextColor = hex, "礼物区文字颜色");
+
+    private void BiliChooseOnlineColorButton_Click(object sender, RoutedEventArgs e) =>
+        ApplyBiliColor(PickColorHex(_biliSettings.OnlineColor), hex => _biliSettings.OnlineColor = hex, "顶部文字颜色");
+
+    private void ApplyBiliColor(string? hex, Action<string> apply, string label)
+    {
+        if (string.IsNullOrEmpty(hex))
+        {
+            return;
+        }
+
+        apply(hex);
+        UpdateBiliColorPreviews();
+        SaveBiliSettingsFromUi(false);
+        BiliLog($"{label} → {hex}");
+    }
+
+    // ---------- 礼物 / 粉丝牌颜色 ----------
+
+    private void BiliGiftColorListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_biliLoading || BiliGiftColorListBox.SelectedItem is not GiftColorItem item)
+        {
+            return;
+        }
+
+        BiliGiftNameTextBox.Text = item.GiftName;
+        _biliGiftEditColor = item.Color;
+        UpdateBiliColorPreviews();
+    }
+
+    private void BiliChooseGiftColorButton_Click(object sender, RoutedEventArgs e)
+    {
+        var hex = PickColorHex(_biliGiftEditColor);
+        if (string.IsNullOrEmpty(hex))
+        {
+            return;
+        }
+
+        _biliGiftEditColor = hex;
+
+        // 已经选中某一行时顺手把它改掉，符合直觉
+        if (BiliGiftColorListBox.SelectedItem is GiftColorItem selected)
+        {
+            selected.Color = hex;
+            SaveBiliSettingsFromUi(false);
+        }
+
+        UpdateBiliColorPreviews();
+    }
+
+    private void BiliAddGiftColorButton_Click(object sender, RoutedEventArgs e)
+    {
+        var name = BiliGiftNameTextBox.Text.Trim();
+        if (string.IsNullOrEmpty(name))
+        {
+            LogStatus(Copy.BiliGiftNameEmpty);
+            return;
+        }
+
+        var existing = _biliGiftColors.FirstOrDefault(
+            x => string.Equals(x.GiftName.Trim(), name, StringComparison.OrdinalIgnoreCase));
+
+        if (existing != null)
+        {
+            existing.Color = _biliGiftEditColor;
+            BiliGiftColorListBox.SelectedItem = existing;
+        }
+        else
+        {
+            var item = new GiftColorItem(name, _biliGiftEditColor);
+            _biliGiftColors.Add(item);
+            BiliGiftColorListBox.SelectedItem = item;
+        }
+
+        SaveBiliSettingsFromUi(false);
+        BiliLog($"礼物颜色：{name} → {_biliGiftEditColor}");
+    }
+
+    private void BiliUpdateGiftColorButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (BiliGiftColorListBox.SelectedItem is not GiftColorItem item)
+        {
+            LogStatus(Copy.BiliGiftNotSelected);
+            return;
+        }
+
+        var name = BiliGiftNameTextBox.Text.Trim();
+        if (string.IsNullOrEmpty(name))
+        {
+            LogStatus(Copy.BiliGiftNameEmpty);
+            return;
+        }
+
+        item.GiftName = name;
+        item.Color = _biliGiftEditColor;
+        SaveBiliSettingsFromUi(false);
+        BiliLog($"礼物颜色已更新：{name} → {_biliGiftEditColor}");
+    }
+
+    private void BiliRemoveGiftColorButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (BiliGiftColorListBox.SelectedItem is not GiftColorItem item)
+        {
+            LogStatus(Copy.BiliGiftNotSelected);
+            return;
+        }
+
+        _biliGiftColors.Remove(item);
+        SaveBiliSettingsFromUi(false);
+        BiliLog($"礼物颜色已删除：{item.GiftName}");
+    }
+
+    // ---------- 连接 / 断开 ----------
+
+    private async void BiliToggleConnectButton_Click(object sender, RoutedEventArgs e)
+    {
+        SaveBiliSettingsFromUi(false);
+
+        if (_biliClient != null)
+        {
+            await DisconnectBiliClientAsync();
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_biliSettings.RoomId))
+        {
+            MessageBox.Show(this, "请输入直播间号或短号。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        BiliToggleConnectButton.IsEnabled = false;
+        try
+        {
+            BiliLog("正在连接直播间 " + _biliSettings.RoomId + " ...");
+            _biliRealOnline = 0;
+            _biliCurrentRoom = null;
+            _biliLastRoomSnapshot = "";
+
+            _biliClient = new BilibiliLiveClient(_biliSettings.BiliCookie);
+            _biliClient.RoomInfoUpdated += BiliClient_RoomInfoUpdated;
+            _biliClient.DanmakuReceived += BiliClient_DanmakuReceived;
+            _biliClient.NoticeReceived += BiliClient_NoticeReceived;
+            _biliClient.SuperChatReceived += BiliClient_SuperChatReceived;
+            _biliClient.StatusChanged += BiliClient_StatusChanged;
+            _biliClient.ErrorOccurred += BiliClient_ErrorOccurred;
+            _biliClient.OnlineCountUpdated += BiliClient_OnlineCountUpdated;
+
+            await _biliClient.ConnectAsync(_biliSettings.RoomId);
+            ShowBiliOverlay();
+            BiliToggleConnectButton.Content = "断开连接";
+            SetBiliConnStatus(true, "已连接：" + _biliSettings.RoomId);
+        }
+        catch (Exception ex)
+        {
+            BiliLog("连接失败：" + ex.Message);
+            if (_biliClient != null)
+            {
+                var failed = _biliClient;
+                _biliClient = null;
+                try
+                {
+                    failed.Dispose();
+                }
+                catch
+                {
+                }
+            }
+
+            BiliToggleConnectButton.Content = "连接直播间";
+            SetBiliConnStatus(false, "连接失败");
+        }
+        finally
+        {
+            BiliToggleConnectButton.IsEnabled = true;
+        }
+    }
+
+    private async Task DisconnectBiliClientAsync()
+    {
+        var client = _biliClient;
+        _biliClient = null;
+        if (client != null)
+        {
+            try
+            {
+                await client.DisconnectAsync();
+            }
+            catch
+            {
+            }
+            finally
+            {
+                client.RoomInfoUpdated -= BiliClient_RoomInfoUpdated;
+                client.DanmakuReceived -= BiliClient_DanmakuReceived;
+                client.NoticeReceived -= BiliClient_NoticeReceived;
+                client.SuperChatReceived -= BiliClient_SuperChatReceived;
+                client.StatusChanged -= BiliClient_StatusChanged;
+                client.ErrorOccurred -= BiliClient_ErrorOccurred;
+                client.OnlineCountUpdated -= BiliClient_OnlineCountUpdated;
+                client.Dispose();
+            }
+        }
+
+        BiliToggleConnectButton.Content = "连接直播间";
+        SetBiliConnStatus(false, "未连接");
+        BiliLog("已断开连接");
+    }
+
+    private void BiliClient_RoomInfoUpdated(RoomInfo room)
+    {
+        Dispatcher.InvokeAsync(() =>
+        {
+            // 房间信息每 60 秒刷新一次，只在悬浮窗还没创建时才自动显示，
+            // 否则用户手动隐藏的悬浮窗会被定时刷新反复弹回来。
+            if (_biliOverlay == null)
+            {
+                ShowBiliOverlay();
+            }
+
+            _biliCurrentRoom = room;
+            _biliOverlay?.SetRoomTitle(room.Title, room.UserName);
+            _biliOverlay?.SetOnline(room, _biliRealOnline);
+
+            var snapshot = $"{room.RoomId}|{room.Title}|{room.UserName}|{room.Online}|{room.LiveStatus}";
+            if (snapshot != _biliLastRoomSnapshot)
+            {
+                _biliLastRoomSnapshot = snapshot;
+                BiliLog($"房间：{room}（room_id={room.RoomId}，{(room.LiveStatus ? "直播中" : "未开播")}，人气 {room.Online}）");
+            }
+        });
+    }
+
+    private void BiliClient_DanmakuReceived(DanmakuItem danmaku)
+    {
+        Dispatcher.InvokeAsync(() => _biliOverlay?.AddDanmaku(danmaku));
+    }
+
+    private void BiliClient_SuperChatReceived(SuperChatItem superChat)
+    {
+        if (!_biliSettings.ShowSuperChatNotice)
+        {
+            return;
+        }
+
+        Dispatcher.InvokeAsync(() => _biliOverlay?.AddSuperChat(superChat));
+    }
+
+    private void BiliClient_NoticeReceived(NoticeItem notice)
+    {
+        // 进场消息量极大（实测 70 秒 86 条），会把礼物/SC 冲掉，所以按类型过滤。
+        if (!IsBiliNoticeEnabled(notice.Kind))
+        {
+            return;
+        }
+
+        Dispatcher.InvokeAsync(() => _biliOverlay?.AddNotice(notice));
+    }
+
+    private bool IsBiliNoticeEnabled(NoticeKind kind) => kind switch
+    {
+        NoticeKind.Entry => _biliSettings.ShowEntryNotice,
+        NoticeKind.Follow => _biliSettings.ShowEntryNotice,
+        NoticeKind.Share => _biliSettings.ShowEntryNotice,
+        NoticeKind.Gift => _biliSettings.ShowGiftNotice,
+        // SC 不再走通知路径，它有自己的 SuperChatReceived 事件和 SC 区
+        NoticeKind.Guard => _biliSettings.ShowGuardNotice,
+        _ => true
+    };
+
+    private void BiliClient_OnlineCountUpdated(int onlineCount)
+    {
+        Dispatcher.InvokeAsync(() =>
+        {
+            _biliRealOnline = onlineCount;
+            if (_biliCurrentRoom != null)
+            {
+                _biliOverlay?.SetOnline(_biliCurrentRoom, _biliRealOnline);
+            }
+        });
+    }
+
+    private void BiliClient_StatusChanged(string message) => Dispatcher.InvokeAsync(() => BiliLog(message));
+
+    private void BiliClient_ErrorOccurred(Exception ex) => Dispatcher.InvokeAsync(() => BiliLog("错误：" + ex.Message));
+
+    // ---------- 弹幕窗显示控制 ----------
+
+    private void ShowBiliOverlay()
+    {
+        if (_biliOverlay == null)
+        {
+            _biliFaceCache ??= new FaceCache();
+            _biliOverlay = new BiliOverlayWindow(_biliSettings, _biliFaceCache);
+            _biliOverlay.Closed += (_, _) =>
+            {
+                _biliOverlay = null;
+                BiliToggleOverlayButton.Content = "显示弹幕窗";
+            };
+        }
+
+        if (!_biliOverlay.IsVisible)
+        {
+            _biliOverlay.Show();
+        }
+
+        BiliToggleOverlayButton.Content = "隐藏弹幕窗";
+    }
+
+    private void HideBiliOverlay()
+    {
+        _biliOverlay?.Hide();
+        BiliToggleOverlayButton.Content = "显示弹幕窗";
+    }
+
+    private void BiliToggleOverlayButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_biliOverlay?.IsVisible == true)
+        {
+            HideBiliOverlay();
+            LogStatus(Copy.BiliOverlayHidden);
+        }
+        else
+        {
+            ShowBiliOverlay();
+            LogStatus(Copy.BiliOverlayShown);
+        }
+    }
+
+    private void BiliClearOverlayButton_Click(object sender, RoutedEventArgs e)
+    {
+        _biliOverlay?.ClearMessages();
+        BiliLog("B站弹幕窗已清空");
+    }
+
+    private void BiliResetOverlayPositionButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_biliOverlay == null)
+        {
+            _biliSettings.OverlayLeft = null;
+            _biliSettings.OverlayTop = null;
+            _biliSettings.OverlayAnchorBottom = null;
+            BiliSettingsService.Save(_biliSettings);
+        }
+        else
+        {
+            _biliOverlay.ResetPosition();
+        }
+
+        BiliLog("B站弹幕窗位置已重置");
+    }
+
+    // ---------- 扫码登录 ----------
+
+    private void BiliQrLoginButton_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new BiliQrLoginWindow { Owner = this };
+        if (dialog.ShowDialog() != true || string.IsNullOrWhiteSpace(dialog.Cookie))
+        {
+            return;
+        }
+
+        _biliSettings.BiliCookie = dialog.Cookie;
+        BiliSettingsService.Save(_biliSettings);
+        BiliLog("扫码登录成功，登录凭据已保存到本机");
+        _ = CheckBiliLoginStateAsync();
+    }
+
+    /// <summary>检查登录态是否还有效；失效就提醒重新扫码。</summary>
+    private async Task CheckBiliLoginStateAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_biliSettings.BiliCookie))
+        {
+            SetBiliLoginStatus("未登录", false);
+            return;
+        }
+
+        var info = await BiliLoginService.VerifyLoginAsync(_biliSettings.BiliCookie, System.Threading.CancellationToken.None);
+        SetBiliLoginStatus(info.Message, info.IsLogin);
+
+        if (info.IsLogin)
+        {
+            BiliLog("B站登录态正常：" + info.Message);
+        }
+        else
+        {
+            BiliLog("B站登录态已失效，请重新扫码登录（" + info.Message + "）");
+        }
+    }
+
+    private void SetBiliLoginStatus(string message, bool isLogin)
+    {
+        if (BiliLoginStatusText == null)
+        {
+            return;
+        }
+
+        BiliLoginStatusText.Text = message;
+        BiliLoginStatusText.Foreground = isLogin
+            ? (TryFindResource("MintBrush") as Brush ?? Brushes.MediumSeaGreen)
+            : (TryFindResource("TextTertiaryBrush") as Brush ?? Brushes.Gray);
+    }
+
+    // ---------- 连接状态（显示在「调试后台」面板里） ----------
+
+    private void SetBiliConnStatus(bool connected, string text)
+    {
+        if (BiliConnDot != null)
+        {
+            BiliConnDot.Fill = (TryFindResource(connected ? "MintBrush" : "TextTertiaryBrush") as Brush)
+                               ?? (connected ? Brushes.MediumSeaGreen : Brushes.Gray);
+        }
+
+        if (BiliConnStatusText != null)
+        {
+            BiliConnStatusText.Text = text;
+        }
+    }
+
+    private void BiliLog(string message)
+    {
+        _biliLogBuffer.Add($"[{DateTime.Now:HH:mm:ss}] {message}");
+        if (_biliLogBuffer.Count > 2000)
+        {
+            _biliLogBuffer.RemoveRange(0, _biliLogBuffer.Count - 2000);
+        }
+
+        if (BiliLogTextBox != null)
+        {
+            BiliLogTextBox.Text = string.Join("\r\n", _biliLogBuffer);
+            BiliLogTextBox.ScrollToEnd();
+        }
+
+        if (BiliLogCountText != null)
+        {
+            BiliLogCountText.Text = $"共 {_biliLogBuffer.Count} 行";
+        }
+    }
+
+    // ==================== 版本与检查更新 ====================
+
+    /// <summary>Releases 页面，点「获取更新」时用默认浏览器直接打开这里，少一次点击。</summary>
+    private const string ReleasesUrl = "https://github.com/goldiamond1031/MinecraftChatOverlay/releases";
+
+    private const string LatestReleaseApi =
+        "https://api.github.com/repos/goldiamond1031/MinecraftChatOverlay/releases/latest";
+
+    private const string TagsApi =
+        "https://api.github.com/repos/goldiamond1031/MinecraftChatOverlay/tags";
+
+    /// <summary>检查到的远程版本号（空 = 还没查或没查到）。</summary>
+    private string _latestVersion = "";
+
+    /// <summary>当前是否处于「已发现有新版本」的状态，此时按钮变成「获取更新」。</summary>
+    private bool _updateAvailable;
+
+    private async void CheckUpdateButton_Click(object sender, RoutedEventArgs e)
+    {
+        // 已经发现有新版本了，这一下就是去下载
+        if (_updateAvailable)
+        {
+            OpenReleasesPage();
+            return;
+        }
+
+        CheckUpdateButton.IsEnabled = false;
+        CheckUpdateButton.Content = Copy.CheckingUpdate;
+        try
+        {
+            var latest = await FetchLatestVersionAsync();
+            if (string.IsNullOrEmpty(latest))
+            {
+                CheckUpdateButton.Content = Copy.CheckUpdate;
+                NotifyCheckFailed("没读到版本号（可能还没发布 Release，或者网络不通）");
+                return;
+            }
+
+            // 注意：这里比「远程是不是更新」，不是比「一样不一样」。
+            // 如果按「不一样就提示」，本地版本领先于线上 Release 时也会一直提示去下载，反而误导。
+            ApplyUpdateState(latest);
+            if (_updateAvailable)
+            {
+                LogStatus($"{Copy.UpdateAvailable}{Normalize(latest)}（当前 v{Copy.AppVersion}），点按钮去下载");
+            }
+            else
+            {
+                LogStatus(IsSameVersion(latest, Copy.AppVersion)
+                    ? Copy.AlreadyLatest + "（v" + Copy.AppVersion + "）"
+                    : $"线上最新的是 v{Normalize(latest)}，不比当前 v{Copy.AppVersion} 新");
+            }
+        }
+        catch (Exception ex)
+        {
+            CheckUpdateButton.Content = Copy.CheckUpdate;
+            NotifyCheckFailed(ex.Message);
+        }
+        finally
+        {
+            CheckUpdateButton.IsEnabled = true;
+        }
+    }
+
+    /// <summary>
+    /// 取远程最新版本号：优先用最新 Release 的 tag；
+    /// 如果仓库还没建过 Release，就退回用第一个 tag。
+    /// </summary>
+    private static async Task<string> FetchLatestVersionAsync()
+    {
+        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+        // GitHub 的 API 要求带 User-Agent，不带会直接 403
+        http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "MinecraftChatOverlay");
+        http.DefaultRequestHeaders.TryAddWithoutValidation("Accept", "application/vnd.github+json");
+
+        var json = await TryGetStringAsync(http, LatestReleaseApi);
+        if (json != null)
+        {
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("tag_name", out var tag) &&
+                tag.ValueKind == JsonValueKind.String &&
+                !string.IsNullOrWhiteSpace(tag.GetString()))
+            {
+                return tag.GetString()!.Trim();
+            }
+        }
+
+        json = await TryGetStringAsync(http, TagsApi);
+        if (json != null)
+        {
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in doc.RootElement.EnumerateArray())
+                {
+                    if (item.TryGetProperty("name", out var name) &&
+                        name.ValueKind == JsonValueKind.String &&
+                        !string.IsNullOrWhiteSpace(name.GetString()))
+                    {
+                        return name.GetString()!.Trim();
+                    }
+                }
+            }
+        }
+
+        return "";
+    }
+
+    private static async Task<string?> TryGetStringAsync(HttpClient http, string url)
+    {
+        try
+        {
+            using var response = await http.GetAsync(url);
+            return response.IsSuccessStatusCode
+                ? await response.Content.ReadAsStringAsync()
+                : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// 把检查结果反映到界面上：有新版就换成「获取更新」并亮起小红点。
+    /// </summary>
+    private void ApplyUpdateState(string latest)
+    {
+        _latestVersion = latest;
+
+        if (IsNewerVersion(latest, Copy.AppVersion))
+        {
+            _updateAvailable = true;
+            CheckUpdateButton.Content = Copy.GetUpdate;
+            UpdateDot.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            _updateAvailable = false;
+            CheckUpdateButton.Content = Copy.CheckUpdate;
+            UpdateDot.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    /// <summary>手动检查失败时明确告诉用户（状态栏 + 弹窗），不要只是悄悄写一行日志。</summary>
+    private void NotifyCheckFailed(string reason)
+    {
+        var message = Copy.CheckUpdateFailed + reason;
+        LogStatus(message);
+        MessageBox.Show(this, message, Copy.CheckUpdateTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
+    }
+
+    /// <summary>
+    /// 启动时自动查一次更新：有新版就把按钮换成「获取更新」并亮小红点。
+    /// 失败保持安静 —— 这只是后台顺手一查，不该每次开软件都弹提示；
+    /// 用户手动点「检查更新」失败时才会弹窗。
+    /// </summary>
+    private async Task AutoCheckUpdateAsync()
+    {
+        try
+        {
+            var latest = await FetchLatestVersionAsync();
+            if (string.IsNullOrEmpty(latest))
+            {
+                return;
+            }
+
+            ApplyUpdateState(latest);
+            if (_updateAvailable)
+            {
+                LogStatus($"{Copy.UpdateAvailable}{Normalize(latest)}（当前 v{Copy.AppVersion}），点左下角按钮去下载");
+            }
+        }
+        catch
+        {
+            // 自动检查失败不打扰用户
+        }
+    }
+
+    /// <summary>
+    /// 远程版本是不是比本地新。能解析成 x.y.z 就按数字逐段比（1.0.10 &gt; 1.0.9 才对）；
+    /// 解析不出来（比如 tag 不叫版本号）就退回「字符串不一致」。
+    /// </summary>
+    private static bool IsNewerVersion(string remote, string local)
+    {
+        var remoteParts = ParseVersionParts(remote);
+        var localParts = ParseVersionParts(local);
+
+        if (remoteParts == null || localParts == null)
+        {
+            return !IsSameVersion(remote, local);
+        }
+
+        for (var i = 0; i < Math.Max(remoteParts.Length, localParts.Length); i++)
+        {
+            var remotePart = i < remoteParts.Length ? remoteParts[i] : 0;
+            var localPart = i < localParts.Length ? localParts[i] : 0;
+            if (remotePart != localPart)
+            {
+                return remotePart > localPart;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>把 "V1.0.4-beta" 解析成 [1,0,4]；解析不了返回 null。</summary>
+    private static int[]? ParseVersionParts(string version)
+    {
+        var parts = Normalize(version).Split('.', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 0)
+        {
+            return null;
+        }
+
+        var numbers = new int[parts.Length];
+        for (var i = 0; i < parts.Length; i++)
+        {
+            // 只取每段开头的数字，兼容 "4-beta" 这种后缀
+            var digits = new string(parts[i].TakeWhile(char.IsDigit).ToArray());
+            if (digits.Length == 0 || !int.TryParse(digits, out numbers[i]))
+            {
+                return null;
+            }
+        }
+
+        return numbers;
+    }
+
+    /// <summary>只比「是不是同一个版本」，忽略大小写与开头的 v。</summary>
+    private static bool IsSameVersion(string a, string b) =>
+        string.Equals(Normalize(a), Normalize(b), StringComparison.OrdinalIgnoreCase);
+
+    private static string Normalize(string version)
+    {
+        var text = version.Trim();
+        if (text.StartsWith("v", StringComparison.OrdinalIgnoreCase))
+        {
+            text = text[1..];
+        }
+
+        return text.Trim();
+    }
+
+    private void OpenReleasesPage()
+    {
+        try
+        {
+            // UseShellExecute 才会交给系统用默认浏览器打开
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(ReleasesUrl)
+            {
+                UseShellExecute = true
+            });
+            LogStatus(Copy.ReleasesOpened);
+        }
+        catch (Exception ex)
+        {
+            LogStatus(Copy.BrowserFailed + ex.Message);
+        }
+    }
+
+    private void BiliCopyLogButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            Clipboard.SetText(BiliLogTextBox.Text);
+            LogStatus(Copy.BiliLogCopied);
+        }
+        catch
+        {
+            // 剪贴板被别的程序占用时忽略即可
+        }
+    }
+
+    private void BiliClearLogButton_Click(object sender, RoutedEventArgs e)
+    {
+        _biliLogBuffer.Clear();
+        BiliLogTextBox.Clear();
+        BiliLogCountText.Text = "共 0 行";
     }
 }
 

@@ -23,6 +23,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- B站扫码登录用：把登录链接生成二维码图片（纯托管实现，MIT 许可，不依赖 System.Drawing） -->
+    <PackageReference Include="QRCoder" Version="1.6.0" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- 保留旧版 MainWindow.xaml 作为备份，但不参与编译。 -->
     <Page Remove="MainWindow.xaml" />
   </ItemGroup>
