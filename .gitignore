@@ -12,3 +12,6 @@ publish/
 # 系统
 Thumbs.db
 desktop.ini
+
+# 本地的发布脚本，不进仓库
+push.bat
