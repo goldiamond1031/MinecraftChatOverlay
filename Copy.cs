@@ -90,7 +90,7 @@ public static class Copy
     // ==================== 版本与更新 ====================
 
     /// <summary>当前版本号。只改这一处，界面标题和更新检查都用它。</summary>
-    public const string AppVersion = "1.0.4";
+    public const string AppVersion = "1.0.5";
 
     /// <summary>界面上版本号的前缀（应用名单独一行显示，所以这里只剩 v）。</summary>
     public const string AppVersionPrefix = "v";
