@@ -47,6 +47,9 @@
 
     <Color x:Key="PrimaryColor">#7C6CF0</Color>
 
+    <!-- bool → Visibility。列表项勾选框显隐用（关掉随机时收起来，不留空位） -->
+    <local:BoolToVisibilityConverter x:Key="BoolToVisibility"/>
+
     <!-- =========================================================
          阴影 / 效果
          ========================================================= -->
@@ -191,6 +194,29 @@
                         </Storyboard>
                     </BeginStoryboard>
                 </Trigger.ExitActions>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!--
+        锁定卡片：总开关关掉时，整张卡降饱和 + 压暗，明确告诉用户"现在不生效"。
+        跟"局部变灰"不一样 —— 这是卡级的整体状态提示，所以做成独立样式，
+        由外面把对应总开关的锁定态绑到 Border.Tag 上（true = 锁定）。
+
+        实现要点：
+        - Tag 是个 object 类型的中性槽位，用它传布尔最省事：三个卡片共用同一条
+          样式，各自绑自己的键，不用为三个绑定键复制三份样式。
+        - 不用 IsEnabled=False 去禁用整卡：总开关本身就在卡片里，
+          禁用整卡会连开关一起点不动，用户就永远打不开了。
+        - 去掉 Effect 是因为 Opacity 之后阴影会显得脏，索性一起收掉。
+    -->
+    <Style x:Key="LockedCardStyle" TargetType="Border" BasedOn="{StaticResource CardStyle}">
+        <Style.Triggers>
+            <Trigger Property="Tag" Value="True">
+                <Setter Property="Background" Value="{DynamicResource Surface2Brush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+                <Setter Property="Opacity" Value="0.62"/>
+                <Setter Property="Effect" Value="{x:Null}"/>
             </Trigger>
         </Style.Triggers>
     </Style>
@@ -408,6 +434,101 @@
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="BorderBrush" Value="Transparent"/>
         <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+    </Style>
+
+    <!--
+      「拖动定位」用的开关式按钮。
+      不能用 SmallPrimaryButtonStyle —— 那个 TargetType 是 Button，
+      套到 ToggleButton 上会被 WPF 静默忽略（找不到匹配的样式就直接用默认外观），
+      结果是按钮长得完全不像预期。这里照着小尺寸重写一份。
+    -->
+    <Style x:Key="SmallPrimaryToggleButtonStyle" TargetType="ToggleButton">
+        <Setter Property="Height" Value="34"/>
+        <Setter Property="MinWidth" Value="56"/>
+        <Setter Property="Padding" Value="12,0"/>
+        <Setter Property="FontSize" Value="12.5"/>
+        <Setter Property="FontWeight" Value="Bold"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Background" Value="{DynamicResource PrimaryBrush}"/>
+        <Setter Property="BorderBrush" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="1.5"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextOnPrimaryBrush}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToggleButton">
+                    <Border x:Name="root"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="10">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                          Margin="{TemplateBinding Padding}"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="root" Property="Opacity" Value="0.88"/>
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <!-- 选中 = 拖动模式开着，换个底色让人一眼看出"现在正在拖" -->
+                            <Setter TargetName="root" Property="Background" Value="{DynamicResource DangerBrush}"/>
+                            <Setter Property="Foreground" Value="White"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="root" Property="Opacity" Value="0.45"/>
+                            <Setter Property="Cursor" Value="Arrow"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--
+      「击杀反馈」效果列表里的小控件。
+      不能基于 BtnStyle —— 它带 MinWidth=72 / Height=40 / Padding=16,0，
+      会给色块按钮撑出一个大胶囊，压在右边的数字框上。这里全部重写成小尺寸。
+    -->
+    <Style x:Key="SwatchButtonStyle" TargetType="Button">
+        <Setter Property="Width" Value="26"/>
+        <Setter Property="Height" Value="26"/>
+        <Setter Property="MinWidth" Value="0"/>
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Background" Value="{DynamicResource Surface2Brush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="border"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="1.5"
+                            CornerRadius="8"
+                            SnapsToDevicePixels="True">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--
+      效果列表里的百分比输入框。
+      隐式 TextBox 样式是 MinHeight=40 + Padding=12,0 的圆角框，放在这种一行一效果
+      的紧凑列表里会又高又挤。这里收成 30 高、右边距小一点，数字居中偏右。
+    -->
+    <Style x:Key="EffectPercentTextBoxStyle" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+        <Setter Property="MinHeight" Value="30"/>
+        <Setter Property="Height" Value="30"/>
+        <Setter Property="Padding" Value="6,0"/>
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="TextAlignment" Value="Right"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
     </Style>
 
     <Style x:Key="WindowControlButtonStyle" TargetType="Button">
@@ -1068,12 +1189,123 @@
     <!-- =========================================================
          列表
          ========================================================= -->
+    <!--
+        列表。
+        **必须自己写 ControlTemplate** —— 只设 Background="Transparent" 是不够的：
+        WPF 默认的 ListBox 模板（Aero2）里有一个叫 Bd 的 Border 负责背涂，
+        它取的是 SystemColors.WindowBrush，**跟应用的 Background 属性和主题都无关**。
+        系统是浅色时那块就是纯白，压在暗色卡片上就是一块"日间白"。
+        这是"暗色模式下列表背景发白"的真正根因 —— 和 IsEnabled / 文字颜色都没关系，
+        开关开着也是白的，只是关掉之后没了内容衬托，才显得特别扎眼。
+
+        模板写成"一个纯 ScrollViewer"，不画任何背景，让卡片底色透上来。
+    -->
     <Style TargetType="ListBox">
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="BorderThickness" Value="0"/>
         <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
         <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled"/>
         <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ListBox">
+                    <ScrollViewer Focusable="False"
+                                  Background="Transparent"
+                                  Padding="{TemplateBinding Padding}"
+                                  HorizontalScrollBarVisibility="{TemplateBinding ScrollViewer.HorizontalScrollBarVisibility}"
+                                  VerticalScrollBarVisibility="{TemplateBinding ScrollViewer.VerticalScrollBarVisibility}">
+                        <ItemsPresenter SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"/>
+                    </ScrollViewer>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--
+        普通复选方框（不带 x:Key，作为默认样式）。
+        列表里的"勾上 = 参与随机抽取"用的就是它。
+
+        **必须自己写模板**：WPF 默认的 CheckBox 模板（Aero2）里那个方框是画死的
+        白色底 + 系统色描边，跟应用主题完全无关。暗色卡片上就是一堆刺眼的白方块。
+
+        写成"圆角方框 + 对勾"的最小实现：
+          - 底色 Surface2Brush，跟卡片有层次但同色系
+          - 勾选后填 PrimaryBrush，对勾用白色
+          - 悬停时描边提亮
+    -->
+    <Style TargetType="CheckBox">
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="CheckBox">
+                    <StackPanel Orientation="Horizontal" Background="Transparent">
+                        <!--
+                            禁用态用外层 Opacity 压暗，**不要**单独去改 box / check 的透明度 ——
+                            那样会和"勾选/未勾选"这两个触发器打架（谁写在后面谁赢），
+                            结果就是未勾选时也显示一个淡淡的对勾。
+                            压在外层就没有优先级问题：勾选态该有的对勾照样有，只是整体变暗。
+                        -->
+                        <Border x:Name="boxHost" RenderTransformOrigin="0.5,0.5">
+                            <Border.RenderTransform>
+                                <ScaleTransform x:Name="boxScale" ScaleX="1" ScaleY="1"/>
+                            </Border.RenderTransform>
+                            <Border x:Name="box"
+                                    Width="17" Height="17"
+                                    CornerRadius="5"
+                                    Background="{DynamicResource Surface2Brush}"
+                                    BorderBrush="{DynamicResource BorderStrongBrush}"
+                                    BorderThickness="1.5"
+                                    VerticalAlignment="Center">
+                                <!-- 对勾：用 Path 画，比贴字符清晰且不依赖字体 -->
+                                <Path x:Name="check"
+                                      Data="M 3.2,8.4 L 6.6,11.6 L 13.2,4.6"
+                                      Stroke="{DynamicResource TextOnPrimaryBrush}"
+                                      StrokeThickness="2"
+                                      StrokeStartLineCap="Round"
+                                      StrokeEndLineCap="Round"
+                                      StrokeLineJoin="Round"
+                                      Opacity="0"
+                                      HorizontalAlignment="Center"
+                                      VerticalAlignment="Center"/>
+                            </Border>
+                        </Border>
+                        <ContentPresenter Margin="9,0,0,0"
+                                          VerticalAlignment="Center"
+                                          RecognizesAccessKey="True"/>
+                    </StackPanel>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="box" Property="Background" Value="{DynamicResource PrimaryBrush}"/>
+                            <Setter TargetName="box" Property="BorderBrush" Value="{DynamicResource PrimaryBrush}"/>
+                            <Setter TargetName="check" Property="Opacity" Value="1"/>
+                            <Trigger.EnterActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <!-- 轻微弹一下，和开关滑块的"雀跃"是一个调子 -->
+                                        <DoubleAnimation Storyboard.TargetName="boxScale"
+                                                         Storyboard.TargetProperty="ScaleX"
+                                                         To="1.14" Duration="0:0:0.1" AutoReverse="True"/>
+                                        <DoubleAnimation Storyboard.TargetName="boxScale"
+                                                         Storyboard.TargetProperty="ScaleY"
+                                                         To="1.14" Duration="0:0:0.1" AutoReverse="True"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.EnterActions>
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="box" Property="BorderBrush" Value="{DynamicResource PrimaryBrush}"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}"/>
+                            <Setter TargetName="boxHost" Property="Opacity" Value="0.45"/>
+                            <Setter Property="Cursor" Value="Arrow"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
     <Style TargetType="ListBoxItem">
@@ -1132,6 +1364,17 @@
                             <Setter TargetName="itemBorder" Property="Background" Value="{DynamicResource PrimarySofterBrush}"/>
                             <Setter TargetName="itemBorder" Property="BorderBrush" Value="{DynamicResource PrimaryBrush}"/>
                             <Setter TargetName="itemBorder" Property="Effect" Value="{DynamicResource GlowShadow}"/>
+                        </Trigger>
+                        <!--
+                            禁用态自己接管前景色。
+                            不写这条的话，WPF 会套用系统默认的"禁用文字色"（一个跟主题无关的浅灰），
+                            在暗色卡片上读不清。
+                            注意：这不是"列表背景发白"的原因 —— 那个另有其人，见上面 ListBox 样式里
+                            关于 Aero2 模板 Border#Bd 的注释。两件事，别混。
+                        -->
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}"/>
+                            <Setter Property="Cursor" Value="Arrow"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -1307,6 +1550,73 @@
                 <Setter TargetName="RootGrid" Property="Opacity" Value="0.5"/>
             </DataTrigger>
         </DataTemplate.Triggers>
+    </DataTemplate>
+
+    <DataTemplate x:Key="KillFeedbackEffectItemTemplate">
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel>
+                <TextBlock Text="{Binding Name}"
+                           FontSize="13"
+                           FontWeight="Bold"
+                           Foreground="{DynamicResource TextPrimaryBrush}"
+                           TextTrimming="CharacterEllipsis"/>
+                <TextBlock Text="{Binding Summary}"
+                           FontSize="11.5"
+                           Margin="0,2,0,0"
+                           Foreground="{DynamicResource TextSecondaryBrush}"
+                           TextWrapping="Wrap"/>
+            </StackPanel>
+            <Border x:Name="recChip"
+                    Grid.Column="1"
+                    Style="{StaticResource ChipPrimaryBorderStyle}"
+                    VerticalAlignment="Top"
+                    Margin="8,0,0,0"
+                    Visibility="Collapsed">
+                <TextBlock Text="推荐" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource PrimaryBrush}"/>
+            </Border>
+        </Grid>
+        <DataTemplate.Triggers>
+            <DataTrigger Binding="{Binding IsRecommended}" Value="True">
+                <Setter TargetName="recChip" Property="Visibility" Value="Visible"/>
+            </DataTrigger>
+        </DataTemplate.Triggers>
+    </DataTemplate>
+
+    <!--
+        提示音列表项：勾选框 + 文件名。
+        勾选框绑 IsPicked（参与随机抽取）。
+
+        勾选框的显隐由 ShowCheckBox 驱动 —— 关掉「随机播放」时它是 Collapsed，
+        内容直接靠左，不留下一个空荡荡的格子。ShowCheckBox 由卡片那边跟着随机开关同步。
+
+        这里**不能**写 Checked/Unchecked 事件处理器：这个文件是纯 ResourceDictionary
+        （没有 x:Class），XAML 编译器不允许在里面挂事件。所以走另一条路 ——
+        卡片那边监听数据项自己的 PropertyChanged（SoundChoice 实现了 INotifyPropertyChanged），
+        见 MainWindow.SoundNotify.xaml.cs 的 HookSoundChoiceNotifications。
+    -->
+    <DataTemplate x:Key="SoundChoiceItemTemplate">
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <CheckBox Grid.Column="0"
+                      IsChecked="{Binding IsPicked, Mode=TwoWay}"
+                      Visibility="{Binding ShowCheckBox, Converter={StaticResource BoolToVisibility}}"
+                      VerticalAlignment="Center"
+                      ToolTip="勾上 = 参与随机抽取"/>
+            <TextBlock Grid.Column="1"
+                       Text="{Binding Name}"
+                       Margin="10,0,0,0"
+                       FontSize="13"
+                       FontWeight="Bold"
+                       TextTrimming="CharacterEllipsis"
+                       VerticalAlignment="Center"/>
+        </Grid>
     </DataTemplate>
 
     <DataTemplate x:Key="ReplaceRuleItemTemplate">

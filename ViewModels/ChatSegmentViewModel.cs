@@ -17,6 +17,12 @@ public sealed class ChatSegmentViewModel
     /// <summary>是否为用户彩色渲染规则主动染色的片段；玩家发言颜色不会覆盖它。</summary>
     public bool IsUserColored { get; set; }
 
+    /// <summary>下划线（游戏内样式）。</summary>
+    public bool Underline { get; set; }
+
+    /// <summary>删除线（游戏内样式）。</summary>
+    public bool Strikethrough { get; set; }
+
     public ChatSegmentViewModel()
     {
     }

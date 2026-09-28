@@ -22,6 +22,26 @@ public static class Copy
 
     public const string NeedLogPath = "还没选日志文件呢，先挑一个吧。";
     public const string NeedColorText = "还没填要染色的文字。";
+
+    // ---------- ID 对应颜色（队伍色）----------
+    public const string TeamAssignEmpty = "还没粘玩家列表。";
+    public const string TeamAssignNoMatch = "一条都没认出来 —— 每行要像「灰队 | 2B12」这样。";
+    public const string TeamColorsNoneToClear = "没有队伍色规则要清。";
+
+    /// <summary>粘贴内容后实时显示的识别结果。</summary>
+    public static string TeamAssignPreview(int count, string breakdown) =>
+        $"认到 {count} 个 ID：{breakdown}";
+
+    public static string TeamAssigned(int count) => $"分配好了：{count} 个 ID 染上了队伍色";
+
+    public static string TeamColorsCleared(int count) => $"清掉了 {count} 条队伍色规则";
+
+    // ---------- AI 识图 ----------
+    public const string AiNeedBaseUrl = "先填接口地址（BaseUrl）。";
+    public const string AiNeedModel = "先填模型 ID。";
+    public const string AiNeedDir = "截图目录不存在，先设置一下。";
+    public const string AiNoScreenshot = "截图目录里还没有 png 图片。";
+    public const string AiNothingRecognized = "AI 没认出队伍行，这次不分配（保持现有颜色）";
     public const string NeedFindText = "还没填要查找的文字。";
     public const string NeedKeyword = "还没填关键词。";
     public const string NeedApiKey = "还没填 API KEY";
@@ -68,6 +88,80 @@ public static class Copy
     public const string ConfigLoaded = "配置读取好了：";
     public const string QuerySettingsSaved = "玩家查询设置保存好了";
 
+    // ==================== 消息提示音 ====================
+
+    public const string SoundNotifyOff = "关着，不会响";
+    public const string PickSound = "先在列表里选一个提示音吧。";
+
+    /// <summary>没有任何提示音时，切换开关给出的提醒。</summary>
+    public const string SoundNoFiles = "还没有提示音 —— 点【添加提示音…】导入一个。";
+
+    public const string SoundFileFilterTitle = "选一个提示音文件";
+
+    /// <summary>
+    /// 提示音的自检计数。三个数分开记，是为了让"没响"这件事一眼能定位：
+    /// 已看一直是 0 → 日志/消息根本没进来；
+    /// 已看涨、判为发言不涨 → 判据没认出来（要调 ChatTextProcessor.LooksLikePlayerSpeech）；
+    /// 判为发言涨、响不涨 → 是防刷屏间隔或音频通路的问题。
+    /// </summary>
+    public static string SoundNotifyStats(int seen, int speech, int played) =>
+        $"已看 {seen} 条 · 判为发言 {speech} 条 · 响 {played} 次";
+
+    // ==================== 击杀提示音 ====================
+
+    public const string KillSoundOff = "关着，击杀不会响";
+
+    public static string KillSoundStats(int played) => $"击杀时已响 {played} 次";
+
+    // ==================== 击杀反馈 ====================
+
+    public const string KillFeedbackNoScreenshot =
+        "截图目录里还没有图。先去游戏里按 F2 截一张，或者点【换一张截图】自己选一张。";
+    public const string KillFeedbackPickImageTitle = "选一张游戏截图当预览底图";
+    public const string KillFeedbackImageFilter = "图片 (*.png;*.jpg;*.jpeg;*.bmp)|*.png;*.jpg;*.jpeg;*.bmp|所有文件 (*.*)|*.*";
+    public const string KillFeedbackPlaying = "正在播放…";
+    public const string KillFeedbackImageTooSmall = "这张图太小了，换一张大点的。";
+    public const string KillFeedbackOff = "关着，不会匹配";
+    public const string KillFeedbackNoPattern = "还没有匹配规则 —— 上面粘一条示例消息，点【生成并加一行】";
+
+    /// <summary>击杀反馈的"前置条件"横幅：注入没就绪时显示的标题。</summary>
+    public const string KillFeedbackPrereqMissing =
+        "要先开启动态模糊并注入游戏，击杀反馈才会生效";
+
+    /// <summary>同上，注入没就绪时的说明。</summary>
+    public const string KillFeedbackPrereqMissingDetail =
+        "击杀反馈的画面效果是通过动态模糊的注入通路送进游戏的 —— 没注入，效果到不了游戏画面。"
+        + "到「游戏动态模糊」页选好进程点【注入并接管】就能用。";
+
+    /// <summary>注入已就绪时的标题。</summary>
+    public const string KillFeedbackPrereqReady = "动态模糊已注入，击杀反馈可以生效";
+
+    /// <summary>同上，说明（告诉用户还能去哪儿改）。</summary>
+    public const string KillFeedbackPrereqReadyDetail =
+        "画面效果会通过已注入的通路送到游戏。想调节模糊本身到「游戏动态模糊」页。";
+
+    /// <summary>选了原生侧还没实现的效果时给的提示。</summary>
+    public const string KillFeedbackEffectNotInGame =
+        "这个效果在当前图形路径下没实现（OpenGL 兼容上下文只支持缩放脉冲和抖动），所以匹配到了画面上也不会动";
+
+    /// <summary>
+    /// 击杀匹配的自检计数。和提示音那行一个思路：把故障点分开。
+    /// 已看一直是 0 → 日志/聊天没进来；
+    /// 已看涨、匹配不涨 → 规则不对（多半是称号 / VIP 前缀，或者该开剥离）；这是最要紧的一栏。
+    /// 匹配涨了但画面没动 → 那是 DLL 那一半的事。
+    /// 最后那句会把**命中的是哪条规则**打出来 —— 写了好几条时能看出是哪条在生效。
+    /// </summary>
+    public static string KillFeedbackStats(int ruleCount, int seen, int matched, DateTime? lastAt, string lastRule)
+    {
+        var head = $"规则 {ruleCount} 条 · 已看 {seen} 条 · 匹配 {matched} 条";
+        if (lastAt is null || string.IsNullOrWhiteSpace(lastRule))
+        {
+            return head;
+        }
+
+        return head + $" · 最后一次 {lastAt.Value:HH:mm:ss} 命中「{lastRule}」";
+    }
+
     // ==================== 监听状态（状态栏） ====================
 
     public const string ListeningStarted = "开始监听聊天栏";
@@ -90,7 +184,7 @@ public static class Copy
     // ==================== 版本与更新 ====================
 
     /// <summary>当前版本号。只改这一处，界面标题和更新检查都用它。</summary>
-    public const string AppVersion = "1.0.5";
+    public const string AppVersion = "1.1.0";
 
     /// <summary>界面上版本号的前缀（应用名单独一行显示，所以这里只剩 v）。</summary>
     public const string AppVersionPrefix = "v";

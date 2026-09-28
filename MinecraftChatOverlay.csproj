@@ -9,6 +9,14 @@
     <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>MinecraftChatOverlay</AssemblyName>
     <RootNamespace>MinecraftChatOverlay</RootNamespace>
+    <!--
+      WPF 的标记编译在需要"本地类型解析"时会额外生成一个临时工程
+      （MinecraftChatOverlay_xxxx_wpftmp.csproj），那个临时工程的默认通配会把
+      obj\ 里自动生成的 AssemblyInfo.cs 也包含进来，于是所有程序集特性都报"重复定义"。
+      把 obj 从默认通配里排除掉即可。
+    -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);obj\**</DefaultItemExcludes>
+
     <ApplicationManifest>app.manifest</ApplicationManifest>
       <ApplicationIcon>MinecraftChatOverlay.ico</ApplicationIcon>
   </PropertyGroup>
@@ -16,6 +24,31 @@
     <ItemGroup>
       <Resource Include="MinecraftChatOverlay.ico" />
     </ItemGroup>
+  <ItemGroup>
+    <!--
+      tools\ 下面是独立的命令行小工具（自带 csproj 和 obj\），必须排除在主工程通配之外：
+      否则主工程的 **\*.cs 会把 tools 里生成的 AssemblyInfo.cs 也编译一遍，
+      报"程序集特性重复定义"(CS0579)，连 WPF 标记编译生成的临时工程也会一起失败。
+
+      native\ 下面是 C++ 原生工程，不该参与 C# 编译；但**不能**在这里
+      用 <None Remove="native\**" /> 一刀切 —— 那样会把下面那个
+      "要复制到输出/发布目录"的 None Include 也一起剔掉，导致发布包里
+      没有 GameMotionBlurHook.dll（用户拿到的版本动态模糊直接失效）。
+      正确的做法是把 native\ 的 .cs/.xaml 排除掉，而保留 dist 下的 DLL。
+    -->
+    <Compile Remove="tools\**" />
+    <Page Remove="tools\**" />
+    <ApplicationDefinition Remove="tools\**" />
+    <EmbeddedResource Remove="tools\**" />
+    <None Remove="tools\**" />
+
+    <!-- native\ 只排除会被 C# 编译器误认的源码后缀，保留 dist\*.dll -->
+    <Compile Remove="native\**" />
+    <Page Remove="native\**" />
+    <ApplicationDefinition Remove="native\**" />
+    <EmbeddedResource Remove="native\**" />
+  </ItemGroup>
+
 
   <ItemGroup>
     <Using Remove="System.Drawing" />
@@ -38,7 +71,56 @@
     <None Update="res\ciallo.mp3" CopyToOutputDirectory="PreserveNewest" />
     <None Update="res\ciallo.ogg" CopyToOutputDirectory="PreserveNewest" />
     <None Update="res\ciallo.png" CopyToOutputDirectory="PreserveNewest" />
+    <!--
+      提示音不再随程序发布 —— 全部由用户在界面上导入（要么从 res\ 里挑，要么浏览到别处）。
+      以前这里复制 notify_ding / notify_dingdong / notify_soft / notify_blip 四个 wav，
+      v8 起连同文件一起删掉了，内置音效表也一并移除。
+    -->
   </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      原生钩子 DLL：先跑 native\build.ps1 编出来，编译和发布时都会落到程序目录，
+      界面优先在程序目录里找它。没编过也不影响启动（界面上会提示去编译）。
+
+      这里用 <None Include> + CopyToOutputDirectory，只管 `dotnet build` 的 bin\ 输出。
+      `dotnet publish` 的复制管线对"Link / TargetPath 过来的项"不认（试过
+      None + CopyToPublishDirectory、Content + CopyToPublishDirectory 都不行），
+      所以发布目录里的这份由下面那个 AfterTargets="Publish" 目标手工补上。
+    -->
+    <None Include="native\dist\GameMotionBlurHook_v6.dll" Link="GameMotionBlurHook.dll"
+          Condition="Exists('native\dist\GameMotionBlurHook_v6.dll')"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="native\dist\GameMotionBlurHook.dll" Link="GameMotionBlurHook.dll"
+          Condition="!Exists('native\dist\GameMotionBlurHook_v6.dll')"
+          CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!--
+    publish 兜底：不管上面那些 Item 规则在 dotnet publish 里好不好使，
+    发布完成后都把 GameMotionBlurHook.dll 拷到发布目录一份。
+    程序运行时按裸文件名 "GameMotionBlurHook.dll" 在 exe 同目录找它，
+    所以这里必须显式指定 DestinationFiles 改名，不能只给 DestinationFolder
+    （只给目录会保留源文件名 GameMotionBlurHook_v6.dll，程序就找不到）。
+    找不到文件就发个警告跳过（说明还没编 native，不算错误）。
+  -->
+  <Target Name="CopyNativeHookToPublish" AfterTargets="Publish"
+          Condition="'$(PublishDir)' != ''">
+    <PropertyGroup>
+      <_GmbSourceV6>$(MSBuildProjectDirectory)\native\dist\GameMotionBlurHook_v6.dll</_GmbSourceV6>
+      <_GmbSourceV1>$(MSBuildProjectDirectory)\native\dist\GameMotionBlurHook.dll</_GmbSourceV1>
+      <_GmbSource Condition="Exists('$(_GmbSourceV6)')">$(_GmbSourceV6)</_GmbSource>
+      <_GmbSource Condition="'$(_GmbSource)' == '' And Exists('$(_GmbSourceV1)')">$(_GmbSourceV1)</_GmbSource>
+    </PropertyGroup>
+    <Copy SourceFiles="$(_GmbSource)"
+          DestinationFiles="$(PublishDir)GameMotionBlurHook.dll"
+          SkipUnchangedFiles="true"
+          Condition="'$(_GmbSource)' != ''" />
+    <Message Importance="high" Condition="'$(_GmbSource)' != ''"
+             Text="已把原生钩子 DLL 复制到发布目录：$(_GmbSource) -&gt; $(PublishDir)GameMotionBlurHook.dll" />
+    <Warning Condition="'$(_GmbSource)' == ''"
+             Text="没找到 native\dist\GameMotionBlurHook(.v6).dll，发布包将不含动态模糊所需的原生钩子。" />
+  </Target>
 
 </Project>
 

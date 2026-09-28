@@ -23,13 +23,26 @@ public static class ChatLineParser
             return null;
         }
 
-        var separatorIndex = line.IndexOf(ChatLineSeparator, StringComparison.Ordinal);
+        var chatIndex = line.IndexOf(ChatMarker, StringComparison.Ordinal);
+        if (chatIndex < 0)
+        {
+            return null;
+        }
+
+        // 标准 Forge 是 "]: [CHAT]"；Fabric 的 System 消息是 "]: [System] [CHAT]"。
+        // 先找 [CHAT]，再向前找最近的 "]: "，中间只允许 [xxx] 这样的标签。
+        var separatorIndex = line.LastIndexOf("]:", chatIndex, StringComparison.Ordinal);
         if (separatorIndex < 0)
         {
             return null;
         }
 
-        var chatIndex = separatorIndex + ChatLineSeparator.Length - ChatMarker.Length;
+        var between = line[(separatorIndex + 2)..chatIndex];
+        if (!System.Text.RegularExpressions.Regex.IsMatch(between, @"^\s*(\[[^\]]+\]\s*)*$"))
+        {
+            return null;
+        }
+
         var start = chatIndex + ChatMarker.Length;
 
         // 跳过 [CHAT] 后面的普通空格；保留消息内部空格。

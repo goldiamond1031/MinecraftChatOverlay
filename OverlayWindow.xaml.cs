@@ -315,19 +315,18 @@ public partial class OverlayWindow : Window
         }
     }
 
-    public void AddMessage(string chatMessage)
+    /// <summary>加入一条聊天消息。</summary>
+    public ChatMessageViewModel? AddMessage(string chatMessage)
     {
         // 合并连续重复消息：只有紧挨着的同一条消息会被忽略。
         if (_settings.MergeDuplicateMessages &&
             _messages.Count > 0 &&
             string.Equals(_messages[^1].RawText, chatMessage, StringComparison.Ordinal))
         {
-            return;
+            return null;
         }
 
         var now = DateTime.Now;
-        // 鼠标不在悬浮窗上时始终自动跟随最新消息；
-        // 鼠标在悬浮窗上时，只有原本在底部附近才自动跟随，方便查看历史。
         var autoScroll = !_isMouseOverOverlay || IsNearBottom();
         var vm = new ChatMessageViewModel
         {
@@ -349,19 +348,18 @@ public partial class OverlayWindow : Window
             _messages.RemoveAt(0);
         }
 
-        // 如果用户正在查看历史消息，不强制跳到底部；只有原本就在底部附近时才自动跟随。
         if (autoScroll)
         {
             ChatScroll.ScrollToEnd();
         }
 
-        // 让悬浮窗保持底边位置不变，新消息加入后整体向上扩展。
-        // 具体的位置补偿放在 SizeChanged 里统一处理，这里只需触发一次布局。
         UpdateLayout();
         ApplyAnchor();
 
         AnimateNewMessage(vm);
+        return vm;
     }
+
 
     /// <summary>
     /// 把"窗口最大高度"限制在当前显示器工作区内，避免悬浮窗比屏幕还高、必然露到屏幕外。
@@ -478,22 +476,18 @@ public partial class OverlayWindow : Window
     private List<ChatSegmentViewModel> BuildSegments(string rawText, DateTime timestamp)
     {
         // 这里保留原始文本并实时应用替换规则，修改规则后已显示消息也会重新渲染。
-        var displayText = ChatTextProcessor.ApplyReplacements(rawText, _settings.ReplaceRules);
-
         var foreground = ParseBrush(_settings.TextColor, Brushes.White);
         var defaultWeight = ParseFontWeight(_settings.FontWeight);
 
         var segments = new List<ChatSegmentViewModel>();
         if (_settings.ShowTimestamp)
         {
-            segments.Add(new ChatSegmentViewModel(
-                $"[{timestamp:HH:mm:ss}] ",
-                foreground,
-                defaultWeight));
+            segments.Add(new ChatSegmentViewModel($"[{timestamp:HH:mm:ss}] ", foreground, defaultWeight));
         }
 
-        // 先按用户颜色规则生成分段，再叠加“玩家发言颜色/发言玩家 ID 颜色”。
+        var displayText = ChatTextProcessor.ApplyReplacements(rawText, _settings.ReplaceRules);
         var colored = ChatTextProcessor.BuildColoredSegments(displayText, _settings.ColorRules, foreground, defaultWeight);
+
         var contentBrush = string.IsNullOrWhiteSpace(_settings.PlayerContentColor)
             ? null
             : ParseBrush(_settings.PlayerContentColor, foreground);

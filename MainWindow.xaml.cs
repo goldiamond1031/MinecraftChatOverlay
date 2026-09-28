@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
 using System.Net.Http;
@@ -72,6 +72,10 @@ public partial class MainWindow : Window
     /// <summary>B站面板正在从配置回填控件时为 true，避免回填过程触发一次无谓的保存。</summary>
     private bool _biliLoading = true;
     private bool _loading = true;
+
+    // ---------- AI 识图 ----------
+    private ScreenshotWatcher? _screenshotWatcher;
+    private bool _aiBusy;
     private string _colorRuleColor = "#FFFF0000";
     private string _colorRuleMatchColor = "";
     private bool _autoGgSending;
@@ -111,16 +115,26 @@ public partial class MainWindow : Window
         LoadWindowIcon();
         LoadBrandAssets();
         _settings = SettingsService.Load();
+
+        // 卡片的"锁定态"要用绑定读设置对象，所以 DataContext 必须是窗口自己。
+        // 放在 Load 之后：绑定的 getter 会解引用 _settings，早于赋值会空引用。
+        DataContext = this;
+
         InitializeComboBoxes();
         InitializePlayerQueryUi();
         LoadRuleCollections();
         LoadUiFromSettings();
+        LoadAiUiFromSettings();
 
         // 先把字段下拉填好，否则第一次打开"玩家查询"时下拉是空的
         RebuildFieldPickerOptions();
 
         _loading = false;
         SubscribeImmediateApply();
+
+        // 上次退出时如果勾着"启用自动识别"，这里要真的把监听器启动起来
+        // （回填控件时 _loading 还是 true，那次的保存被跳过了，不会启动监听）
+        UpdateScreenshotWatcher();
 
         // B站弹幕模块：独立配置文件 + 独立悬浮窗
         _biliSettings = BiliSettingsService.Load();
@@ -135,7 +149,11 @@ public partial class MainWindow : Window
 
 private void MainWindow_Loaded(object sender, RoutedEventArgs e)
 {
-    MoveIndicatorToSelected();
+        MoveIndicatorToSelected();
+        InitializeMotionBlurUi();
+        InitializeSoundNotifyUi();
+        InitializeKillFeedUi();
+        InitializeKillSoundUi();
 
         AppVersionText.Text = Copy.AppVersionPrefix + Copy.AppVersion;
 
@@ -2697,6 +2715,9 @@ private void SaveThemePreference(bool darkMode)
             if (_watcher.IsRunning)
             {
                 StopListening();
+        _screenshotWatcher?.Dispose();
+        _screenshotWatcher = null;
+        SaveAiSettingsFromUi();
                 StartListening();
             }
             else SaveSettingsFromUi();
@@ -2757,20 +2778,25 @@ private void SaveThemePreference(bool darkMode)
         Dispatcher.InvokeAsync(() =>
         {
             var activeReplaceRules = _replaceRules.Where(r => r.IsEnabled).ToList();
-            var activeBlockKeywords = _blockKeywords.Where(k => k.IsEnabled).Select(k => k.Keyword).ToList();
+            var activeBlockKeywords = _blockKeywords.Where(k => k.IsEnabled).ToList();
             var replacedForCheck = ChatTextProcessor.ApplyReplacements(chatMessage, activeReplaceRules);
-            if (ChatTextProcessor.IsBlocked(replacedForCheck, activeBlockKeywords))
+            var blocked = ChatTextProcessor.IsBlocked(replacedForCheck, activeBlockKeywords);
+
+            if (blocked)
             {
                 AppendDebugLog("[屏蔽] 已屏蔽，不显示到悬浮窗：" + replacedForCheck);
                 return;
             }
 
             TryAutoGg(chatMessage);
+            NotifySoundForChat(replacedForCheck);
+            NotifyKillFeedback(replacedForCheck);
             ShowOverlay();
             _overlay?.AddMessage(chatMessage);
         });
     }
 
+    /// <summary>
     private void TryAutoGg(string message)
     {
         if (!_settings.EnableAutoGg || string.IsNullOrWhiteSpace(_settings.AutoGgTriggerPattern)) return;
@@ -3533,6 +3559,611 @@ private void SaveThemePreference(bool darkMode)
         ColorRuleMatchColorPreview.Background = Brushes.Transparent;
     }
 
+    // ==================== ID 对应颜色（玩家 → 队伍色） ====================
+
+    /// <summary>粘贴内容一变就显示识别结果，不用先点分配才知道认没认对。</summary>
+    private void TeamAssignTextBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (TeamAssignStatusText is null)
+        {
+            return;
+        }
+
+        var parsed = TeamColorTable.Parse(TeamAssignTextBox.Text);
+        TeamAssignStatusText.Text = parsed.Count == 0
+            ? ""
+            : Copy.TeamAssignPreview(parsed.Count, DescribeTeamBreakdown(parsed));
+    }
+
+    private static string DescribeTeamBreakdown(List<(string Team, string Name)> parsed) =>
+        string.Join("  ", parsed
+            .GroupBy(x => x.Team)
+            .OrderByDescending(g => g.Count())
+            .Select(g => $"{g.Key}{g.Count()}"));
+
+    private void AssignTeamColorsButton_Click(object sender, RoutedEventArgs e)
+    {
+        var parsed = TeamColorTable.Parse(TeamAssignTextBox.Text);
+        if (parsed.Count == 0)
+        {
+            TeamAssignStatusText.Text = Copy.TeamAssignNoMatch;
+            return;
+        }
+
+        AssignTeamColors(parsed, "手动");
+    }
+
+    /// <summary>统一入口：清掉上一批队色规则，再按解析结果重新分配。</summary>
+    private void AssignTeamColors(List<(string Team, string Name)> parsed, string source)
+    {
+        // 先把上一次分配的队色规则清掉，反复分配不会越堆越多
+        RemoveTeamColorRules();
+
+        foreach (var (team, name) in parsed)
+        {
+            var color = TeamColorTable.ColorOf(team);
+            if (string.IsNullOrEmpty(color))
+            {
+                continue;
+            }
+
+            AddTeamColorRule(name, color);
+
+            // 名字里可能被 OCR 塞了空格（实际名单里没有），补一条去掉空格的版本
+            var compact = name.Replace(" ", "");
+            if (!string.Equals(compact, name, StringComparison.Ordinal) && compact.Length > 0)
+            {
+                AddTeamColorRule(compact, color);
+            }
+        }
+
+        SaveSettingsFromUi(false);
+        var message = Copy.TeamAssigned(parsed.Count);
+        TeamAssignStatusText.Text = message;
+        LogStatus($"{message}（{source}）");
+    }
+
+    // ==================== AI 识图：截图 → 自动分配 ====================
+
+    /// <summary>
+    /// AI 相关的提示一律走这里：卡片上的状态行 + 底部状态栏（+ 出错时弹窗），
+    /// 保证不会出现"点了没反应、什么提示都没有"的情况。
+    /// </summary>
+    private void SetAiStatus(string message, bool isError = false, bool popup = false)
+    {
+        // 这个可能被后台线程调到（截图监听器、HTTP 回调），先切回 UI 线程再动控件
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.InvokeAsync(() => SetAiStatus(message, isError, popup));
+            return;
+        }
+
+        if (AiStatusText is not null)
+        {
+            AiStatusText.Text = message;
+            AiStatusText.Foreground = isError
+                ? (TryFindResource("DangerBrush") as Brush ?? Brushes.OrangeRed)
+                : (TryFindResource("TextSecondaryBrush") as Brush ?? Brushes.Gray);
+        }
+
+        LogStatus("AI：" + message);
+
+        // 同时写进「调试后台」的日志，方便复制出来排查
+        AppendDebugLog("AI：" + message);
+
+        if (popup)
+        {
+            try
+            {
+                MessageBox.Show(this, message, "AI 自动识别", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    private void LoadAiUiFromSettings()
+    {
+        AiAutoAssignCheckBox.IsChecked = _settings.AiAutoAssign;
+        AiScreenshotDirTextBox.Text = ResolveScreenshotDir();
+        AiApiModeComboBox.SelectedIndex = string.Equals(_settings.AiApiMode, "zhipuOcr", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
+        AiBaseUrlTextBox.Text = _settings.AiBaseUrl;
+        AiModelIdTextBox.Text = _settings.AiModelId;
+        AiApiKeyBox.Password = _settings.AiApiKey;
+        AiPromptTextBox.Text = _settings.AiPrompt;
+        AiExtraBodyTextBox.Text = _settings.AiExtraBodyJson;
+        AiCompressImageCheckBox.IsChecked = _settings.AiCompressImage;
+        AiCollectIdsCheckBox.IsChecked = _settings.AiCollectIds;
+        AiTabFirstTextBox.Text = _settings.AiTabFirstPresses.ToString();
+        AiTabNextTextBox.Text = _settings.AiTabStep.ToString();
+        AiTabMaxRoundsTextBox.Text = _settings.AiTabMaxRounds.ToString();
+        AiTabDelayTextBox.Text = _settings.AiTabStepDelayMs.ToString();
+        AiStatusText.Text = _settings.AiAutoAssign ? "已开启，等新截图…" : "未开启";
+
+        UpdateAiAutoAssignVisibility();
+    }
+
+    /// <summary>
+    /// 未开启自动识别时，把详细设置整体收起，只留总开关。
+    ///
+    /// 理由：这块设置又长又密（目录、接口、Key、提示词、TAB 参数…），
+    /// 没开这个功能的人根本用不上，摊在那儿就是白占大半屏。
+    /// 收起只是隐藏，控件都还在 —— 开关一打开，之前填的值原样回来。
+    /// </summary>
+    private void UpdateAiAutoAssignVisibility()
+    {
+        if (AiAutoAssignDetailsPanel == null)
+        {
+            return;
+        }
+
+        AiAutoAssignDetailsPanel.Visibility = AiAutoAssignCheckBox.IsChecked == true
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+    }
+
+    private void SaveAiSettingsFromUi()
+    {
+        if (_loading || AiAutoAssignCheckBox is null)
+        {
+            return;
+        }
+
+        _settings.AiAutoAssign = AiAutoAssignCheckBox.IsChecked == true;
+        _settings.AiScreenshotDir = AiScreenshotDirTextBox.Text.Trim();
+        _settings.AiApiMode = AiApiModeComboBox.SelectedIndex == 1 ? "zhipuOcr" : "chat";
+        _settings.AiBaseUrl = AiBaseUrlTextBox.Text.Trim();
+        _settings.AiModelId = AiModelIdTextBox.Text.Trim();
+        _settings.AiApiKey = AiApiKeyBox.Password;
+        _settings.AiPrompt = AiPromptTextBox.Text.Trim();
+        _settings.AiExtraBodyJson = AiExtraBodyTextBox.Text.Trim();
+        _settings.AiCompressImage = AiCompressImageCheckBox.IsChecked == true;
+        _settings.AiCollectIds = AiCollectIdsCheckBox.IsChecked == true;
+        _settings.AiTabFirstPresses = ParseInt(AiTabFirstTextBox.Text, 2, 1, 10);
+        _settings.AiTabStep = ParseInt(AiTabNextTextBox.Text, 1, 0, 5);
+        _settings.AiTabMaxRounds = ParseInt(AiTabMaxRoundsTextBox.Text, 20, 2, 60);
+        _settings.AiTabStepDelayMs = ParseInt(AiTabDelayTextBox.Text, 20, 5, 300);
+        SettingsService.Save(_settings);
+        UpdateScreenshotWatcher();
+
+        UpdateAiAutoAssignVisibility();
+    }
+
+    private void AiSetting_Changed(object sender, RoutedEventArgs e) => SaveAiSettingsFromUi();
+
+    private void AiApiMode_Changed(object sender, SelectionChangedEventArgs e) => SaveAiSettingsFromUi();
+
+    private void AiSetting_LostFocus(object sender, RoutedEventArgs e) => SaveAiSettingsFromUi();
+
+    /// <summary>截图目录：用户填了就用用户的，没填就从日志目录推（.minecraft\screenshots）。</summary>
+    private string ResolveScreenshotDir()
+    {
+        if (!string.IsNullOrWhiteSpace(_settings.AiScreenshotDir))
+        {
+            return _settings.AiScreenshotDir.Trim();
+        }
+
+        try
+        {
+            var logsDir = Path.GetDirectoryName(_settings.LogPath);
+            var gameDir = string.IsNullOrEmpty(logsDir) ? null : Path.GetDirectoryName(logsDir);
+            if (!string.IsNullOrEmpty(gameDir))
+            {
+                var guess = Path.Combine(gameDir, "screenshots");
+                if (Directory.Exists(guess))
+                {
+                    return guess;
+                }
+            }
+        }
+        catch
+        {
+        }
+
+        return "";
+    }
+
+    private void BrowseAiScreenshotDirButton_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.OpenFolderDialog { Title = "选截图目录（一般是 .minecraft 里的 screenshots）" };
+        var current = ResolveScreenshotDir();
+        if (!string.IsNullOrEmpty(current) && Directory.Exists(current))
+        {
+            dialog.InitialDirectory = current;
+        }
+
+        if (dialog.ShowDialog(this) == true)
+        {
+            AiScreenshotDirTextBox.Text = dialog.FolderName;
+            SaveAiSettingsFromUi();
+        }
+    }
+
+    /// <summary>按开关状态启动/停止截图监听。</summary>
+    private void UpdateScreenshotWatcher()
+    {
+        if (!_settings.AiAutoAssign)
+        {
+            _screenshotWatcher?.Stop();
+            return;
+        }
+
+        var dir = ResolveScreenshotDir();
+        if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir))
+        {
+            SetAiStatus(Copy.AiNeedDir + "（当前：" + (string.IsNullOrEmpty(dir) ? "空" : dir) + "）", true, true);
+            _screenshotWatcher?.Stop();
+            return;
+        }
+
+        if (_screenshotWatcher is null)
+        {
+            _screenshotWatcher = new ScreenshotWatcher();
+            _screenshotWatcher.NewScreenshot += path => _ = RunAiRecognizeAsync(path);
+        }
+
+        _screenshotWatcher.Start(dir);
+        SetAiStatus("在盯着：" + dir);
+    }
+
+    private void RecognizeLatestScreenshotButton_Click(object sender, RoutedEventArgs e)
+    {
+        var dir = ResolveScreenshotDir();
+        if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir))
+        {
+            SetAiStatus(Copy.AiNeedDir + "（当前：" + (string.IsNullOrEmpty(dir) ? "空" : dir) + "）", true, true);
+            return;
+        }
+
+        FileInfo? newest;
+        try
+        {
+            newest = new DirectoryInfo(dir).EnumerateFiles("*.png")
+                .OrderByDescending(f => f.LastWriteTimeUtc)
+                .FirstOrDefault();
+        }
+        catch (Exception ex)
+        {
+            SetAiStatus("读截图目录失败：" + ex.Message, true, true);
+            return;
+        }
+
+        if (newest is null)
+        {
+            SetAiStatus(Copy.AiNoScreenshot + "（" + dir + "）", true, true);
+            return;
+        }
+
+        _ = RunAiRecognizeAsync(newest.FullName);
+    }
+
+    /// <summary>线程守卫：截图监听器是在后台线程触发事件的，先用它切回 UI 线程。</summary>
+    private Task RunAiRecognizeAsync(string imagePath)
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            return Dispatcher.InvokeAsync(() => RunAiRecognizeCoreAsync(imagePath)).Task.Unwrap();
+        }
+
+        return RunAiRecognizeCoreAsync(imagePath);
+    }
+
+    private async Task RunAiRecognizeCoreAsync(string imagePath)
+    {
+        if (_aiBusy)
+        {
+            SetAiStatus("上一次识别还没结束，等它跑完", true, true);
+            return;
+        }
+
+        // 先把当前生效的配置回显出来，配置有没有被读到一眼就能看出来
+        SetAiStatus($"配置：接口={Show(_settings.AiBaseUrl)} 模型={Show(_settings.AiModelId)} Key={(_settings.AiApiKey.Length > 0 ? "已填" : "空")}");
+
+        if (string.IsNullOrWhiteSpace(_settings.AiBaseUrl))
+        {
+            SetAiStatus(Copy.AiNeedBaseUrl + "（输入框填完记得点到别处，让它保存）", true, true);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_settings.AiModelId))
+        {
+            SetAiStatus(Copy.AiNeedModel + "（输入框填完记得点到别处，让它保存）", true, true);
+            return;
+        }
+
+        _aiBusy = true;
+        var name = Path.GetFileName(imagePath);
+
+        try
+        {
+            // ① 需要的话，先用 TAB 补全把本局玩家 ID 问出来当参考
+            var ids = new List<string>();
+            if (_settings.AiCollectIds)
+            {
+                SetAiStatus("正在用 TAB 补全收集玩家 ID（会短暂打开聊天栏）…");
+                ids = await ChatIdCollector.CollectAsync(
+                    BuildCollectOptions(),
+                    ReadClipboardOnUiThread,
+                    WriteClipboardOnUiThread,
+                    step => SetAiStatus(step),
+                    System.Threading.CancellationToken.None);
+            }
+
+            // ② 拼进提示词：让 AI 从候选里挑，而不是纯靠像素猜
+            var prompt = BuildPromptWithIds(_settings.AiPrompt, ids);
+
+            // 发出去之前先记下"发了什么"，和后面的返回原文配成一对
+            LogAiRequest(imagePath, prompt);
+
+            var text = await AiVisionClient.RecognizeAsync(
+                new AiVisionOptions
+                {
+                    BaseUrl = _settings.AiBaseUrl,
+                    ModelId = _settings.AiModelId,
+                    ApiKey = _settings.AiApiKey,
+                    Prompt = prompt,
+                    Compress = _settings.AiCompressImage,
+                    ExtraBodyJson = _settings.AiExtraBodyJson,
+                    ApiMode = _settings.AiApiMode
+                },
+                imagePath,
+                System.Threading.CancellationToken.None,
+                step => SetAiStatus(step));
+
+            LogStatus("AI 识图完成：" + name);
+            ApplyAiRecognizedText(text, name);
+        }
+        catch (Exception ex)
+        {
+            SetAiStatus("识别失败：" + ex.Message, true, true);
+            LogStatus("AI 识图失败：" + ex.Message);
+            AiResponseLog.Append("识别失败", ex.Message, 0);
+        }
+        finally
+        {
+            _aiBusy = false;
+        }
+
+        static string Show(string value) => string.IsNullOrWhiteSpace(value) ? "空！" : value;
+    }
+
+    /// <summary>把这次发送的接口、模型、参数、图片、完整提示词写进 AI 记录文件。</summary>
+    private void LogAiRequest(string imagePath, string prompt)
+    {
+        try
+        {
+            var sizeText = "?";
+            try
+            {
+                var info = new FileInfo(imagePath);
+                if (info.Exists)
+                {
+                    sizeText = (info.Length / 1024) + " KB";
+                }
+            }
+            catch
+            {
+            }
+
+            AiResponseLog.AppendRequest(Path.GetFileName(imagePath), new[]
+            {
+                "接口类型：" + (_settings.AiApiMode == "zhipuOcr"
+                    ? "智谱 GLM-OCR（/layout_parsing）"
+                    : "对话模型（/chat/completions）"),
+                "BaseUrl：" + _settings.AiBaseUrl,
+                "模型：" + _settings.AiModelId,
+                "额外请求参数：" + (string.IsNullOrWhiteSpace(_settings.AiExtraBodyJson)
+                    ? "（无）"
+                    : _settings.AiExtraBodyJson),
+                "图片：" + Path.GetFileName(imagePath)
+                    + "（文件 " + sizeText + "，"
+                    + (_settings.AiCompressImage ? "压缩后上传" : "原图直传") + "）",
+                "TAB 收集 ID：" + (_settings.AiCollectIds
+                    ? "已开启（" + _settings.AiTabFirstPresses + "/+" + _settings.AiTabStep
+                      + "，最多 " + _settings.AiTabMaxRounds + " 轮）"
+                    : "未开启"),
+                "",
+                "完整提示词：",
+                prompt
+            });
+        }
+        catch
+        {
+            // 记录失败不影响识别
+        }
+    }
+
+    private ChatIdCollectOptions BuildCollectOptions() => new()
+    {
+        FirstTabPresses = _settings.AiTabFirstPresses,
+        TabStep = _settings.AiTabStep,
+        MaxRounds = _settings.AiTabMaxRounds,
+        StepDelayMs = _settings.AiTabStepDelayMs
+    };
+
+    /// <summary>剪贴板只能在 UI 线程读，收集器跑在后台线程，所以这里做一次调度。</summary>
+    private string ReadClipboardOnUiThread() =>
+        Dispatcher.CheckAccess()
+            ? Clipboard.GetText()
+            : Dispatcher.Invoke(Clipboard.GetText);
+
+    /// <summary>
+    /// 写剪贴板（同样只能在 UI 线程）。收集器每轮读完会先写一个哨兵值，
+    /// 用来判断"复制到底有没有生效" —— 否则旧名字会一直被误当成新读到的名字。
+    /// </summary>
+    private void WriteClipboardOnUiThread(string text)
+    {
+        void Write() => Clipboard.SetText(text);
+
+        if (Dispatcher.CheckAccess())
+        {
+            Write();
+        }
+        else
+        {
+            Dispatcher.Invoke(Write);
+        }
+    }
+
+    /// <summary>把候选 ID 拼到提示词后面，让 AI 优先从这些里面挑。</summary>
+    private static string BuildPromptWithIds(string basePrompt, List<string> ids)
+    {
+        if (ids.Count == 0)
+        {
+            return basePrompt;
+        }
+
+        return basePrompt
+               + "\n\n参考：本局玩家 ID 可能是这些（识别时优先从里面挑，允许大小写差异）："
+               + string.Join("、", ids)
+               + "\n\n直接输出结果，只按「X队 | XXX」的格式每行一个，"
+               + "不要输出思考过程、推理、分析、标题或任何解释文字。";
+    }
+
+    // ---------- 一键填常见服务商的"关闭思考"参数 ----------
+
+    private void AiPresetNoExtra_Click(object sender, RoutedEventArgs e) => ApplyAiExtraBody("");
+
+    private void AiPresetThinkingDisabled_Click(object sender, RoutedEventArgs e) =>
+        ApplyAiExtraBody("{\"thinking\":{\"type\":\"disabled\"}}");
+
+    private void AiPresetEnableThinkingFalse_Click(object sender, RoutedEventArgs e) =>
+        ApplyAiExtraBody("{\"enable_thinking\":false}");
+
+    private void ApplyAiExtraBody(string json)
+    {
+        AiExtraBodyTextBox.Text = json;
+        SaveAiSettingsFromUi();
+        SetAiStatus(json.Length == 0
+            ? "已清空额外请求参数"
+            : "已填入额外请求参数：" + json);
+    }
+
+    /// <summary>打开 AI 返回记录的日志文件，回查"那次为什么没认出来"。</summary>
+    private void OpenAiResponseLogButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (!System.IO.File.Exists(AiResponseLog.FilePath))
+            {
+                SetAiStatus("还没有识别记录（记录文件：" + AiResponseLog.FilePath + "）");
+                return;
+            }
+
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(AiResponseLog.FilePath)
+            {
+                UseShellExecute = true
+            });
+            SetAiStatus("已打开记录：" + AiResponseLog.FilePath);
+        }
+        catch (Exception ex)
+        {
+            SetAiStatus("打不开记录文件：" + ex.Message + "（路径：" + AiResponseLog.FilePath + "）", true, true);
+        }
+    }
+
+    /// <summary>只收集 ID，不识别 —— 用来试"按几次 TAB"这个参数。</summary>
+    private async void CollectIdsButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            SetAiStatus("开始收集玩家 ID（游戏窗口要在前台）…");
+            var ids = await ChatIdCollector.CollectAsync(
+                BuildCollectOptions(),
+                ReadClipboardOnUiThread,
+                WriteClipboardOnUiThread,
+                step => SetAiStatus(step),
+                System.Threading.CancellationToken.None);
+
+            SetAiStatus(ids.Count == 0
+                ? "没收集到 ID —— 确认游戏窗口在前台，或调整上面两个 TAB 次数"
+                : $"收集到 {ids.Count} 个：{string.Join("、", ids)}");
+        }
+        catch (Exception ex)
+        {
+            SetAiStatus("收集失败：" + ex.Message, true, true);
+        }
+    }
+
+    /// <summary>
+    /// AI 返回的文字：先填进粘贴框（方便看到原文、必要时手改），再逐行解析分配。
+    /// 一条都没认出来时不动现有规则 —— 避免接口返回异常把颜色全清掉。
+    /// </summary>
+    private void ApplyAiRecognizedText(string text, string source)
+    {
+        TeamAssignTextBox.Text = text;
+
+        var parsed = TeamColorTable.Parse(text);
+
+        // 不管认没认出来，都把原文记下来：既写进「调试后台」，也落到文件里
+        // （偶发问题需要回查，而调试后台的日志只有开了开关才看得到）
+        AppendDebugLog($"===== AI 识图返回原文（{source}，{text.Length} 字，认出 {parsed.Count} 条）=====");
+        AppendDebugLog(string.IsNullOrWhiteSpace(text) ? "(空)" : text.Trim());
+        AppendDebugLog("===== 原文结束 =====");
+        AiResponseLog.Append(source, text, parsed.Count);
+
+        if (parsed.Count == 0)
+        {
+            var preview = string.IsNullOrWhiteSpace(text)
+                ? "(返回内容为空)"
+                : text.Replace("\r", " ").Replace("\n", " / ").Trim();
+            if (preview.Length > 160)
+            {
+                preview = preview[..160] + "…";
+            }
+
+            SetAiStatus(Copy.AiNothingRecognized + " AI 返回：" + preview, true, true);
+            LogStatus("AI 原文已存到 " + AiResponseLog.FilePath);
+            return;
+        }
+
+        AssignTeamColors(parsed, "AI：" + source);
+        SetAiStatus(Copy.TeamAssigned(parsed.Count));
+    }
+
+    private void AddTeamColorRule(string name, string color)
+    {
+        // 用户要求：只要这个 ID 出现了就染色，不附加任何前提。
+        // 所以用普通文本匹配（IndexOf），不用整词正则 —— 名字紧贴别的字也能命中。
+        _colorRules.Add(new TextColorRule
+        {
+            Text = name,
+            Color = color,
+            FontWeight = "Normal",
+            UseRegex = false,
+            RegexGroup = 0,
+            MatchColor = "",
+            IsEnabled = true,
+            FromTeamTable = true
+        });
+    }
+
+    private int RemoveTeamColorRules()
+    {
+        var stale = _colorRules.Where(r => r.FromTeamTable).ToList();
+        foreach (var rule in stale)
+        {
+            _colorRules.Remove(rule);
+        }
+
+        return stale.Count;
+    }
+
+    private void ClearTeamColorsButton_Click(object sender, RoutedEventArgs e)
+    {
+        var removed = RemoveTeamColorRules();
+        if (removed == 0)
+        {
+            TeamAssignStatusText.Text = Copy.TeamColorsNoneToClear;
+            return;
+        }
+
+        SaveSettingsFromUi(false);
+        TeamAssignStatusText.Text = Copy.TeamColorsCleared(removed);
+        LogStatus(Copy.TeamColorsCleared(removed));
+    }
+
     private void AddColorRuleButton_Click(object sender, RoutedEventArgs e)
     {
         var text = ColorRuleTextTextBox.Text.Trim();
@@ -3677,6 +4308,7 @@ private void SaveThemePreference(bool darkMode)
         {
             BlockKeywordTextBox.Text = item.Keyword;
             BlockKeywordEnabledCheckBox.IsChecked = item.IsEnabled;
+            BlockKeywordOnlyPlayerContentCheckBox.IsChecked = item.OnlyPlayerContent;
         }
     }
 
@@ -3738,6 +4370,23 @@ private void SaveThemePreference(bool darkMode)
         }
     }
 
+    /// <summary>
+    /// "仅玩家发送消息生效"开关。
+    /// 勾上 = 这个词只在玩家发言的内容段里比对（系统消息不算）。
+    /// </summary>
+    private void BlockKeywordOnlyPlayerContentCheckBox_Changed(object sender, RoutedEventArgs e)
+    {
+        if (BlockKeywordListBox.SelectedItem is BlockKeywordItem item)
+        {
+            item.OnlyPlayerContent = BlockKeywordOnlyPlayerContentCheckBox.IsChecked == true;
+
+            // 列表里那行要跟着显示 / 去掉 [仅玩家内容] 标记
+            BlockKeywordListBox.Items.Refresh();
+            BlockKeywordListBox.SelectedItem = item;
+            SaveSettingsFromUi(false);
+        }
+    }
+
     // ---------- 窗口控制按钮事件 ----------
 
     private void MinimizeButton_Click(object sender, RoutedEventArgs e)
@@ -3782,6 +4431,8 @@ private void SaveThemePreference(bool darkMode)
         else if (NavTextRules.IsChecked == true) selected = NavTextRules;
         else if (NavPlayerQuery.IsChecked == true) selected = NavPlayerQuery;
         else if (NavBili.IsChecked == true) selected = NavBili;
+        else if (NavMotionBlur.IsChecked == true) selected = NavMotionBlur;
+        else if (NavKillFeed.IsChecked == true) selected = NavKillFeed;
         else if (NavDebug.IsChecked == true) selected = NavDebug;
 
         if (selected == null || NavIndicator == null || IndicatorTranslate == null)
@@ -3814,6 +4465,8 @@ private void SaveThemePreference(bool darkMode)
         else if (NavTextRules.IsChecked == true) activePanel = RulesPanel;
         else if (NavPlayerQuery.IsChecked == true) activePanel = PlayerQueryPanel;
         else if (NavBili.IsChecked == true) activePanel = BiliPanel;
+        else if (NavMotionBlur.IsChecked == true) activePanel = MotionBlurPanel;
+        else if (NavKillFeed.IsChecked == true) activePanel = KillFeedPanel;
         else if (NavDebug.IsChecked == true) activePanel = DebugPanel;
 
         if (activePanel == null)
@@ -3855,6 +4508,10 @@ private void SaveThemePreference(bool darkMode)
         SaveSettingsFromUi(false);
         StopListening();
         _overlay?.Close();
+
+        // 击杀图标窗口是常驻的，退出时得显式关掉，否则进程退不干净。
+        _killBanner?.Close();
+        _killBanner = null;
 
         // B站模块：先存配置，再断开连接、关掉悬浮窗
         try

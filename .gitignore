@@ -1,7 +1,7 @@
 # 构建产物
 bin/
 obj/
-publish/
+publish*/
 
 # IDE
 .vs/
@@ -16,6 +16,31 @@ desktop.ini
 # 本地的发布脚本，不进仓库
 push.bat
 
-# 发布产物
+# 发布产物（publish / publish_v110 … 都是本地打包输出）
 release_*.zip
 publish.bat
+
+# ---------------------------------------------------------------
+# native 调试产物（src 和编好的 DLL 要进仓库，这两个不要）
+# ---------------------------------------------------------------
+# 钩子运行日志：每次注入都会写一个 gmb_hook_<pid>.log
+native/dist/gmb_hook_*.log
+native/**/gmb_hook_*.log
+# 帧转储：调试时导出的 BMP 序列，单个 30~300MB
+native/dist/testdump_*/
+native/**/testdump_*/
+# 测试程序输出
+native/dist/NVIDIA Corporation/
+native/**/*.obj
+native/**/*.pdb
+native/**/*.ilk
+native/**/*.exp
+native/**/*.lib
+native/**/*.tlog
+
+# tools 下的小工具也是独立工程，产物同样不要
+tools/**/bin/
+tools/**/obj/
+
+# 界面说明页（本地看的，不进仓库）
+GUI.html

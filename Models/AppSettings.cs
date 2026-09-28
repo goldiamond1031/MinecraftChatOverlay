@@ -129,6 +129,95 @@ public sealed class AppSettings
     /// <summary>玩家查询：自定义显示字段。</summary>
     public List<PlayerQueryField> PlayerQueryFields { get; set; } = new();
 
+    // ---------- AI 识图（把截图发给 AI，自动分配队伍色）----------
+
+    /// <summary>是否开启：一有新截图就自动发给 AI 识别并分配。</summary>
+    public bool AiAutoAssign { get; set; }
+
+    /// <summary>接口类型："chat" = 对话模型；"zhipuOcr" = 智谱 GLM-OCR 的 layout_parsing。</summary>
+    public string AiApiMode { get; set; } = "chat";
+
+    /// <summary>识图接口地址（OpenAI 兼容），例如 https://api.openai.com/v1</summary>
+    public string AiBaseUrl { get; set; } = "";
+
+    /// <summary>模型 ID，必须是支持图片的模型。</summary>
+    public string AiModelId { get; set; } = "";
+
+    /// <summary>API Key。只存在本机这个配置文件里（明文）。</summary>
+    public string AiApiKey { get; set; } = "";
+
+    /// <summary>截图目录。留空就自动按日志目录推（.minecraft\screenshots）。</summary>
+    public string AiScreenshotDir { get; set; } = "";
+
+    /// <summary>
+    /// 识别前先用 TAB 补全收集玩家 ID 作参考（默认开）。
+    /// 会短暂打开聊天栏，之后自动按 Esc 关闭；全程不按回车。
+    /// </summary>
+    public bool AiCollectIds { get; set; } = true;
+
+    /// <summary>第一个 ID 要按几次 TAB。</summary>
+    public int AiTabFirstPresses { get; set; } = 2;
+
+    /// <summary>每往后一个 ID，TAB 次数再多几下（默认 1 → 2、3、4、5……）。</summary>
+    public int AiTabStep { get; set; } = 1;
+
+    /// <summary>每次按键之间的间隔（毫秒）。越小越快，太小游戏会漏键。</summary>
+    public int AiTabStepDelayMs { get; set; } = 35;
+
+    /// <summary>最多收集几轮，防死循环。</summary>
+    public int AiTabMaxRounds { get; set; } = 20;
+
+    /// <summary>
+    /// 额外合并进请求体的 JSON，用来关闭思考模式等。
+    /// 智谱/火山：{"thinking":{"type":"disabled"}}；通义/硅基流动：{"enable_thinking":false}
+    /// </summary>
+    public string AiExtraBodyJson { get; set; } = "";
+
+    /// <summary>上传前是否压缩图片（默认 false = 原图直传，保真度最高）。</summary>
+    public bool AiCompressImage { get; set; }
+
+    /// <summary>发给 AI 的提示词。</summary>
+    public string AiPrompt { get; set; } = "识别图片中部偏上的黑色覆盖层内的文字信息，仅输出X队 | XXX的格式";
+
+    // ---------- 消息提示音 ----------
+
+    /// <summary>是否开启：有玩家说话就播提示音。</summary>
+    public bool EnableSoundNotify { get; set; }
+
+    /// <summary>两条提示音之间至少隔多少毫秒，防连发刷屏。</summary>
+    public int SoundNotifyMinIntervalMs { get; set; } = 800;
+
+    /// <summary>
+    /// 用户导入的提示音（绝对路径）。v8 起软件不再附带内置音效，这里是唯一来源。
+    /// </summary>
+    public List<string> SoundNotifyFiles { get; set; } = new();
+
+    /// <summary>参与随机播放的提示音（<see cref="SoundNotifyFiles"/> 的子集）。</summary>
+    public List<string> SoundNotifyPicked { get; set; } = new();
+
+    /// <summary>开了之后每次说话从勾选的提示音里随机抽一个；关掉就用列表中选中的那个。</summary>
+    public bool SoundNotifyRandom { get; set; }
+
+    /// <summary>旧字段（v7）：当前选中的提示音。保留是为了迁移，新代码用 <see cref="SoundNotifyFiles"/>。</summary>
+    public string SoundNotifyFile { get; set; } = "";
+
+    /// <summary>
+    /// 旧字段（v7）：用户加过的声音文件。迁移时并进 <see cref="SoundNotifyFiles"/>。
+    /// </summary>
+    public List<string> SoundNotifyUserFiles { get; set; } = new();
+
+    // ---------- 游戏帧混合动态模糊 ----------
+
+    /// <summary>帧混合动态模糊的设置（注入钩子 + 共享内存实时调参数）。</summary>
+    public MotionBlurSettings MotionBlur { get; set; } = new();
+
+    // ---------- 击杀反馈 ----------
+
+    /// <summary>击杀反馈的设置（效果 + 匹配规则）。</summary>
+    public KillFeedbackSettings KillFeedback { get; set; } = new();
+
+
+
     public AppSettings Clone() => (AppSettings)MemberwiseClone();
 
     private static string GetDefaultLogPath()

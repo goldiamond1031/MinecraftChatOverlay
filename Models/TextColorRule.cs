@@ -1,4 +1,4 @@
-namespace MinecraftChatOverlay.Models;
+﻿namespace MinecraftChatOverlay.Models;
 
 /// <summary>彩色渲染规则：聊天文本中出现指定文字时，用指定颜色/字重显示。</summary>
 public sealed class TextColorRule
@@ -22,6 +22,12 @@ public sealed class TextColorRule
     /// <summary>是否启用此规则。</summary>
     public bool IsEnabled { get; set; } = true;
 
+    /// <summary>
+    /// 是不是从「ID 对应颜色」那张卡片自动分配的（玩家 → 队伍色）。
+    /// 用来实现"一键清空"只清这一批，不动手工加的规则。
+    /// </summary>
+    public bool FromTeamTable { get; set; }
+
     public string DisplayText
     {
         get
@@ -34,7 +40,8 @@ public sealed class TextColorRule
 
             var mode = UseRegex ? $"正则(组{RegexGroup})" : "普通";
             var matchPart = string.IsNullOrWhiteSpace(MatchColor) ? "" : $" 整句={MatchColor}";
-            return $"{enabledMark} {Text}  [{mode} {Color} {FontWeight}{matchPart}]";
+            var source = FromTeamTable ? "[队] " : "";
+            return $"{enabledMark} {source}{Text}  [{mode} {Color} {FontWeight}{matchPart}]";
         }
     }
 }

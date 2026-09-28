@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    脱离界面用的命令行小工具：注入 / 开关 / 导出帧 / 看状态。
+    在做界面之前，所有联调都是用它完成的。
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>gmblur</AssemblyName>
+    <RootNamespace>MinecraftChatOverlay.Tools</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 直接复用主工程里的那两个文件，保证命令行和界面用的是同一份实现 -->
+    <Compile Include="..\..\Services\GameMotionBlur\MotionBlurControlBlock.cs" Link="MotionBlurControlBlock.cs" />
+    <Compile Include="..\..\Services\GameMotionBlur\GameProcessInjector.cs" Link="GameProcessInjector.cs" />
+  </ItemGroup>
+
+</Project>

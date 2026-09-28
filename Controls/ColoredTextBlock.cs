@@ -41,12 +41,22 @@ public sealed class ColoredTextBlock : TextBlock
                 continue;
             }
 
-            Inlines.Add(new Run(segment.Text)
+            var run = new Run(segment.Text)
             {
                 Foreground = segment.Foreground,
                 FontWeight = segment.FontWeight,
                 FontStyle = segment.FontStyle
-            });
+            };
+
+            if (segment.Underline || segment.Strikethrough)
+            {
+                var decorations = new TextDecorationCollection();
+                if (segment.Underline) decorations.Add(System.Windows.TextDecorations.Underline[0]);
+                if (segment.Strikethrough) decorations.Add(System.Windows.TextDecorations.Strikethrough[0]);
+                run.TextDecorations = decorations;
+            }
+
+            Inlines.Add(run);
         }
     }
 }

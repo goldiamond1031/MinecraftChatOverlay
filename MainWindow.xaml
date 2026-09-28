@@ -991,6 +991,12 @@
                                                   Style="{StaticResource ToggleSwitchStyle}"
                                                   Checked="BlockKeywordEnabledCheckBox_Changed"
                                                   Unchecked="BlockKeywordEnabledCheckBox_Changed"/>
+                                        <CheckBox x:Name="BlockKeywordOnlyPlayerContentCheckBox"
+                                                  Content="仅玩家发送消息生效"
+                                                  Style="{StaticResource ToggleSwitchStyle}"
+                                                  Margin="16,0,0,0"
+                                                  Checked="BlockKeywordOnlyPlayerContentCheckBox_Changed"
+                                                  Unchecked="BlockKeywordOnlyPlayerContentCheckBox_Changed"/>
                                     </StackPanel>
                                 </StackPanel>
                             </Border>

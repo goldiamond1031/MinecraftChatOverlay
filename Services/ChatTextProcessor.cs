@@ -93,6 +93,56 @@ public static class ChatTextProcessor
         return content.Length > 0;
     }
 
+    /// <summary>
+    /// 判断一条聊天行「看起来是不是玩家在说话」。
+    ///
+    /// 注意：这是在**猜**，不是在问服务器到底谁发的 —— 日志里没有发送者信息，
+    /// 只能从文本形状上认。用的三条经验规则：
+    ///
+    ///   1. 有 &gt; / ＞ 分隔符，且分隔符后面有内容；
+    ///   2. 分隔符**前面**那段，最后一个 ] 之后（没有 ] 就取最后一个空格之后）是一个名字：
+    ///      非空、不超过 16 个字、中间不含空格；
+    ///   3. 分隔符**后面**不能以 [ 开头 —— 这条专门用来排掉
+    ///      「床被摧毁 &gt; [关注xx]某人 摧毁了 青队 的圣床」这类**带 &gt; 的系统公告**。
+    ///
+    /// 第 3 条是针对布吉岛那类服务器的：系统公告的固定形状是
+    /// 「中文短语 &gt; [前缀]玩家名 动词...」，而玩家发言是「[前缀]玩家名 &gt; 内容」。
+    /// 换个服务器如果形状不一样，就得回来调这里（判据集中在这一个方法里，就是为了好调）。
+    /// </summary>
+    public static bool LooksLikePlayerSpeech(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text) ||
+            !TrySplitPlayerSpeech(text, out var prefix, out _, out var content))
+        {
+            return false;
+        }
+
+        // 规则 3：> 后面紧跟一个 [xxx] 的，是系统公告那种「标题 > [前缀]名 动作」
+        if (content[0] is '[' or '［')
+        {
+            return false;
+        }
+
+        // 规则 2：取出发言者那一段
+        var nameStart = FindTrailingPlayerNameStart(prefix);
+        if (nameStart < 0 || nameStart >= prefix.Length)
+        {
+            return false;
+        }
+
+        var name = prefix[nameStart..].Trim();
+
+        // 规则 4（写死，用户不可配）：布吉岛等服务器的拆床公告会被猜成
+        // 「床被摧毁」在说话。这里的标题不是玩家，直接不提示音。
+        if (name.Contains("床被摧毁", StringComparison.Ordinal) ||
+            name.Contains("床被破坏", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        return name.Length is >= 1 and <= 16 && !name.Contains(' ');
+    }
+
     public static bool IsBlocked(string text, IReadOnlyList<string> keywords)
     {
         if (keywords == null || keywords.Count == 0)
@@ -103,6 +153,52 @@ public static class ChatTextProcessor
         foreach (var keyword in keywords)
         {
             if (!string.IsNullOrEmpty(keyword) && text.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// 按整条屏蔽规则判断（带每条的"仅玩家生效"开关）。
+    ///
+    /// 和字符串版 <see cref="IsBlocked(string, IReadOnlyList{string})"/> 的区别：
+    /// 标了 <see cref="BlockKeywordItem.OnlyPlayerContent"/> 的词**只在玩家发言的内容段里找**。
+    /// 判断方式复用替换规则那套 <see cref="TrySplitPlayerSpeech"/> —— 两处用同一个切法，
+    /// 免得"替换"和"屏蔽"对同一句话的理解不一样。
+    ///
+    /// 系统消息（进服/退服/成就…）没有 <c>&gt;</c> 分隔，切不出来，
+    /// 所以标了"仅玩家内容"的词天然就不会命中它们。
+    /// </summary>
+    public static bool IsBlocked(string text, IReadOnlyList<BlockKeywordItem> keywords)
+    {
+        if (keywords == null || keywords.Count == 0)
+        {
+            return false;
+        }
+
+        foreach (var item in keywords)
+        {
+            if (item == null || !item.IsEnabled || string.IsNullOrEmpty(item.Keyword))
+            {
+                continue;
+            }
+
+            if (item.OnlyPlayerContent)
+            {
+                // 只在"内容段"里找。切不出玩家发言格式（系统消息）就这一条不算命中。
+                if (TrySplitPlayerSpeech(text, out _, out _, out var content) &&
+                    content.Contains(item.Keyword, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+
+                continue;
+            }
+
+            if (text.Contains(item.Keyword, StringComparison.OrdinalIgnoreCase))
             {
                 return true;
             }

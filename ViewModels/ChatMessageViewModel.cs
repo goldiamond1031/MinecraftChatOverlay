@@ -30,6 +30,7 @@ public sealed class ChatMessageViewModel : INotifyPropertyChanged
         set => SetField(ref _text, value);
     }
 
+
     /// <summary>用于彩色渲染的分段文本。</summary>
     public IReadOnlyList<ChatSegmentViewModel> Segments
     {
@@ -92,3 +93,4 @@ public sealed class ChatMessageViewModel : INotifyPropertyChanged
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 }
+

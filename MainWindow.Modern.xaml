@@ -1,4 +1,4 @@
-﻿<Window x:Class="MinecraftChatOverlay.MainWindow"
+<Window x:Class="MinecraftChatOverlay.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
@@ -158,6 +158,16 @@
                                              GroupName="MainNav"
                                              Style="{StaticResource NavRadioButtonStyle}"
                                              Content="B站弹幕"
+                                             Checked="NavRadioButton_Checked"/>
+                                <RadioButton x:Name="NavMotionBlur"
+                                             GroupName="MainNav"
+                                             Style="{StaticResource NavRadioButtonStyle}"
+                                             Content="游戏动态模糊"
+                                             Checked="NavRadioButton_Checked"/>
+                                <RadioButton x:Name="NavKillFeed"
+                                             GroupName="MainNav"
+                                             Style="{StaticResource NavRadioButtonStyle}"
+                                             Content="击杀反馈"
                                              Checked="NavRadioButton_Checked"/>
 
                                 <RadioButton x:Name="NavDebug"
@@ -471,7 +481,7 @@
                                                     <ComboBox x:Name="LogEncodingComboBox" Loaded="ComboBox_Loaded"/>
                                                 </StackPanel>
 
-                                                <StackPanel Grid.Row="2" Margin="0,0,9,16">
+                                                <StackPanel x:Name="TextColorRow" Grid.Row="2" Margin="0,0,9,16">
                                                     <TextBlock Text="文字颜色" Style="{StaticResource FieldLabelStyle}"/>
                                                     <StackPanel Orientation="Horizontal">
                                                         <Border x:Name="TextColorPreview" Width="40" Height="40" CornerRadius="12"
@@ -483,7 +493,7 @@
                                                         <Button Content="选择" Click="TextColorButton_Click" Style="{StaticResource SmallGhostButtonStyle}"/>
                                                     </StackPanel>
                                                 </StackPanel>
-                                                <StackPanel Grid.Row="2" Grid.Column="1" Margin="9,0,0,16">
+                                                <StackPanel x:Name="BackgroundColorRow" Grid.Row="2" Grid.Column="1" Margin="9,0,0,16">
                                                     <TextBlock Text="背景颜色" Style="{StaticResource FieldLabelStyle}"/>
                                                     <StackPanel Orientation="Horizontal">
                                                         <Border x:Name="BackgroundColorPreview" Width="40" Height="40" CornerRadius="12"
@@ -496,7 +506,7 @@
                                                     </StackPanel>
                                                 </StackPanel>
 
-                                                <StackPanel Grid.Row="3" Margin="0,0,9,16">
+                                                <StackPanel x:Name="PlayerContentColorRow" Grid.Row="3" Margin="0,0,9,16">
                                                     <TextBlock Text="玩家发言颜色" Style="{StaticResource FieldLabelStyle}"/>
                                                     <StackPanel Orientation="Horizontal">
                                                         <Border x:Name="PlayerContentColorPreview" Width="40" Height="40" CornerRadius="12"
@@ -509,7 +519,7 @@
                                                         <Button Content="清除" Click="ClearPlayerContentColorButton_Click" Style="{StaticResource SmallGhostButtonStyle}"/>
                                                     </StackPanel>
                                                 </StackPanel>
-                                                <StackPanel Grid.Row="3" Grid.Column="1" Margin="9,0,0,16">
+                                                <StackPanel x:Name="PlayerNameColorRow" Grid.Row="3" Grid.Column="1" Margin="9,0,0,16">
                                                     <TextBlock Text="发言玩家 ID 颜色" Style="{StaticResource FieldLabelStyle}"/>
                                                     <StackPanel Orientation="Horizontal">
                                                         <Border x:Name="PlayerNameColorPreview" Width="40" Height="40" CornerRadius="12"
@@ -574,14 +584,104 @@
                                                         <TextBlock Text="新消息使用滑入动画" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0"/>
                                                     </StackPanel>
                                                 </CheckBox>
+                                                <CheckBox x:Name="SoundNotifyEnableCheckBox" Style="{StaticResource ToggleSwitchStyle}" Margin="8,10,0,0"
+                                                          Checked="SoundNotifyEnableCheckBox_Changed"
+                                                          Unchecked="SoundNotifyEnableCheckBox_Changed">
+                                                    <StackPanel>
+                                                        <TextBlock Text="消息提示音" FontSize="13" FontWeight="Bold"/>
+                                                        <TextBlock Text="有玩家说话时播放提示音" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0"/>
+                                                    </StackPanel>
+                                                </CheckBox>
                                             </UniformGrid>
                                         </StackPanel>
                                     </Border>
+
+                                    <!-- 消息提示音 -->
+                                    <Border Style="{StaticResource LockedCardStyle}"
+                                            Tag="{Binding IsSoundNotifyCardLocked}"
+                                            Margin="0,16,0,0">
+                                        <StackPanel>
+                                            <TextBlock Text="消息提示音" Style="{StaticResource CardTitleStyle}"/>
+                                            <TextBlock Text="当有玩家说话时就会播放提示音。先在「行为选项」里把它打开，这里才能设置" Style="{StaticResource CardDescStyle}" Margin="0,3,0,18"/>
+
+                                            <StackPanel IsEnabled="{Binding IsChecked, ElementName=SoundNotifyEnableCheckBox}">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <StackPanel Margin="0,0,9,0">
+                                                        <TextBlock Text="最短间隔" Style="{StaticResource FieldLabelStyle}"/>
+                                                        <Grid>
+                                                            <TextBox x:Name="SoundNotifyIntervalTextBox"
+                                                                     Padding="12,0,52,0"
+                                                                     MaxLength="5"
+                                                                     LostFocus="SoundNotifyIntervalTextBox_LostFocus"/>
+                                                            <TextBlock Text="毫秒"
+                                                                       FontSize="11.5" FontWeight="Bold"
+                                                                       Foreground="{DynamicResource TextTertiaryBrush}"
+                                                                       HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                                       Margin="0,0,13,0" IsHitTestVisible="False"/>
+                                                        </Grid>
+                                                    </StackPanel>
+                                                    <TextBlock Grid.Column="1"
+                                                               Margin="9,0,0,0"
+                                                               Text="这段时间内连着来好几条发言，只响第一次。想每条都响就填 0。"
+                                                               Style="{StaticResource HintStyle}"
+                                                               TextWrapping="Wrap"
+                                                               VerticalAlignment="Center"/>
+                                                </Grid>
+
+                                                <TextBlock Text="提示音" Style="{StaticResource FieldLabelStyle}" Margin="0,18,0,7"/>
+                                                <ListBox x:Name="SoundChoiceListBox"
+                                                         MinHeight="90"
+                                                         MaxHeight="190"
+                                                         ItemTemplate="{StaticResource SoundChoiceItemTemplate}"
+                                                         SelectionChanged="SoundChoiceListBox_SelectionChanged"/>
+                                                <Grid Margin="0,12,0,0">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <Button Content="试听" Click="PreviewSoundButton_Click"
+                                                            Style="{StaticResource SmallPrimaryButtonStyle}" Margin="0,0,8,0"/>
+                                                    <Button Grid.Column="1" Content="添加提示音…" Click="BrowseSoundFileButton_Click"
+                                                            Style="{StaticResource SmallGhostButtonStyle}" Margin="0,0,8,0"/>
+                                                    <Button Grid.Column="2" Content="移除" Click="RemoveSoundChoiceButton_Click"
+                                                            Style="{StaticResource SmallDangerButtonStyle}"/>
+                                                    <CheckBox Grid.Column="3"
+                                                              x:Name="SoundNotifyRandomCheckBox"
+                                                              Content="随机播放"
+                                                              Style="{StaticResource InlineToggleStyle}"
+                                                              VerticalAlignment="Center"
+                                                              Margin="14,0,0,0"
+                                                              ToolTip="开启后每次都从勾选的音效里随机抽一个；关掉就用列表中选中的那个"
+                                                              Checked="SoundNotifyRandomCheckBox_Changed"
+                                                              Unchecked="SoundNotifyRandomCheckBox_Changed"/>
+                                                    <TextBlock Grid.Column="4"
+                                                               Margin="12,0,0,0"
+                                                               Text="「试听」放的是列表里选中的那个"
+                                                               Style="{StaticResource HintStyle}"
+                                                               VerticalAlignment="Center"
+                                                               TextTrimming="CharacterEllipsis"/>
+                                                </Grid>
+                                                <TextBlock x:Name="SoundNotifyStatusText"
+                                                           Style="{StaticResource HintStyle}"
+                                                           Margin="0,10,0,0"
+                                                           TextWrapping="Wrap"/>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
                                 </StackPanel>
+
                             </StackPanel>
                         </ScrollViewer>
 
                         <!-- ========== 面板 2：自动 GG ========== -->
+
                         <ScrollViewer x:Name="AutoGgPanel"
                                       VerticalScrollBarVisibility="Auto"
                                       HorizontalScrollBarVisibility="Disabled"
@@ -700,6 +800,7 @@
                                         <StackPanel>
                                             <TextBlock Text="彩色渲染规则" Style="{StaticResource CardTitleStyle}"/>
                                             <TextBlock Text="把指定文字染成指定颜色 / 字重，支持正则与捕获组" Style="{StaticResource CardDescStyle}" Margin="0,3,0,14"/>
+                                            <StackPanel x:Name="ColorRuleEditorPanel">
                                             <ListBox x:Name="ColorRuleListBox"
                                                      MinHeight="84"
                                                      MaxHeight="216"
@@ -751,6 +852,230 @@
                                                           Unchecked="ColorRuleEnabledCheckBox_Changed"/>
                                             </Grid>
                                             <Button Content="删除选中规则" Click="DeleteColorRuleButton_Click" Style="{StaticResource SmallDangerButtonStyle}" HorizontalAlignment="Left" Margin="0,14,0,0"/>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- ID 对应颜色：从聊天里粘进来，一键分配队伍色 -->
+                                    <Border Style="{StaticResource CardStyle}" Margin="0,16,0,0">
+                                        <StackPanel>
+                                            <TextBlock Text="ID 对应颜色" Style="{StaticResource CardTitleStyle}"/>
+                                            <TextBlock Text="把玩家列表按「队伍 | 玩家ID」每行一条粘进来，点分配就给这些 ID 染上对应队伍的颜色（游戏里按 TAB 能看到这个列表）"
+                                                       Style="{StaticResource CardDescStyle}" Margin="0,3,0,14"/>
+                                            <TextBox x:Name="TeamAssignTextBox"
+                                                     Height="150"
+                                                     AcceptsReturn="True"
+                                                     TextWrapping="NoWrap"
+                                                     VerticalScrollBarVisibility="Auto"
+                                                     HorizontalScrollBarVisibility="Auto"
+                                                     FontFamily="Consolas, Cascadia Mono, Microsoft YaHei UI"
+                                                     TextChanged="TeamAssignTextBox_TextChanged"/>
+                                            <Grid Margin="0,12,0,0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <Button Content="分配" Click="AssignTeamColorsButton_Click"
+                                                        Style="{StaticResource SmallPrimaryButtonStyle}" Margin="0,0,8,0"/>
+                                                <Button Grid.Column="1" Content="一键清空" Click="ClearTeamColorsButton_Click"
+                                                        Style="{StaticResource SmallGhostButtonStyle}"/>
+                                                <TextBlock x:Name="TeamAssignStatusText"
+                                                           Grid.Column="2"
+                                                           Margin="12,0,0,0"
+                                                           VerticalAlignment="Center"
+                                                           FontSize="12"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                            </Grid>
+                                            <TextBlock Text="支持 11 个队：红 / 蓝 / 绿 / 黄 / 青 / 紫 / 粉 / 白 / 黑 / 橙 / 灰队。名字用整词匹配，2B12 不会被 2B1 误染。这些规则在「彩色渲染规则」列表里标着 [队]，一键清空只清它们。"
+                                                       Style="{StaticResource HintStyle}" Margin="0,12,0,0"/>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- AI 自动识别：截图目录有新图就发给 AI，自动分配 -->
+                                    <Border Style="{StaticResource CardStyle}" Margin="0,16,0,0">
+                                        <StackPanel>
+                                            <TextBlock Text="AI 自动识别（截图 → 自动分配）" Style="{StaticResource CardTitleStyle}"/>
+                                            <TextBlock Text="开启后，截图目录里一出现新截图就发给 AI 识别，认到的内容会自动填进上面那张卡片并分配队伍色。接口需要支持图片（OpenAI 兼容的 /chat/completions）。"
+                                                       Style="{StaticResource CardDescStyle}" Margin="0,3,0,14"/>
+
+                                            <!--
+                                                总开关。**它必须一直露着** —— 关着的时候下面那坨详细设置整体收起，
+                                                免得一个没用上的功能占掉大半屏。用户想开的时候这里就有入口。
+                                            -->
+                                            <CheckBox x:Name="AiAutoAssignCheckBox"
+                                                      Style="{StaticResource ToggleSwitchStyle}"
+                                                      Checked="AiSetting_Changed"
+                                                      Unchecked="AiSetting_Changed">
+                                                <StackPanel>
+                                                    <TextBlock Text="启用自动识别" FontSize="15" FontWeight="ExtraBold"/>
+                                                    <TextBlock Text="一有新截图就自动识别并重新分配" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,4,0,0"/>
+                                                </StackPanel>
+                                            </CheckBox>
+
+                                            <!-- 关着的时候整块收起，只剩上面那个开关 -->
+                                            <StackPanel x:Name="AiAutoAssignDetailsPanel"
+                                                        Visibility="Collapsed"
+                                                        Margin="0,16,0,0">
+                                            <TextBlock Text="截图目录" Style="{StaticResource FieldLabelStyle}"/>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBox x:Name="AiScreenshotDirTextBox" LostFocus="AiSetting_LostFocus"/>
+                                                <Button Grid.Column="1" Content="浏览" Click="BrowseAiScreenshotDirButton_Click"
+                                                        Style="{StaticResource SmallButtonStyle}" Margin="8,0,0,0"/>
+                                            </Grid>
+
+                                            <StackPanel Margin="0,14,0,0">
+                                                <TextBlock Text="接口类型" Style="{StaticResource FieldLabelStyle}"/>
+                                                <ComboBox x:Name="AiApiModeComboBox"
+                                                          Width="360"
+                                                          HorizontalAlignment="Left"
+                                                          Loaded="ComboBox_Loaded"
+                                                          SelectionChanged="AiApiMode_Changed">
+                                                    <ComboBoxItem Content="对话模型 /chat/completions（如 glm-4v-flash、qwen-vl-max）"/>
+                                                    <ComboBoxItem Content="智谱 GLM-OCR /layout_parsing（专用 OCR 接口）"/>
+                                                </ComboBox>
+                                            </StackPanel>
+
+                                            <StackPanel Margin="0,14,0,0">
+                                                <TextBlock Text="接口地址 BaseUrl" Style="{StaticResource FieldLabelStyle}"/>
+                                                <TextBox x:Name="AiBaseUrlTextBox" LostFocus="AiSetting_LostFocus"/>
+                                                <TextBlock Text="智谱填 https://open.bigmodel.cn/api/paas/v4（后面会自动接 /chat/completions 或 /layout_parsing）"
+                                                           Style="{StaticResource HintStyle}" Margin="0,6,0,0"/>
+                                            </StackPanel>
+
+                                            <Grid Margin="0,14,0,0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel Margin="0,0,9,0">
+                                                    <TextBlock Text="模型 ID（要支持图片）" Style="{StaticResource FieldLabelStyle}"/>
+                                                    <TextBox x:Name="AiModelIdTextBox" LostFocus="AiSetting_LostFocus"/>
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="1" Margin="9,0,0,0">
+                                                    <TextBlock Text="API Key" Style="{StaticResource FieldLabelStyle}"/>
+                                                    <PasswordBox x:Name="AiApiKeyBox"
+                                                                 Style="{StaticResource ModernPasswordBoxStyle}"
+                                                                 LostFocus="AiSetting_LostFocus"/>
+                                                </StackPanel>
+                                            </Grid>
+
+                                            <StackPanel Margin="0,14,0,0">
+                                                <TextBlock Text="提示词" Style="{StaticResource FieldLabelStyle}"/>
+                                                <TextBox x:Name="AiPromptTextBox" Height="54" AcceptsReturn="True" TextWrapping="Wrap"
+                                                         VerticalScrollBarVisibility="Auto" LostFocus="AiSetting_LostFocus"/>
+                                            </StackPanel>
+
+                                            <StackPanel Margin="0,14,0,0">
+                                                <TextBlock Text="额外请求参数（JSON，用来关闭思考模式）" Style="{StaticResource FieldLabelStyle}"/>
+                                                <TextBox x:Name="AiExtraBodyTextBox"
+                                                         FontFamily="Consolas, Cascadia Mono, Microsoft YaHei UI"
+                                                         LostFocus="AiSetting_LostFocus"/>
+                                                <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                                    <Button Content="不设置"
+                                                            Click="AiPresetNoExtra_Click"
+                                                            Style="{StaticResource SmallGhostButtonStyle}"
+                                                            Margin="0,0,8,0"/>
+                                                    <Button Content="thinking: disabled"
+                                                            Click="AiPresetThinkingDisabled_Click"
+                                                            Style="{StaticResource SmallGhostButtonStyle}"
+                                                            Margin="0,0,8,0"/>
+                                                    <Button Content="enable_thinking: false"
+                                                            Click="AiPresetEnableThinkingFalse_Click"
+                                                            Style="{StaticResource SmallGhostButtonStyle}"/>
+                                                </StackPanel>
+                                                <TextBlock Text="各家字段名不一样：智谱/火山用 thinking.type=disabled，通义/硅基流动用 enable_thinking=false。模型把推理过程当正文吐出来时，点对应那个按钮就能关掉。"
+                                                           Style="{StaticResource HintStyle}" Margin="0,8,0,0"/>
+                                            </StackPanel>
+
+                                            <Border Background="{DynamicResource Surface2Brush}"
+                                                    BorderBrush="{DynamicResource BorderBrush}"
+                                                    BorderThickness="1"
+                                                    CornerRadius="13"
+                                                    Padding="15,13"
+                                                    Margin="0,14,0,0">
+                                                <StackPanel>
+                                                    <CheckBox x:Name="AiCollectIdsCheckBox"
+                                                              Style="{StaticResource ToggleSwitchStyle}"
+                                                              Checked="AiSetting_Changed"
+                                                              Unchecked="AiSetting_Changed">
+                                                        <StackPanel>
+                                                            <TextBlock Text="用 TAB 补全收集玩家 ID 作参考" FontSize="13" FontWeight="Bold"/>
+                                                            <TextBlock Text="TAB 次数是递增的：第 1 个 2 下、第 2 个 3 下、第 3 个 4 下……" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0"/>
+                                                            <TextBlock Text="会短暂打开聊天栏（几秒）后自动按 Esc 关闭，绝不按回车。收集到的 ID 会拼进提示词，让 AI 从候选里挑，识别率明显提高"
+                                                                       FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}"
+                                                                       TextWrapping="Wrap" Margin="0,3,0,0"/>
+                                                        </StackPanel>
+                                                    </CheckBox>
+
+                                                    <Grid Margin="0,14,0,0">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <StackPanel Margin="0,0,9,0">
+                                                            <TextBlock Text="第一个 ID 按几次 TAB" Style="{StaticResource FieldLabelStyle}"/>
+                                                            <TextBox x:Name="AiTabFirstTextBox" LostFocus="AiSetting_LostFocus"/>
+                                                        </StackPanel>
+                                                        <StackPanel Grid.Column="1" Margin="9,0,9,0">
+                                                            <TextBlock Text="每往后一个多加几下" Style="{StaticResource FieldLabelStyle}"/>
+                                                            <TextBox x:Name="AiTabNextTextBox" LostFocus="AiSetting_LostFocus"/>
+                                                        </StackPanel>
+                                                        <StackPanel Grid.Column="2" Margin="9,0,9,0">
+                                                            <TextBlock Text="按键间隔（毫秒，越小越快）" Style="{StaticResource FieldLabelStyle}"/>
+                                                            <TextBox x:Name="AiTabDelayTextBox" LostFocus="AiSetting_LostFocus"/>
+                                                        </StackPanel>
+                                                        <StackPanel Grid.Column="3" Margin="9,0,0,0">
+                                                            <TextBlock Text="最多几轮（防死循环）" Style="{StaticResource FieldLabelStyle}"/>
+                                                            <TextBox x:Name="AiTabMaxRoundsTextBox" LostFocus="AiSetting_LostFocus"/>
+                                                        </StackPanel>
+                                                    </Grid>
+
+                                                    <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+                                                        <Button Content="测试收集 ID（会打开聊天栏）"
+                                                                Click="CollectIdsButton_Click"
+                                                                Style="{StaticResource SmallGhostButtonStyle}"
+                                                                Margin="0,0,8,0"/>
+                                                        <Button Content="打开 AI 返回记录"
+                                                                Click="OpenAiResponseLogButton_Click"
+                                                                Style="{StaticResource SmallGhostButtonStyle}"/>
+                                                    </StackPanel>
+                                                </StackPanel>
+                                            </Border>
+
+                                            <CheckBox x:Name="AiCompressImageCheckBox"
+                                                      Content="上传前压缩图片（省流量，但小字可能变糊；不勾就是原图直传）"
+                                                      Style="{StaticResource InlineToggleStyle}"
+                                                      Margin="0,14,0,0"
+                                                      Checked="AiSetting_Changed"
+                                                      Unchecked="AiSetting_Changed"/>
+
+                                            <Grid Margin="0,14,0,0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <Button Content="识别最新一张截图" Click="RecognizeLatestScreenshotButton_Click"
+                                                        Style="{StaticResource SmallPrimaryButtonStyle}"/>
+                                                <TextBlock x:Name="AiStatusText"
+                                                           Grid.Column="1"
+                                                           Margin="12,0,0,0"
+                                                           VerticalAlignment="Center"
+                                                           FontSize="12"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                            </Grid>
+
+                                            <TextBlock Text="提示：API Key 只保存在本机配置文件里（明文）。识别时整张截图会上传到上面填的这个接口，涉及游戏画面和玩家名单。AI 返回的内容逐行解析，认不出的那一行不会被分配，对应 ID 保持默认颜色。"
+                                                       Style="{StaticResource HintStyle}" Margin="0,12,0,0"/>
+                                            </StackPanel>
                                         </StackPanel>
                                     </Border>
 
@@ -821,6 +1146,14 @@
                                                       Margin="0,12,0,0"
                                                       Checked="BlockKeywordEnabledCheckBox_Changed"
                                                       Unchecked="BlockKeywordEnabledCheckBox_Changed"/>
+                                            <CheckBox x:Name="BlockKeywordOnlyPlayerContentCheckBox"
+                                                      Content="仅玩家发送消息生效"
+                                                      Style="{StaticResource InlineToggleStyle}"
+                                                      Margin="0,10,0,0"
+                                                      Checked="BlockKeywordOnlyPlayerContentCheckBox_Changed"
+                                                      Unchecked="BlockKeywordOnlyPlayerContentCheckBox_Changed"/>
+                                            <TextBlock Text="勾上后这个词只在玩家发言的内容里生效，系统消息（进服 / 退服 / 成就等）提到它不会被屏蔽"
+                                                       Style="{StaticResource HintStyle}" Margin="0,6,0,0"/>
                                         </StackPanel>
                                     </Border>
                                 </StackPanel>
@@ -1570,7 +1903,899 @@
                             </StackPanel>
                         </ScrollViewer>
 
-                        <!-- ========== 面板 6：调试后台 ========== -->
+                        <!-- ========== 面板 6：游戏动态模糊（帧混合） ========== -->
+                        <ScrollViewer x:Name="MotionBlurPanel"
+                                      VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled"
+                                      Visibility="{Binding IsChecked, ElementName=NavMotionBlur, Converter={StaticResource BoolToVis}}">
+                            <StackPanel Margin="22,22,24,30">
+                                <Grid Margin="0,0,0,18">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="游戏动态模糊" Style="{StaticResource PanelTitleStyle}"/>
+                                        <TextBlock Text="使用帧混合实现动态模糊" Style="{StaticResource PanelDescStyle}"/>
+                                    </StackPanel>
+                                </Grid>
+
+                                <Border Style="{StaticResource CardStyle}">
+                                    <StackPanel>
+                                        <TextBlock Text="1. 选择游戏进程" Style="{StaticResource CardTitleStyle}"/>
+                                        <TextBlock Text="列出的是所有带窗口的进程，找到你的 Java 版游戏。注入不用重启游戏，卸载也不用；使用帧混合实现动态模糊，当前支持 OpenGL（Minecraft Java 版）。" Style="{StaticResource CardDescStyle}" Margin="0,3,0,14"/>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <ComboBox x:Name="MotionBlurProcessComboBox"
+                                                      Height="34"
+                                                      Loaded="ComboBox_Loaded"
+                                                      ToolTip="选择要注入的游戏进程"/>
+                                            <Button Grid.Column="1"
+                                                    Content="刷新列表"
+                                                    Click="MotionBlurRefreshButton_Click"
+                                                    Style="{StaticResource SmallButtonStyle}"
+                                                    Margin="8,0,0,0"/>
+                                            <Button Grid.Column="2"
+                                                    x:Name="MotionBlurInjectButton"
+                                                    Content="注入并接管"
+                                                    Click="MotionBlurInjectButton_Click"
+                                                    Style="{StaticResource SmallPrimaryButtonStyle}"
+                                                    Margin="8,0,0,0"/>
+                                        </Grid>
+                                        <TextBlock x:Name="MotionBlurStatusText"
+                                                   Style="{StaticResource HintStyle}"
+                                                   Text="尚未注入"
+                                                   Margin="0,12,0,0"
+                                                   TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Style="{StaticResource CardStyle}" Margin="0,14,0,0">
+                                    <StackPanel>
+                                        <TextBlock Text="2. 帧混合设置" Style="{StaticResource CardTitleStyle}"/>
+                                        <TextBlock Text="使用帧混合实现动态模糊。强度 = 参与平均的帧数（2~8 帧），权重线性递减并归一化。越大拖影越长，但长度有上限，停下后最多 N 帧就干净了，不会残留长尾。" Style="{StaticResource CardDescStyle}" Margin="0,3,0,16"/>
+
+                                        <CheckBox x:Name="MotionBlurEnableCheckBox"
+                                                  Style="{StaticResource ToggleSwitchStyle}"
+                                                  Checked="MotionBlurEnableCheckBox_Changed"
+                                                  Unchecked="MotionBlurEnableCheckBox_Changed">
+                                            <StackPanel>
+                                                <TextBlock Text="开启帧混合" FontSize="13" FontWeight="Bold"/>
+                                                <TextBlock Text="关掉之后游戏立刻回到完全原生的画面（静止画面始终逐像素不变）" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0"/>
+                                            </StackPanel>
+                                        </CheckBox>
+
+                                        <StackPanel Margin="0,16,0,0">
+                                            <TextBlock Text="模糊强度" Style="{StaticResource FieldLabelStyle}"/>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <Slider x:Name="MotionBlurStrengthSlider"
+                                                        Minimum="0.05"
+                                                        Maximum="0.95"
+                                                        Value="0.55"
+                                                        ValueChanged="MotionBlurStrengthSlider_ValueChanged"/>
+                                                <TextBlock Grid.Column="1"
+                                                           Text="{Binding Value, ElementName=MotionBlurStrengthSlider, StringFormat={}{0:P0}}"
+                                                           FontSize="12.5" FontWeight="ExtraBold"
+                                                           Foreground="{DynamicResource PrimaryBrush}"
+                                                           HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                           Margin="10,0,0,0"/>
+                                            </Grid>
+                                        </StackPanel>
+
+                                        <CheckBox x:Name="MotionBlurAutoInjectCheckBox"
+                                                  Style="{StaticResource ToggleSwitchStyle}"
+                                                  Margin="0,16,0,0"
+                                                  Checked="MotionBlurAutoInjectCheckBox_Changed"
+                                                  Unchecked="MotionBlurAutoInjectCheckBox_Changed">
+                                            <StackPanel>
+                                                <TextBlock Text="下次启动自动注入这个游戏" FontSize="13" FontWeight="Bold"/>
+                                                <TextBlock Text="按记住的进程名找（例如 javaw.exe），找到就自动注入" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0"/>
+                                            </StackPanel>
+                                        </CheckBox>
+
+                                        <StackPanel Orientation="Horizontal" Margin="0,18,0,0">
+                                            <Button Content="重装钩子" Click="MotionBlurReinstallButton_Click" Style="{StaticResource SmallGhostButtonStyle}" Margin="0,0,8,0"
+                                                    ToolTip="DLL 已经在游戏进程里、但 SwapBuffers 钩子丢失时，让 DLL 重新挂钩（不需要重新注入）。"/>
+                                            <Button Content="卸载钩子" Click="MotionBlurUnhookButton_Click" Style="{StaticResource SmallGhostButtonStyle}"
+                                                    ToolTip="还原游戏原生 SwapBuffers；DLL 仍留在进程里。开/关帧混合只切换效果，不负责装载或卸载钩子。"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+
+                            </StackPanel>
+                        </ScrollViewer>
+
+                        <!-- ========== 面板 8：击杀反馈 ========== -->
+                        <ScrollViewer x:Name="KillFeedPanel"
+                                      VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled"
+                                      Visibility="{Binding IsChecked, ElementName=NavKillFeed, Converter={StaticResource BoolToVis}}">
+                            <StackPanel Margin="22,22,24,30">
+                                <Grid Margin="0,0,0,18">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="击杀反馈" Style="{StaticResource PanelTitleStyle}"/>
+                                        <TextBlock Text="检测到你的击杀时，在游戏画面上做一次视觉反馈"
+                                                   Style="{StaticResource PanelDescStyle}"/>
+                                    </StackPanel>
+                                    <Border Grid.Column="1"
+                                            Style="{StaticResource ChipPrimaryBorderStyle}"
+                                            VerticalAlignment="Top">
+                                        <TextBlock Text="需要注入" FontSize="11.5" FontWeight="Bold"
+                                                   Foreground="{DynamicResource PrimaryBrush}"/>
+                                    </Border>
+                                </Grid>
+
+                                <!--
+                                    前置条件提示条：击杀反馈的视觉部分是走动态模糊那条注入通路送到游戏里的，
+                                    没注入 → 效果根本到不了游戏画面。这行常驻显示，并按实际情况变色，
+                                    免得用户开了击杀反馈却发现"没反应"，还得自己猜原因。
+                                -->
+                                <Border x:Name="KillFeedbackPrereqBanner"
+                                        Style="{StaticResource CardStyle}"
+                                        Padding="14,11"
+                                        Margin="0,0,0,16">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock x:Name="KillFeedbackPrereqIcon"
+                                                   FontSize="15"
+                                                   FontWeight="Bold"
+                                                   VerticalAlignment="Top"
+                                                   Margin="0,0,9,0"
+                                                   Foreground="{DynamicResource ConsoleWarnBrush}"
+                                                   Text="!"/>
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock x:Name="KillFeedbackPrereqTitle"
+                                                       FontSize="12.5"
+                                                       FontWeight="ExtraBold"
+                                                       TextWrapping="Wrap"
+                                                       Foreground="{DynamicResource ConsoleWarnBrush}"
+                                                       Text="要先开启动态模糊并注入游戏，击杀反馈才会生效"/>
+                                            <TextBlock x:Name="KillFeedbackPrereqDetail"
+                                                       FontSize="11.5"
+                                                       TextWrapping="Wrap"
+                                                       Margin="0,3,0,0"
+                                                       Foreground="{DynamicResource TextSecondaryBrush}"
+                                                       Text="击杀反馈的画面效果是通过动态模糊的注入通路送进游戏的 —— 没注入，效果到不了游戏画面。到「游戏动态模糊」页选好进程点【注入并接管】就能用。"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+
+                                <Border Style="{StaticResource CardStyle}">
+                                    <StackPanel>
+                                        <CheckBox x:Name="KillFeedbackEnableCheckBox"
+                                                  Style="{StaticResource ToggleSwitchStyle}"
+                                                  Checked="KillFeedbackEnableCheckBox_Changed"
+                                                  Unchecked="KillFeedbackEnableCheckBox_Changed">
+                                            <StackPanel>
+                                                <TextBlock Text="击杀反馈" FontSize="15" FontWeight="ExtraBold"/>
+                                                <TextBlock Text="匹配到你的击杀时做一次反馈。规则由示例消息自动切出来，不用会写正则 —— 只留「你的 ID + 紧挨着的一小段固定词」，不要求出现在行首，一局里有几种格式就写几条"
+                                                           FontSize="12"
+                                                           Foreground="{DynamicResource TextSecondaryBrush}"
+                                                           TextWrapping="Wrap"
+                                                           Margin="0,4,0,0"/>
+                                            </StackPanel>
+                                        </CheckBox>
+
+                                        <StackPanel IsEnabled="{Binding IsChecked, ElementName=KillFeedbackEnableCheckBox}"
+                                                    Margin="0,18,0,0">
+                                            <StackPanel Margin="0,0,0,14">
+                                                <TextBlock Text="你自己的 ID（按日志里长什么样填）" Style="{StaticResource FieldLabelStyle}"/>
+                                                <TextBox x:Name="KillFeedbackPlayerIdTextBox"
+                                                         LostFocus="KillFeedbackRuleInput_LostFocus"/>
+                                            </StackPanel>
+                                            <StackPanel Margin="0,0,0,14">
+                                                <TextBlock Text="你的击杀消息示例（从日志或悬浮窗复制一条）" Style="{StaticResource FieldLabelStyle}"/>
+                                                <TextBox x:Name="KillFeedbackSampleTextBox"
+                                                         LostFocus="KillFeedbackRuleInput_LostFocus"/>
+                                            </StackPanel>
+                                            <StackPanel>
+                                                <TextBlock Text="示例里的敌方名字（只当切点用，不写进规则）" Style="{StaticResource FieldLabelStyle}"/>
+                                                <TextBox x:Name="KillFeedbackSampleEnemyTextBox"
+                                                         ToolTip="软件靠它认出消息里哪一段是名字。你的 ID 在前在后都行 —— 敌方名字在前就取它之后那一段，在后就取它之前那一段"
+                                                         LostFocus="KillFeedbackRuleInput_LostFocus"/>
+                                            </StackPanel>
+
+                                            <Grid Margin="0,14,0,0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <Button Content="生成并加一行"
+                                                        Click="KillFeedbackBuildPatternButton_Click"
+                                                        Style="{StaticResource SmallPrimaryButtonStyle}"
+                                                        Margin="0,0,14,0"/>
+                                                <CheckBox x:Name="KillFeedbackStripCheckBox"
+                                                          Grid.Column="1"
+                                                          Content="剥离方括号前缀"
+                                                          Style="{StaticResource InlineToggleStyle}"
+                                                          VerticalAlignment="Center"
+                                                          ToolTip="匹配前先把 [vip1] / [25阶1003⚝] / 【称号】 这类装饰剥掉，VIP 图标的私用区字符也一并去掉。不剥的话规则会因为称号一变就失配"
+                                                          Checked="KillFeedbackStripCheckBox_Changed"
+                                                          Unchecked="KillFeedbackStripCheckBox_Changed"/>
+                                                <TextBlock x:Name="KillFeedbackBuildStatusText"
+                                                           Grid.Column="2"
+                                                           Margin="14,0,0,0"
+                                                           Style="{StaticResource HintStyle}"
+                                                           VerticalAlignment="Center"
+                                                           TextTrimming="CharacterEllipsis"/>
+                                            </Grid>
+
+                                            <TextBlock Text="匹配规则（一行一条，命中任意一条就算）"
+                                                       Style="{StaticResource FieldLabelStyle}"
+                                                       Margin="0,16,0,7"/>
+                                            <TextBox x:Name="KillFeedbackRulesTextBox"
+                                                     Height="96"
+                                                     AcceptsReturn="True"
+                                                     TextWrapping="NoWrap"
+                                                     VerticalScrollBarVisibility="Auto"
+                                                     HorizontalScrollBarVisibility="Auto"
+                                                     FontFamily="Consolas, Cascadia Mono, Microsoft YaHei UI"
+                                                     ToolTip="一局里近战 / 远程 / 爆炸的击杀消息往往不是同一个模板，每种粘一条。规则是「一段固定文本」，不要求出现在行首"
+                                                     LostFocus="KillFeedbackRulesTextBox_LostFocus"/>
+                                            <CheckBox x:Name="KillFeedbackRegexRulesCheckBox"
+                                                      Content="按正则解释（不勾就是纯文本，符号不用转义）"
+                                                      Style="{StaticResource InlineToggleStyle}"
+                                                      Margin="0,10,0,0"
+                                                      Checked="KillFeedbackRegexRulesCheckBox_Changed"
+                                                      Unchecked="KillFeedbackRegexRulesCheckBox_Changed"/>
+
+                                            <Grid Margin="0,12,0,0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBox x:Name="KillFeedbackTestTextBox" MinWidth="160" Margin="0,0,9,0"/>
+                                                <Button Grid.Column="1"
+                                                        Content="试一条"
+                                                        Click="KillFeedbackTestButton_Click"
+                                                        Style="{StaticResource SmallGhostButtonStyle}"/>
+                                            </Grid>
+                                            <TextBlock x:Name="KillFeedbackTestResultText"
+                                                       Style="{StaticResource HintStyle}"
+                                                       Margin="0,8,0,0"/>
+                                            <TextBlock x:Name="KillFeedbackStatsText"
+                                                       Style="{StaticResource HintStyle}"
+                                                       Margin="0,10,0,0"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Style="{StaticResource CardStyle}" Margin="0,16,0,0">
+                                    <StackPanel>
+                                        <TextBlock Text="效果预览" Style="{StaticResource CardTitleStyle}"/>
+                                        <TextBlock Text="用你最近一张游戏截图实时演算，点【触发一次】就能看动画。挑定之后搬进游戏里用的是同一套数学，所以这里看到的和游戏里的基本一致"
+                                                   Style="{StaticResource CardDescStyle}" Margin="0,3,0,18"/>
+
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="272"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+
+                                            <StackPanel Margin="0,0,20,0">
+                                                <TextBlock Text="反馈效果（可多选，各自设置大小）" Style="{StaticResource FieldLabelStyle}"/>
+                                                <ScrollViewer MaxHeight="360" VerticalScrollBarVisibility="Auto" Margin="0,4,0,0">
+                                                <StackPanel>
+                                                    <!-- 边缘脉冲：色块统一放在最右，让所有数字框对齐成一列 -->
+                                                    <Grid Margin="0,0,0,7">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="64"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <CheckBox x:Name="KillEffectEdgeCheckBox" Content="边缘脉冲"
+                                                                  VerticalAlignment="Center"
+                                                                  ToolTip="勾上以后可以点右边的色块换发光颜色"
+                                                                  Checked="KillFeedbackEffectSetting_Changed" Unchecked="KillFeedbackEffectSetting_Changed"/>
+                                                        <TextBox x:Name="KillEffectEdgeStrengthTextBox" Grid.Column="1"
+                                                                 Style="{StaticResource EffectPercentTextBoxStyle}"
+                                                                 Text="60"
+                                                                 TextChanged="KillFeedbackEffectText_Changed"/>
+                                                        <TextBlock Grid.Column="2" Text="%"
+                                                                   Margin="5,0,0,0" VerticalAlignment="Center"
+                                                                   Style="{StaticResource HintStyle}"/>
+                                                        <Button x:Name="KillEffectEdgeColorButton" Grid.Column="3"
+                                                                Style="{StaticResource SwatchButtonStyle}"
+                                                                Margin="12,0,0,0"
+                                                                VerticalAlignment="Center"
+                                                                ToolTip="选择边缘脉冲的发光颜色"
+                                                                Click="KillEffectEdgeColorButton_Click">
+                                                            <Border x:Name="KillEffectEdgeColorSwatch" Width="16" Height="16" CornerRadius="5" Background="#FFF5E0"/>
+                                                        </Button>
+                                                    </Grid>
+                                                    <!-- 暗角脉冲 -->
+                                                    <Grid Margin="0,0,0,7">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="64"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                            <ColumnDefinition Width="38"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <CheckBox x:Name="KillEffectVignetteCheckBox" Content="暗角脉冲"
+                                                                  VerticalAlignment="Center"
+                                                                  Checked="KillFeedbackEffectSetting_Changed" Unchecked="KillFeedbackEffectSetting_Changed"/>
+                                                        <TextBox x:Name="KillEffectVignetteStrengthTextBox" Grid.Column="1"
+                                                                 Style="{StaticResource EffectPercentTextBoxStyle}"
+                                                                 Text="60"
+                                                                 TextChanged="KillFeedbackEffectText_Changed"/>
+                                                        <TextBlock Grid.Column="2" Text="%"
+                                                                   Margin="5,0,0,0" VerticalAlignment="Center"
+                                                                   Style="{StaticResource HintStyle}"/>
+                                                    </Grid>
+                                                    <!-- 色差分离 -->
+                                                    <Grid Margin="0,0,0,7">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="64"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                            <ColumnDefinition Width="38"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <CheckBox x:Name="KillEffectChromaticCheckBox" Content="色差分离"
+                                                                  VerticalAlignment="Center"
+                                                                  Checked="KillFeedbackEffectSetting_Changed" Unchecked="KillFeedbackEffectSetting_Changed"/>
+                                                        <TextBox x:Name="KillEffectChromaticStrengthTextBox" Grid.Column="1"
+                                                                 Style="{StaticResource EffectPercentTextBoxStyle}"
+                                                                 Text="60"
+                                                                 TextChanged="KillFeedbackEffectText_Changed"/>
+                                                        <TextBlock Grid.Column="2" Text="%"
+                                                                   Margin="5,0,0,0" VerticalAlignment="Center"
+                                                                   Style="{StaticResource HintStyle}"/>
+                                                    </Grid>
+                                                    <!-- 缩放脉冲 -->
+                                                    <Grid Margin="0,0,0,7">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="64"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                            <ColumnDefinition Width="38"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <CheckBox x:Name="KillEffectZoomCheckBox" Content="缩放脉冲"
+                                                                  VerticalAlignment="Center"
+                                                                  Checked="KillFeedbackEffectSetting_Changed" Unchecked="KillFeedbackEffectSetting_Changed"/>
+                                                        <TextBox x:Name="KillEffectZoomStrengthTextBox" Grid.Column="1"
+                                                                 Style="{StaticResource EffectPercentTextBoxStyle}"
+                                                                 Text="60"
+                                                                 TextChanged="KillFeedbackEffectText_Changed"/>
+                                                        <TextBlock Grid.Column="2" Text="%"
+                                                                   Margin="5,0,0,0" VerticalAlignment="Center"
+                                                                   Style="{StaticResource HintStyle}"/>
+                                                    </Grid>
+                                                    <!-- 抖动 -->
+                                                    <Grid Margin="0,0,0,7">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="64"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                            <ColumnDefinition Width="38"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <CheckBox x:Name="KillEffectShakeCheckBox" Content="抖动"
+                                                                  VerticalAlignment="Center"
+                                                                  Checked="KillFeedbackEffectSetting_Changed" Unchecked="KillFeedbackEffectSetting_Changed"/>
+                                                        <TextBox x:Name="KillEffectShakeStrengthTextBox" Grid.Column="1"
+                                                                 Style="{StaticResource EffectPercentTextBoxStyle}"
+                                                                 Text="60"
+                                                                 TextChanged="KillFeedbackEffectText_Changed"/>
+                                                        <TextBlock Grid.Column="2" Text="%"
+                                                                   Margin="5,0,0,0" VerticalAlignment="Center"
+                                                                   Style="{StaticResource HintStyle}"/>
+                                                    </Grid>
+                                                    <!-- 全屏闪光 -->
+                                                    <Grid Margin="0,0,0,7">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="64"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                            <ColumnDefinition Width="38"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <CheckBox x:Name="KillEffectFlashCheckBox" Content="全屏闪光"
+                                                                  VerticalAlignment="Center"
+                                                                  ToolTip="整个画面短暂变亮；和「暗角脉冲」同时开时会被削弱"
+                                                                  Checked="KillFeedbackEffectSetting_Changed" Unchecked="KillFeedbackEffectSetting_Changed"/>
+                                                        <TextBox x:Name="KillEffectFlashStrengthTextBox" Grid.Column="1"
+                                                                 Style="{StaticResource EffectPercentTextBoxStyle}"
+                                                                 Text="60"
+                                                                 TextChanged="KillFeedbackEffectText_Changed"/>
+                                                        <TextBlock Grid.Column="2" Text="%"
+                                                                   Margin="5,0,0,0" VerticalAlignment="Center"
+                                                                   Style="{StaticResource HintStyle}"/>
+                                                    </Grid>
+                                                    <!-- 中心冲击环 -->
+                                                    <Grid Margin="0,0,0,7">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="64"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                            <ColumnDefinition Width="38"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <CheckBox x:Name="KillEffectShockwaveCheckBox" Content="中心冲击环"
+                                                                  VerticalAlignment="Center"
+                                                                  ToolTip="一圈光从画面中心向外扩散"
+                                                                  Checked="KillFeedbackEffectSetting_Changed" Unchecked="KillFeedbackEffectSetting_Changed"/>
+                                                        <TextBox x:Name="KillEffectShockwaveStrengthTextBox" Grid.Column="1"
+                                                                 Style="{StaticResource EffectPercentTextBoxStyle}"
+                                                                 Text="60"
+                                                                 TextChanged="KillFeedbackEffectText_Changed"/>
+                                                        <TextBlock Grid.Column="2" Text="%"
+                                                                   Margin="5,0,0,0" VerticalAlignment="Center"
+                                                                   Style="{StaticResource HintStyle}"/>
+                                                    </Grid>
+                                                    <!-- 故障撕裂 -->
+                                                    <Grid Margin="0">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="64"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                            <ColumnDefinition Width="38"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <CheckBox x:Name="KillEffectGlitchCheckBox" Content="故障撕裂"
+                                                                  VerticalAlignment="Center"
+                                                                  ToolTip="横向块位移 + 红蓝分离"
+                                                                  Checked="KillFeedbackEffectSetting_Changed" Unchecked="KillFeedbackEffectSetting_Changed"/>
+                                                        <TextBox x:Name="KillEffectGlitchStrengthTextBox" Grid.Column="1"
+                                                                 Style="{StaticResource EffectPercentTextBoxStyle}"
+                                                                 Text="60"
+                                                                 TextChanged="KillFeedbackEffectText_Changed"/>
+                                                        <TextBlock Grid.Column="2" Text="%"
+                                                                   Margin="5,0,0,0" VerticalAlignment="Center"
+                                                                   Style="{StaticResource HintStyle}"/>
+                                                    </Grid>
+                                                    </StackPanel>
+                                                </ScrollViewer>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="预览" Style="{StaticResource FieldLabelStyle}"/>
+                                                    <TextBlock x:Name="KillFeedbackPreviewSourceText"
+                                                               Grid.Column="1"
+                                                               Style="{StaticResource HintStyle}"
+                                                               HorizontalAlignment="Right"
+                                                               MaxWidth="300"
+                                                               TextTrimming="CharacterEllipsis"/>
+                                                </Grid>
+                                                <Border Background="#FF070B0F"
+                                                        BorderBrush="{DynamicResource BorderBrush}"
+                                                        BorderThickness="1"
+                                                        CornerRadius="12"
+                                                        ClipToBounds="True"
+                                                        HorizontalAlignment="Left"
+                                                        Width="392"
+                                                        Height="221">
+                                                    <Image x:Name="KillFeedbackPreviewImage"
+                                                           Stretch="UniformToFill"/>
+                                                </Border>
+                                                <Grid Margin="0,12,0,0" HorizontalAlignment="Left">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <Button Content="触发一次"
+                                                            Click="KillFeedbackTriggerButton_Click"
+                                                            Style="{StaticResource SmallPrimaryButtonStyle}"
+                                                            Margin="0,0,8,0"/>
+                                                    <Button Grid.Column="1"
+                                                            Content="换一张截图"
+                                                            Click="KillFeedbackPickImageButton_Click"
+                                                            Style="{StaticResource SmallGhostButtonStyle}"/>
+                                                </Grid>
+                                                <TextBlock x:Name="KillFeedbackPreviewStatusText"
+                                                           Style="{StaticResource HintStyle}"
+                                                           Margin="0,10,0,0"/>
+                                            </StackPanel>
+                                        </Grid>
+
+                                        <Grid Margin="0,18,0,0">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <StackPanel Margin="0,0,9,0">
+                                                <TextBlock Text="持续时间（所有效果共用）" Style="{StaticResource FieldLabelStyle}"/>
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="78"/></Grid.ColumnDefinitions>
+                                                    <Slider x:Name="KillFeedbackDurationSlider" Minimum="120" Maximum="900" Value="380"
+                                                            ValueChanged="KillFeedbackSlider_ValueChanged"/>
+                                                    <TextBlock Grid.Column="1"
+                                                               Text="{Binding Value, ElementName=KillFeedbackDurationSlider, StringFormat={}{0:F0} ms}"
+                                                               FontSize="12.5" FontWeight="ExtraBold"
+                                                               Foreground="{DynamicResource PrimaryBrush}"
+                                                               HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                                                </Grid>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1" Margin="9,0,0,0">
+                                                <TextBlock Text="大小说明" Style="{StaticResource FieldLabelStyle}"/>
+                                                <TextBlock Text="百分比输入，100% = 基准，500% = 5 倍；可多个效果同时开。"
+                                                           Style="{StaticResource HintStyle}" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Grid>
+                                        <Border Background="{DynamicResource AccentSoftBrush}"
+                                                BorderBrush="{DynamicResource AccentBrush}"
+                                                BorderThickness="1"
+                                                CornerRadius="13"
+                                                Padding="15,13"
+                                                Margin="0,18,0,0">
+                                            <StackPanel>
+                                                <TextBlock Text="匹配和画面效果都已经接上：上面那行计数会跟着真实聊天涨；命中后游戏里会把勾选的效果一起播一遍（OpenGL / Java 版）。除缩放脉冲和抖动外，其余效果都走 core 着色器；极老的兼容上下文只支持这两种。"
+                                                           FontSize="12.5"
+                                                           Foreground="{DynamicResource TextSecondaryBrush}"
+                                                           TextWrapping="Wrap"/>
+                                                <TextBlock Text="注意：「全屏闪光」和「暗角脉冲」同时开时，闪白会被削弱 —— 暗角是画面最后一步整体压暗，边缘那一圈白光会被一起吃掉（画面越亮越明显，亮的场景里几乎看不出来）。想让闪白最明显，就别同时勾暗角。"
+                                                           FontSize="12.5"
+                                                           Foreground="{DynamicResource AmberBrush}"
+                                                           TextWrapping="Wrap"
+                                                           Margin="0,8,0,0"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </StackPanel>
+                                </Border>
+
+                                                                                <!-- 击杀图标（原「击杀横幅」） -->
+                                        <Border Style="{StaticResource LockedCardStyle}"
+                                                Tag="{Binding IsKillIconCardLocked}"
+                                                Margin="0,16,0,0">
+                                            <StackPanel>
+                                                <TextBlock Text="击杀图标" Style="{StaticResource CardTitleStyle}"/>
+                                                <TextBlock Text="击杀后在屏幕上弹出一枚图标（类似 CS / 瓦 的击杀确认）。图标要你自己导入 —— 软件不带现成的，免得版权上说不清。和画面效果、提示音互不影响。"
+                                                           Style="{StaticResource CardDescStyle}" Margin="0,3,0,18"/>
+
+                                                <CheckBox x:Name="KillBannerEnableCheckBox"
+                                                          Style="{StaticResource ToggleSwitchStyle}"
+                                                          Margin="0,0,0,12"
+                                                          Checked="KillBannerSetting_Changed"
+                                                          Unchecked="KillBannerSetting_Changed">
+                                                    <StackPanel>
+                                                        <TextBlock Text="击杀时显示图标" FontSize="13" FontWeight="Bold"/>
+                                                        <TextBlock Text="只在匹配到你的击杀后弹出"
+                                                                   FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}"
+                                                                   TextWrapping="Wrap" Margin="0,3,0,0"/>
+                                                    </StackPanel>
+                                                </CheckBox>
+
+                                                <StackPanel IsEnabled="{Binding IsChecked, ElementName=KillBannerEnableCheckBox}">
+                                                    <!-- 图标列表 + 预览 并排 -->
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                        </Grid.ColumnDefinitions>
+
+                                                        <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                                                            <TextBlock Text="图标" Style="{StaticResource FieldLabelStyle}" Margin="0,4,0,7"/>
+                                                            <ListBox x:Name="KillBannerIconListBox"
+                                                                     Height="196"
+                                                                     SelectionChanged="KillBannerIconListBox_SelectionChanged">
+                                                                <ListBox.ItemTemplate>
+                                                                    <DataTemplate>
+                                                                        <Grid>
+                                                                            <Grid.ColumnDefinitions>
+                                                                                <ColumnDefinition Width="Auto"/>
+                                                                                <ColumnDefinition Width="Auto"/>
+                                                                                <ColumnDefinition Width="*"/>
+                                                                            </Grid.ColumnDefinitions>
+                                                                            <!-- 勾选框：参与随机抽取。关掉「随机显示」时收起来，不留空位 -->
+                                                                            <CheckBox Grid.Column="0"
+                                                                                      IsChecked="{Binding IsPicked, Mode=TwoWay}"
+                                                                                      Visibility="{Binding ShowCheckBox, Converter={StaticResource BoolToVisibility}}"
+                                                                                      VerticalAlignment="Center"
+                                                                                      Checked="KillBannerIconPicked_Changed"
+                                                                                      Unchecked="KillBannerIconPicked_Changed"
+                                                                                      ToolTip="勾上 = 参与随机抽取"/>
+                                                                            <Border Grid.Column="1"
+                                                                                    Width="22" Height="22" Margin="9,0,9,0"
+                                                                                    VerticalAlignment="Center"
+                                                                                    CornerRadius="5"
+                                                                                    Background="{DynamicResource Surface2Brush}">
+                                                                                <Image Source="{Binding Thumbnail}"
+                                                                                       Stretch="Uniform"
+                                                                                       Margin="2"
+                                                                                       RenderOptions.BitmapScalingMode="HighQuality"/>
+                                                                            </Border>
+                                                                            <TextBlock Grid.Column="2"
+                                                                                       Text="{Binding Name}"
+                                                                                       VerticalAlignment="Center"
+                                                                                       FontSize="13"
+                                                                                       TextTrimming="CharacterEllipsis"/>
+                                                                        </Grid>
+                                                                    </DataTemplate>
+                                                                </ListBox.ItemTemplate>
+                                                            </ListBox>
+
+                                                            <Grid Margin="0,10,0,0">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="Auto"/>
+                                                                    <ColumnDefinition Width="Auto"/>
+                                                                    <ColumnDefinition Width="*"/>
+                                                                </Grid.ColumnDefinitions>
+                                                                <Button Content="添加图标…" Click="KillBannerAddButton_Click"
+                                                                        Style="{StaticResource SmallPrimaryButtonStyle}" Margin="0,0,8,0"/>
+                                                                <Button Grid.Column="1" Content="移除" Click="KillBannerRemoveButton_Click"
+                                                                        Style="{StaticResource SmallDangerButtonStyle}"/>
+                                                                <CheckBox Grid.Column="2"
+                                                                          x:Name="KillBannerRandomCheckBox"
+                                                                          Content="随机显示"
+                                                                          Style="{StaticResource InlineToggleStyle}"
+                                                                          VerticalAlignment="Center"
+                                                                          Margin="14,0,0,0"
+                                                                          ToolTip="开启后每次击杀从勾选的图标里随机抽一个；关掉就用列表中选中的那张"
+                                                                          Checked="KillBannerRandomCheckBox_Changed"
+                                                                          Unchecked="KillBannerRandomCheckBox_Changed"/>
+                                                            </Grid>
+                                                        </StackPanel>
+
+                                                        <!-- 预览框：假装是游戏画面，看图标落点 -->
+                                                        <StackPanel Grid.Column="1">
+                                                            <TextBlock Text="预览" Style="{StaticResource FieldLabelStyle}" Margin="0,4,0,7"/>
+                                                            <Border Width="200" Height="200"
+                                                                    CornerRadius="10"
+                                                                    Background="{DynamicResource Surface2Brush}"
+                                                                    BorderBrush="{DynamicResource BorderBrush}"
+                                                                    BorderThickness="1"
+                                                                    ClipToBounds="True">
+                                                                <Grid>
+                                                                    <!-- 画面中心十字，标出"准星"在哪 -->
+                                                                    <Canvas>
+                                                                        <Line X1="100" Y1="92" X2="100" Y2="100"
+                                                                              Stroke="{DynamicResource TextTertiaryBrush}" StrokeThickness="1"/>
+                                                                        <Line X1="100" Y1="100" X2="100" Y2="108"
+                                                                              Stroke="{DynamicResource TextTertiaryBrush}" StrokeThickness="1"/>
+                                                                        <Line X1="92" Y1="100" X2="100" Y2="100"
+                                                                              Stroke="{DynamicResource TextTertiaryBrush}" StrokeThickness="1"/>
+                                                                        <Line X1="100" Y1="100" X2="108" Y2="100"
+                                                                              Stroke="{DynamicResource TextTertiaryBrush}" StrokeThickness="1"/>
+                                                                    </Canvas>
+                                                                    <Image x:Name="KillBannerPreviewImage"
+                                                                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                           Stretch="Uniform"
+                                                                           Visibility="Collapsed"/>
+                                                                </Grid>
+                                                            </Border>
+                                                            <TextBlock x:Name="KillBannerStatusText"
+                                                                       FontSize="11.5"
+                                                                       Foreground="{DynamicResource TextSecondaryBrush}"
+                                                                       TextWrapping="Wrap"
+                                                                       MaxWidth="200"
+                                                                       Margin="0,6,0,0"/>
+                                                        </StackPanel>
+                                                    </Grid>
+
+                                                    <!-- 外发光颜色（用户图片保持原色，这个只改垫在底下的辉光） -->
+                                                    <Grid Margin="0,14,0,0">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <StackPanel Grid.Column="0">
+                                                            <TextBlock Text="外发光颜色" Style="{StaticResource FieldLabelStyle}" Margin="0,0,0,4"/>
+                                                            <TextBlock Text="图片本身保持原色；这个颜色是垫在底下的一圈辉光，挑对比强一点的更清楚。"
+                                                                       FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}"
+                                                                       TextWrapping="Wrap"/>
+                                                        </StackPanel>
+                                                        <Button Grid.Column="1"
+                                                                Style="{StaticResource SwatchButtonStyle}"
+                                                                VerticalAlignment="Center"
+                                                                ToolTip="选择击杀图标的外发光颜色"
+                                                                Click="KillBannerIconColorButton_Click">
+                                                            <Border x:Name="KillBannerIconColorSwatch" Width="16" Height="16"
+                                                                    CornerRadius="5" Background="#FFFFFF"/>
+                                                        </Button>
+                                                    </Grid>
+
+                                                    <!-- 位置：拖动定位 + 两个滑块微调 -->
+                                                    <Grid Margin="0,16,0,6">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <StackPanel Grid.Column="0">
+                                                            <TextBlock Text="出现位置" Style="{StaticResource FieldLabelStyle}" Margin="0,0,0,4"/>
+                                                            <TextBlock Text="点右边按钮，图标会真的出现在屏幕上，直接拖到想要的位置松手就保存。"
+                                                                       FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}"
+                                                                       TextWrapping="Wrap"/>
+                                                        </StackPanel>
+                                                        <ToggleButton Grid.Column="1"
+                                                                      x:Name="KillBannerDragButton"
+                                                                      Content="拖动定位"
+                                                                      VerticalAlignment="Center"
+                                                                      Style="{StaticResource SmallPrimaryToggleButtonStyle}"
+                                                                      Checked="KillBannerDragButton_Click"
+                                                                      Unchecked="KillBannerDragButton_Click"/>
+                                                    </Grid>
+
+                                                    <!-- 位置 X -->
+                                                    <TextBlock Text="横向位置" Style="{StaticResource FieldLabelStyle}" Margin="0,10,0,7"/>
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="78"/></Grid.ColumnDefinitions>
+                                                        <Slider x:Name="KillBannerPosXSlider" Minimum="0" Maximum="1" Value="0.5"
+                                                                ValueChanged="KillBannerSlider_ValueChanged"/>
+                                                        <TextBlock Grid.Column="1"
+                                                                   Text="{Binding Value, ElementName=KillBannerPosXSlider, StringFormat={}{0:P0}}"
+                                                                   FontSize="12.5" FontWeight="ExtraBold"
+                                                                   Foreground="{DynamicResource PrimaryBrush}"
+                                                                   HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                                                    </Grid>
+
+                                                    <!-- 位置 Y -->
+                                                    <TextBlock Text="纵向位置" Style="{StaticResource FieldLabelStyle}" Margin="0,14,0,7"/>
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="78"/></Grid.ColumnDefinitions>
+                                                        <Slider x:Name="KillBannerPosYSlider" Minimum="0" Maximum="1" Value="0.58"
+                                                                ValueChanged="KillBannerSlider_ValueChanged"/>
+                                                        <TextBlock Grid.Column="1"
+                                                                   Text="{Binding Value, ElementName=KillBannerPosYSlider, StringFormat={}{0:P0}}"
+                                                                   FontSize="12.5" FontWeight="ExtraBold"
+                                                                   Foreground="{DynamicResource PrimaryBrush}"
+                                                                   HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                                                    </Grid>
+
+                                                    <!-- 大小 -->
+                                                    <TextBlock Text="图标大小" Style="{StaticResource FieldLabelStyle}" Margin="0,14,0,7"/>
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="78"/></Grid.ColumnDefinitions>
+                                                        <Slider x:Name="KillBannerSizeSlider" Minimum="24" Maximum="320" Value="96"
+                                                                ValueChanged="KillBannerSlider_ValueChanged"/>
+                                                        <TextBlock Grid.Column="1"
+                                                                   Text="{Binding Value, ElementName=KillBannerSizeSlider, StringFormat={}{0:F0} px}"
+                                                                   FontSize="12.5" FontWeight="ExtraBold"
+                                                                   Foreground="{DynamicResource PrimaryBrush}"
+                                                                   HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                                                    </Grid>
+
+                                                    <!-- 三段时长 -->
+                                                    <TextBlock Text="出现节奏" Style="{StaticResource FieldLabelStyle}" Margin="0,18,0,3"/>
+                                                    <TextBlock Text="三段相加就是图标从出现到消失的总时长。中间那段是「停住让你看清」的时间。"
+                                                               FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}"
+                                                               TextWrapping="Wrap" Margin="0,0,0,10"/>
+
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="78"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="72"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Text="淡入" FontSize="12.5" VerticalAlignment="Center"
+                                                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                                        <Slider Grid.Column="1" x:Name="KillBannerFadeInSlider"
+                                                                Minimum="0" Maximum="2000" Value="150"
+                                                                ValueChanged="KillBannerSlider_ValueChanged"/>
+                                                        <TextBlock Grid.Column="2"
+                                                                   Text="{Binding Value, ElementName=KillBannerFadeInSlider, StringFormat={}{0:F0} ms}"
+                                                                   FontSize="12.5" FontWeight="ExtraBold"
+                                                                   Foreground="{DynamicResource PrimaryBrush}"
+                                                                   HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                                                    </Grid>
+
+                                                    <Grid Margin="0,10,0,0">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="78"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="72"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Text="停留" FontSize="12.5" VerticalAlignment="Center"
+                                                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                                        <Slider Grid.Column="1" x:Name="KillBannerHoldSlider"
+                                                                Minimum="0" Maximum="6000" Value="600"
+                                                                ValueChanged="KillBannerSlider_ValueChanged"/>
+                                                        <TextBlock Grid.Column="2"
+                                                                   Text="{Binding Value, ElementName=KillBannerHoldSlider, StringFormat={}{0:F0} ms}"
+                                                                   FontSize="12.5" FontWeight="ExtraBold"
+                                                                   Foreground="{DynamicResource PrimaryBrush}"
+                                                                   HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                                                    </Grid>
+
+                                                    <Grid Margin="0,10,0,0">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="78"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="72"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Text="淡出" FontSize="12.5" VerticalAlignment="Center"
+                                                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                                        <Slider Grid.Column="1" x:Name="KillBannerFadeOutSlider"
+                                                                Minimum="0" Maximum="2000" Value="200"
+                                                                ValueChanged="KillBannerSlider_ValueChanged"/>
+                                                        <TextBlock Grid.Column="2"
+                                                                   Text="{Binding Value, ElementName=KillBannerFadeOutSlider, StringFormat={}{0:F0} ms}"
+                                                                   FontSize="12.5" FontWeight="ExtraBold"
+                                                                   Foreground="{DynamicResource PrimaryBrush}"
+                                                                   HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                                                    </Grid>
+
+                                                    <Button Content="在屏幕上试一下"
+                                                            HorizontalAlignment="Left"
+                                                            Margin="0,18,0,0"
+                                                            Click="KillBannerTestButton_Click"/>
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </Border>
+
+<!-- 击杀提示音 -->
+                                        <Border Style="{StaticResource LockedCardStyle}"
+                                                Tag="{Binding IsKillSoundCardLocked}"
+                                                Margin="0,16,0,0">
+                                            <StackPanel>
+                                                <TextBlock Text="击杀提示音" Style="{StaticResource CardTitleStyle}"/>
+                                                <TextBlock Text="检测到你的击杀时播放提示音。音效要你自己加 —— 软件不带现成的。和上面的画面效果互不影响。"
+                                                           Style="{StaticResource CardDescStyle}" Margin="0,3,0,18"/>
+
+                                                <CheckBox x:Name="KillSoundEnableCheckBox"
+                                                          Style="{StaticResource ToggleSwitchStyle}"
+                                                          Margin="0,0,0,12"
+                                                          Checked="KillSoundEnableCheckBox_Changed"
+                                                          Unchecked="KillSoundEnableCheckBox_Changed">
+                                                    <StackPanel>
+                                                        <TextBlock Text="击杀时播放提示音" FontSize="13" FontWeight="Bold"/>
+                                                        <TextBlock Text="只在匹配到你的击杀后播放"
+                                                                   FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}"
+                                                                   TextWrapping="Wrap" Margin="0,3,0,0"/>
+                                                    </StackPanel>
+                                                </CheckBox>
+
+                                                <StackPanel IsEnabled="{Binding IsChecked, ElementName=KillSoundEnableCheckBox}">
+                                                    <TextBlock Text="提示音" Style="{StaticResource FieldLabelStyle}" Margin="0,4,0,7"/>
+                                                    <ListBox x:Name="KillSoundChoiceListBox"
+                                                             MinHeight="90"
+                                                             MaxHeight="190"
+                                                             ItemTemplate="{StaticResource SoundChoiceItemTemplate}"
+                                                             SelectionChanged="KillSoundChoiceListBox_SelectionChanged"/>
+                                                    <Grid Margin="0,12,0,0">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <Button Content="试听" Click="PreviewKillSoundButton_Click"
+                                                                Style="{StaticResource SmallPrimaryButtonStyle}" Margin="0,0,8,0"/>
+                                                        <Button Grid.Column="1" Content="添加音效…" Click="BrowseKillSoundFileButton_Click"
+                                                                Style="{StaticResource SmallGhostButtonStyle}" Margin="0,0,8,0"/>
+                                                        <Button Grid.Column="2" Content="移除" Click="RemoveKillSoundChoiceButton_Click"
+                                                                Style="{StaticResource SmallDangerButtonStyle}"/>
+                                                        <CheckBox Grid.Column="3"
+                                                                  x:Name="KillSoundRandomCheckBox"
+                                                                  Content="随机播放"
+                                                                  Style="{StaticResource InlineToggleStyle}"
+                                                                  VerticalAlignment="Center"
+                                                                  Margin="14,0,0,0"
+                                                                  ToolTip="开启后每次击杀从勾选的音效里随机抽一个；关掉就用列表中选中的那个"
+                                                                  Checked="KillSoundRandomCheckBox_Changed"
+                                                                  Unchecked="KillSoundRandomCheckBox_Changed"/>
+                                                        <TextBlock Grid.Column="4"
+                                                                   Margin="12,0,0,0"
+                                                                   Text="连杀时上一声不会被掐断，会叠着响"
+                                                                   Style="{StaticResource HintStyle}"
+                                                                   VerticalAlignment="Center"
+                                                                   TextTrimming="CharacterEllipsis"/>
+                                                    </Grid>
+                                                    <TextBlock x:Name="KillSoundStatusText"
+                                                               Style="{StaticResource HintStyle}"
+                                                               Margin="0,10,0,0"
+                                                               TextWrapping="Wrap"/>
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </Border>
+                            </StackPanel>
+                        </ScrollViewer>
+
+
+                        <!-- ========== 面板 9：调试后台 ========== -->
                         <ScrollViewer x:Name="DebugPanel"
                                       VerticalScrollBarVisibility="Auto"
                                       HorizontalScrollBarVisibility="Disabled"
