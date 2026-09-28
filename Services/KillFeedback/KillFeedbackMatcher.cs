@@ -260,11 +260,21 @@ public sealed class KillFeedbackMatcher
 
         var sample = stripDecorations ? StripDecorations(rawSample) : rawSample;
 
-        var selfIndex = sample.IndexOf(id, StringComparison.OrdinalIgnoreCase);
+        // 用户很可能直接把日志里那一整段（带称号 / VIP 图标）复制进来 ——
+        // 剥离开着的时候，把 ID 本身也先剥一遍再找，两种填法都能用。
+        var idKey = stripDecorations ? StripDecorations(id) : id;
+        if (idKey.Length == 0)
+        {
+            idKey = id;
+        }
+
+        var selfIndex = sample.IndexOf(idKey, StringComparison.OrdinalIgnoreCase);
         if (selfIndex < 0)
         {
             error = $"消息里找不到你的 ID「{id}」。"
-                    + (stripDecorations ? "（已经开了剥离，检查一下是不是 ID 打错了）" : "");
+                    + (stripDecorations
+                        ? "（开着「剥离方括号前缀」时，这里填裸名字就行 —— 检查一下是不是名字打错了）"
+                        : "（「剥离方括号前缀」是关着的，所以要连 [vip1] / 【称号】 这些前缀一起照抄）");
             return false;
         }
 
@@ -275,7 +285,14 @@ public sealed class KillFeedbackMatcher
             return false;
         }
 
-        var enemyIndex = sample.IndexOf(enemyKey, StringComparison.OrdinalIgnoreCase);
+        // 敌方名字同样可能带前缀（[vip2]Alex），剥离开着时一并处理
+        var enemyKeySearch = stripDecorations ? StripDecorations(enemyKey) : enemyKey;
+        if (enemyKeySearch.Length == 0)
+        {
+            enemyKeySearch = enemyKey;
+        }
+
+        var enemyIndex = sample.IndexOf(enemyKeySearch, StringComparison.OrdinalIgnoreCase);
         if (enemyIndex < 0)
         {
             error = $"消息里找不到敌方名字「{enemyKey}」。照抄消息里那一截。";
@@ -285,7 +302,7 @@ public sealed class KillFeedbackMatcher
         string how;
         if (enemyIndex < selfIndex)
         {
-            rule = sample[(enemyIndex + enemyKey.Length)..].Trim();
+            rule = sample[(enemyIndex + enemyKeySearch.Length)..].Trim();
             how = "敌方名字在你前面，所以取它之后那一段";
         }
         else

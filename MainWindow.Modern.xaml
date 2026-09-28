@@ -2094,9 +2094,11 @@
                                         <StackPanel IsEnabled="{Binding IsChecked, ElementName=KillFeedbackEnableCheckBox}"
                                                     Margin="0,18,0,0">
                                             <StackPanel Margin="0,0,0,14">
-                                                <TextBlock Text="你自己的 ID（按日志里长什么样填）" Style="{StaticResource FieldLabelStyle}"/>
+                                                <TextBlock Text="你自己的 ID（填裸名字，不带称号 / VIP 前缀）" Style="{StaticResource FieldLabelStyle}"/>
                                                 <TextBox x:Name="KillFeedbackPlayerIdTextBox"
+                                                         ToolTip="游戏里你显示成 [vip1][25阶1003⚝]Steve 这种样子时，这里只填 Steve。&#10;称号 / VIP 图标 / 方括号前缀不用你自己删 —— 下面的「剥离方括号前缀」会先剥掉再匹配。&#10;只有把那个勾取消掉，才需要照日志原样连前缀一起填。"
                                                          LostFocus="KillFeedbackRuleInput_LostFocus"/>
+                                                <TextBlock Style="{StaticResource HintStyle}" TextWrapping="Wrap" Margin="0,5,0,0" Text="例：日志里写的是 [vip1][25阶1003⚝]Steve 击败了 Alex —— 这里填 Steve 就行，称号和 VIP 前缀不用管。"/>
                                             </StackPanel>
                                             <StackPanel Margin="0,0,0,14">
                                                 <TextBlock Text="你的击杀消息示例（从日志或悬浮窗复制一条）" Style="{StaticResource FieldLabelStyle}"/>
