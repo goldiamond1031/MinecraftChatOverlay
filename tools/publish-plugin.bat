@@ -9,8 +9,9 @@ rem    1) 编译 Plugins\<插件名>
 rem    2) 打包 market\packages\<插件id>-<版本>.zip（并删掉这个插件的旧版本包）
 rem    3) 重建 market\index.json
 rem
-rem  用法：publish-plugin.bat <插件目录名>
-rem        例：publish-plugin.bat AutoGg
+rem  两种用法：
+rem    双击本文件           -> 会列出可用的插件，让你输入名字
+rem    命令行带参数         -> publish-plugin.bat AutoGg
 rem
 rem  注意：本脚本故意不把插件装到你本机（这样才看得到市场里的「可更新」）。
 rem  跑完下一步：push.bat
@@ -20,20 +21,30 @@ set "HERE=%~dp0"
 set "ROOT=%HERE%.."
 set "NAME=%~1"
 
+if not "%NAME%"=="" goto :haveName
+
+echo.
+echo 可用的插件（Plugins\ 下的插件工程）：
+for /d %%D in ("%ROOT%\Plugins\*") do (
+    if exist "%%D\%%~nxD.csproj" echo     %%~nxD
+)
+echo.
+set "NAME="
+set /p "NAME=请输入要发布的插件名（上面的名字之一），然后回车；直接回车则取消："
+set "NAME=%NAME:"=%"
 if "%NAME%"=="" (
-    echo 用法：publish-plugin.bat ^<插件目录名^>
-    echo.
-    echo 可用的插件（Plugins\ 下的目录）：
-    for /d %%D in ("%ROOT%\Plugins\*") do echo     %%~nxD
+    echo 已取消。
     goto :end
 )
 
+:haveName
 if not exist "%ROOT%\Plugins\%NAME%" (
     echo [错误] 找不到插件目录：Plugins\%NAME%
     goto :end
 )
 if not exist "%ROOT%\Plugins\%NAME%\%NAME%.csproj" (
     echo [错误] 找不到工程文件：Plugins\%NAME%\%NAME%.csproj
+    echo        注意这里要填的是**插件目录名**（Plugins\ 下面的那一层）
     goto :end
 )
 
