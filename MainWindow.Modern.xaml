@@ -2616,7 +2616,12 @@
                                     <StackPanel>
                                         <TextBlock Text="想自己写一个插件？" Style="{StaticResource CardTitleStyle}"/>
                                         <TextBlock Text="插件就是普通的 C# 类库：引一下契约程序集，实现 IPlugin，编译出 dll，配上 plugin.json 打成 zip 就能发人。页面不用自己画 —— 把字段（开关 / 滑块 / 下拉 / 按钮）交给宿主，宿主用现有主题渲染，所以插件页面看起来和内置页面一个样。" Style="{StaticResource CardDescStyle}" Margin="0,3,0,10" TextWrapping="Wrap"/>
-                                        <TextBlock x:Name="PluginsDocText" Style="{StaticResource HintStyle}" TextWrapping="Wrap"/>
+                                        <TextBlock Style="{StaticResource HintStyle}" TextWrapping="Wrap"
+                                                   Text="接口说明、plugin.json 字段表、表单式与自绘页面怎么写、怎么打包发布 —— 都在在线文档里。"/>
+                                        <Button x:Name="PluginDevDocButton" Content="打开插件开发文档"
+                                                ToolTip="https://goldiamond1031.github.io/MCO"
+                                                Style="{StaticResource SmallPrimaryButtonStyle}" HorizontalAlignment="Left" Margin="0,10,0,0"
+                                                Click="PluginDevDocButton_Click"/>
                                         <TextBlock Style="{StaticResource HintStyle}" Margin="0,6,0,0" TextWrapping="Wrap" Text="提醒：插件跑在本程序里，权限和本程序一样。只装你信任来源的插件包。"/>
                                     </StackPanel>
                                 </Border>

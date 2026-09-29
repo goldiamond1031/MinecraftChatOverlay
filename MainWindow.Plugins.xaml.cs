@@ -88,9 +88,6 @@ public partial class MainWindow
             // 只报用户插件目录：内置插件根（exe 旁 plugins\）留着备用，但从来没放过东西，
             // 报出来只会让人以为那儿还有一份插件。
             PluginsRootText.Text = "用户插件目录：" + user;
-            PluginsDocText.Text =
-                $"契约程序集（插件只引这个）：Plugins\\Abstractions\\MinecraftChatOverlay.Plugin.Abstractions.dll，apiVersion = {PluginApi.Version}" + Environment.NewLine +
-                "样例插件工程：Plugins\\SamplePlugin\\（编译出的 dll + plugin.json 压成 zip 就是一个插件包）";
 
             // 支持把 zip 直接拖到这一页
             PluginsPanel.AllowDrop = true;
@@ -1016,6 +1013,24 @@ public partial class MainWindow
             AppendDebugLog("[插件] 保存禁用列表失败：" + ex.Message);
         }
     }
+
+    /// <summary>在线插件开发文档（打开系统默认浏览器）。</summary>
+    private void PluginDevDocButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            // UseShellExecute 才会交给系统用默认浏览器打开
+            Process.Start(new ProcessStartInfo(PluginDevDocUrl) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            ShowToast("打不开文档：" + ex.Message);
+            AppendDebugLog("[插件] 打开开发文档失败：" + ex.Message);
+        }
+    }
+
+    /// <summary>插件开发文档地址（GitHub Pages）。</summary>
+    private const string PluginDevDocUrl = "https://goldiamond1031.github.io/MCO";
 
     private void OpenFolder(string path)
     {
