@@ -1,0 +1,25 @@
+{
+    "schemaVersion":  1,
+    "updatedAt":  "2026-09-29T23:41:39+08:00",
+    "plugins":  [
+                    {
+                        "id":  "goldiamond.autogg",
+                        "name":  "自动 GG",
+                        "version":  "1.0.0",
+                        "author":  "MinecraftChatOverlay",
+                        "description":  "检测到胜利消息后，自动打开游戏聊天栏并发送 gg（模拟按键，需要游戏窗口在前台）。",
+                        "apiVersion":  1,
+                        "capabilities":  [
+                                             "读取聊天消息",
+                                             "模拟键盘输入与剪贴板（往游戏里发消息）",
+                                             "在自己目录里读写配置"
+                                         ],
+                        "downloadUrl":  "packages/AutoGG-1.1.0.zip",
+                        "sha256":  "8A74CDB872CF8E9C8AE7301CA42162A0973EF95BE455986E5870AD0C445C682E",
+                        "size":  10730,
+                        "tags":  [
+
+                                 ]
+                    }
+                ]
+}

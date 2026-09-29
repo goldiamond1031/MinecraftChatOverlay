@@ -411,3 +411,12 @@ B站这块的设置和主程序的设置**分开保存**，互不影响。
 - 你的设置只保存在本机当前 Windows 用户下，不会上传
 - **注意**：AI 识图的 API KEY、玩家查询的 API KEY、B站 Cookie 都是**明文**存在本机配置文件里的，
   介意的可以不给它「记住」
+
+## 插件开发
+
+软件支持插件：一个 zip（dll + plugin.json）导入即用，装好后出现在「插件」板块里。
+
+- **插件开发文档（自包含 HTML，浏览器直接打开，也给 AI 读）** → [`Plugins/PLUGIN-DEV-GUIDE.html`](Plugins/PLUGIN-DEV-GUIDE.html)
+- 最小示例工程 → [`Plugins/SamplePlugin/`](Plugins/SamplePlugin/)
+- 一键编译 + 安装到本机 + 打出可分发 zip → `build-plugins.bat`
+- 契约程序集（插件只引它，别引主程序 exe）→ `Plugins/Abstractions/PluginApi.cs`（当前 apiVersion = 1）

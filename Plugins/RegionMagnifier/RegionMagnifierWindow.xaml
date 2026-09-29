@@ -1,0 +1,23 @@
+<Window x:Class="MinecraftChatOverlay.Plugins.RegionMagnifier.RegionMagnifierWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Minecraft 区域放大"
+        Width="180" Height="180"
+        WindowStyle="None" ResizeMode="NoResize" AllowsTransparency="True"
+        Background="Transparent" Topmost="True" ShowInTaskbar="False" ShowActivated="False"
+        UseLayoutRounding="True" SnapsToDevicePixels="True"
+        Cursor="SizeAll">
+    <Border x:Name="Frame" Background="#FF101014" BorderBrush="#FF6E56CF" BorderThickness="1"
+            SnapsToDevicePixels="True">
+        <Grid>
+            <Image x:Name="Preview" Stretch="Fill" SnapsToDevicePixels="True" />
+
+            <!-- 抓不到画面（黑屏 / 目标窗口没了）时盖一层说明，避免用户以为是软件坏了 -->
+            <Border x:Name="Failure" Background="#E6000000" Visibility="Collapsed">
+                <TextBlock x:Name="FailureText" Foreground="#FFFFD166" FontSize="11.5"
+                           TextWrapping="Wrap" Margin="8" TextAlignment="Center"
+                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+        </Grid>
+    </Border>
+</Window>

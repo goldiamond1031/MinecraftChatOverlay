@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    插件契约程序集。
+
+    它存在的唯一理由：插件**永远只引用这个 DLL**，绝不引用主程序 exe。
+    这样主程序内部怎么改都行，只要这里只增不减，已发布的插件就不会碎。
+
+    故意不引 WPF：纯逻辑插件（收消息、发通知、调 API）连 UI 都不用碰。
+    需要界面的插件自己写自己的窗口（自己的 csproj 里开 UseWPF）。
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>MinecraftChatOverlay.Plugin.Abstractions</AssemblyName>
+    <RootNamespace>MinecraftChatOverlay.Plugin</RootNamespace>
+  </PropertyGroup>
+
+</Project>

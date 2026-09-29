@@ -1,0 +1,13 @@
+{
+  "id": "goldiamond.windowfullscreen",
+  "name": "窗口全屏",
+  "version": "1.0.0",
+  "author": "MinecraftChatOverlay",
+  "description": "把游戏窗口改成无边框全屏，这样聊天悬浮窗才能盖在游戏画面上。只改窗口样式和位置，不注入进程、不碰游戏画面。",
+  "apiVersion": 1,
+  "capabilities": [
+    "枚举系统里带窗口的进程",
+    "修改目标窗口的边框、位置和置顶状态（可还原）",
+    "在自己目录里读写配置"
+  ]
+}

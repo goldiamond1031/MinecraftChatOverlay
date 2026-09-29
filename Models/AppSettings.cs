@@ -87,21 +87,6 @@ public sealed class AppSettings
     /// <summary>是否启用新消息滑入动画。</summary>
     public bool EnableMessageAnimation { get; set; } = true;
 
-    /// <summary>是否启用自动 GG。</summary>
-    public bool EnableAutoGg { get; set; }
-
-    /// <summary>自动 GG 触发正则，默认匹配“恭喜! X队 获得胜利!”。</summary>
-    public string AutoGgTriggerPattern { get; set; } = @"恭喜! .+? 获得胜利!";
-
-    /// <summary>打开聊天栏的按键，例如 t 或 /。</summary>
-    public string AutoGgChatKey { get; set; } = "t";
-
-    /// <summary>自动发送的文字。</summary>
-    public string AutoGgText { get; set; } = "gg";
-
-    /// <summary>是否使用剪贴板粘贴方式发送，可避免中文输入法把字母吞掉。</summary>
-    public bool AutoGgUseClipboard { get; set; } = true;
-
     /// <summary>彩色渲染规则。</summary>
     public List<TextColorRule> ColorRules { get; set; } = new();
 
@@ -111,23 +96,6 @@ public sealed class AppSettings
     /// <summary>屏蔽关键词：只要聊天内容包含其中任意一个，就不显示到悬浮窗，但后端日志仍会输出。</summary>
     public List<BlockKeywordItem> BlockKeywords { get; set; } = new();
 
-    /// <summary>玩家查询：是否记住 API KEY。</summary>
-    public bool PlayerQueryRememberKey { get; set; } = true;
-
-    /// <summary>玩家查询：上次使用的 API KEY（仅在 PlayerQueryRememberKey 为 true 时保存）。</summary>
-    public string PlayerQueryApiKey { get; set; } = "";
-
-    /// <summary>玩家查询：上次查询的玩家 ID。</summary>
-    public string PlayerQueryPlayerId { get; set; } = "";
-
-    /// <summary>玩家查询：上次选择的游戏类型 bedwars / skywars。</summary>
-    public string PlayerQueryGameType { get; set; } = "bedwars";
-
-    /// <summary>玩家查询：上次选择的模式显示名。</summary>
-    public string PlayerQueryMode { get; set; } = "总览";
-
-    /// <summary>玩家查询：自定义显示字段。</summary>
-    public List<PlayerQueryField> PlayerQueryFields { get; set; } = new();
 
     // ---------- AI 识图（把截图发给 AI，自动分配队伍色）----------
 
@@ -216,13 +184,20 @@ public sealed class AppSettings
     /// <summary>击杀反馈的设置（效果 + 匹配规则）。</summary>
     public KillFeedbackSettings KillFeedback { get; set; } = new();
 
-    // ---------- 游戏窗口无边框全屏 ----------
-
-    /// <summary>「窗口全屏」页的设置（把游戏窗口变无边框全屏，让悬浮窗能盖上去）。</summary>
-    public WindowFullscreenSettings WindowFullscreen { get; set; } = new();
+    /// <summary>「快捷命令」：把特定格式的聊天消息变成可点击、一键发命令。</summary>
 
 
 
+
+    // ---------- 区域放大 ----------
+
+    /// <summary>「区域放大」页的设置（框选游戏窗口的一小块，放大挂到屏幕别处）。</summary>
+
+    /// <summary>被用户禁用的插件 id 列表（插件是运行时装载的独立 dll，这里只记「不许装」）。</summary>
+    /// <summary>插件市场（清单地址等）。</summary>
+    public PluginMarketSettings PluginMarket { get; set; } = new();
+
+    public List<string> DisabledPlugins { get; set; } = new();
     public AppSettings Clone() => (AppSettings)MemberwiseClone();
 
     private static string GetDefaultLogPath()

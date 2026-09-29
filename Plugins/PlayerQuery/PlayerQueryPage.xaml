@@ -1,0 +1,228 @@
+<UserControl x:Class="MinecraftChatOverlay.Plugins.PlayerQuery.PlayerQueryPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             AllowDrop="True"
+             DragOver="PlayerQueryFieldList_DragOver"
+             DragLeave="PlayerQueryFieldList_DragLeave"
+             Drop="PlayerQueryFieldList_Drop">
+
+    <!--
+        这一页原来是主程序 MainWindow.Modern.xaml 里的 PlayerQueryPanel，整块搬过来了。
+        页面标题和说明由宿主统一画（插件页头），所以这里没有页头那一块；
+        原来页头右侧那个「API」小标签移到了「查询参数」卡片标题行右边。
+
+        注意：样式/画刷一律用 DynamicResource —— 插件控件是先 new 出来、再挂进宿主窗口的，
+        用 StaticResource 在解析时找不到宿主 Window 里的资源字典（会直接抛 XamlParseException）。
+    -->
+    <StackPanel>
+                                <Border Style="{DynamicResource CardStyle}">
+                                    <StackPanel>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel>
+                                                <TextBlock Text="查询参数" Style="{DynamicResource CardTitleStyle}"/>
+                                                <TextBlock Text="API KEY 只用于本次请求，不会保存到本地"
+                                                           Style="{DynamicResource CardDescStyle}"
+                                                           Margin="0,3,0,18"/>
+                                            </StackPanel>
+                                            <Border Grid.Column="1" Style="{DynamicResource ChipPrimaryBorderStyle}" VerticalAlignment="Top">
+                                                <TextBlock Text="API" FontSize="11.5" FontWeight="Bold" Foreground="{DynamicResource PrimaryBrush}"/>
+                                            </Border>
+                                        </Grid>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                            </Grid.RowDefinitions>
+
+                                            <StackPanel Margin="0,0,9,16">
+                                                <TextBlock Text="API KEY" Style="{DynamicResource FieldLabelStyle}"/>
+                                                <PasswordBox x:Name="PlayerQueryKeyPasswordBox"
+                                                             Style="{DynamicResource ModernPasswordBoxStyle}"/>
+                                                <CheckBox x:Name="PlayerQueryRememberKeyCheckBox"
+                                                          Content="记住 API KEY"
+                                                          Style="{DynamicResource InlineToggleStyle}"
+                                                          Margin="0,9,0,0"
+                                                          IsChecked="True"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1" Margin="9,0,0,16">
+                                                <TextBlock Text="玩家 ID / UUID" Style="{DynamicResource FieldLabelStyle}"/>
+                                                <TextBox x:Name="PlayerQueryIdTextBox"/>
+                                            </StackPanel>
+
+                                            <StackPanel Grid.Row="1" Margin="0,0,9,0">
+                                                <TextBlock Text="游戏类型" Style="{DynamicResource FieldLabelStyle}"/>
+                                                <ComboBox x:Name="PlayerQueryGameTypeComboBox"
+                                                          Loaded="ComboBox_Loaded"
+                                                          SelectionChanged="PlayerQueryGameTypeComboBox_SelectionChanged"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Row="1" Grid.Column="1" Margin="9,0,0,0">
+                                                <TextBlock Text="查询模式" Style="{DynamicResource FieldLabelStyle}"/>
+                                                <ComboBox x:Name="PlayerQueryModeComboBox" Loaded="ComboBox_Loaded"/>
+                                            </StackPanel>
+                                        </Grid>
+
+                                        <Grid Margin="0,16,0,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Button x:Name="PlayerQueryButton"
+                                                    Content="开始查询"
+                                                    Click="PlayerQueryButton_Click"
+                                                    Style="{DynamicResource SmallPrimaryButtonStyle}"/>
+                                            <Button Grid.Column="1"
+                                                    Content="清空结果"
+                                                    Click="ClearPlayerQueryButton_Click"
+                                                    Style="{DynamicResource SmallGhostButtonStyle}"
+                                                    Margin="8,0,0,0"/>
+                                            <TextBlock x:Name="PlayerQueryStatusText"
+                                                       Grid.Column="3"
+                                                       Text="等待查询"
+                                                       Style="{DynamicResource HintStyle}"
+                                                       VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+
+
+                                <Border Style="{DynamicResource CardStyle}">
+                                    <StackPanel>
+                                        <TextBlock Text="显示字段" Style="{DynamicResource CardTitleStyle}"/>
+                                        <TextBlock Text="左边写你想显示的中文名，右边从下拉里挑字段（也可以直接手敲路径）。{mode} 会替换为当前模式，例如 data.bedwars.{mode}.kills；胜率可写 winrate:win=胜场路径;lose=败场路径，没有败场路径时可写 winrate:win=胜场路径;total=总场数路径"
+                                                   Style="{DynamicResource CardDescStyle}"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,3,0,14"/>
+                                        <ItemsControl x:Name="PlayerQueryFieldItemsControl"
+                                                      AllowDrop="True"
+                                                      DragOver="PlayerQueryFieldList_DragOver"
+                                                      Drop="PlayerQueryFieldList_Drop"
+                                                      PreviewMouseWheel="PlayerQueryFieldItemsControl_PreviewMouseWheel"
+                                                      DragLeave="PlayerQueryFieldList_DragLeave">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <!-- 拖拽反馈全在这一层：
+                                                         正在拖的行 -> 半透明 + 底色（看起来被"拿起来"了）
+                                                         目标行 -> 上/下边画一条主色插入线 -->
+                                                    <Border x:Name="FieldRow"
+                                                            Margin="0,0,0,4"
+                                                            Padding="0,3"
+                                                            CornerRadius="10"
+                                                            Background="Transparent"
+                                                            BorderBrush="Transparent"
+                                                            BorderThickness="0">
+                                                    <Grid Margin="0,0,0,4">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                            <ColumnDefinition Width="150"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <!-- 拖拽把手：只在把手上按住才能拖动，避免和输入框抢鼠标 -->
+                                                        <Border Grid.Column="0"
+                                                                Width="22" Height="36"
+                                                                Margin="0,0,7,0"
+                                                                CornerRadius="9"
+                                                                Background="Transparent"
+                                                                Cursor="SizeAll"
+                                                                ToolTip="按住拖动可调整顺序"
+                                                                PreviewMouseLeftButtonDown="PlayerQueryFieldDragHandle_PreviewMouseLeftButtonDown"
+                                                                PreviewMouseMove="PlayerQueryFieldDragHandle_PreviewMouseMove">
+                                                            <TextBlock Text="⋮⋮"
+                                                                       FontSize="13"
+                                                                       Foreground="{DynamicResource TextTertiaryBrush}"
+                                                                       HorizontalAlignment="Center"
+                                                                       VerticalAlignment="Center"/>
+                                                        </Border>
+                                                        <TextBox Grid.Column="1"
+                                                                 Text="{Binding Label, UpdateSourceTrigger=PropertyChanged}"
+                                                                 Margin="0,0,9,0"
+                                                                 LostFocus="PlayerQueryFieldTextBox_LostFocus"/>
+                                                        <!-- 路径：从字段库里挑，也能直接手敲。
+                                                             注意两个易错点：
+                                                             1) Text 必须绑到 Path，否则主选框不会显示当前值
+                                                             2) 不能用 DisplayMemberPath —— 那会让选中的文字
+                                                                变成"分组 · 名称"这种显示串，失焦时被写回 Path，
+                                                                路径就被污染了。要用 ItemTemplate + TextSearch.Text -->
+                                                        <ComboBox Grid.Column="2"
+                                                                  Margin="0,0,9,0"
+                                                                  IsEditable="False"
+                                                                  IsTextSearchEnabled="False"
+                                                                  SelectedValuePath="Path"
+                                                                    SelectedValue="{Binding Path, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                  ItemsSource="{Binding FieldPickerOptions, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                  ItemTemplate="{DynamicResource FieldOptionItemTemplate}"
+                                                                  ItemContainerStyle="{DynamicResource FieldOptionContainerStyle}"
+                                                                  Loaded="PlayerQueryFieldPathComboBox_Loaded"
+                                                                  SelectionChanged="PlayerQueryFieldPathComboBox_SelectionChanged"
+                                                                  LostFocus="PlayerQueryFieldPathComboBox_LostFocus">
+                                                            <ComboBox.GroupStyle>
+                                                                <GroupStyle>
+                                                                    <GroupStyle.HeaderTemplate>
+                                                                        <DataTemplate>
+                                                                            <TextBlock Text="{Binding Name}"
+                                                                                       FontSize="10.5"
+                                                                                       FontWeight="SemiBold"
+                                                                                       Foreground="{DynamicResource TextTertiaryBrush}"
+                                                                                       Margin="2,5,0,3"/>
+                                                                        </DataTemplate>
+                                                                    </GroupStyle.HeaderTemplate>
+                                                                </GroupStyle>
+                                                            </ComboBox.GroupStyle>
+                                                        </ComboBox>
+                                                        <Button Grid.Column="3"
+                                                                Content="删除"
+                                                                Click="DeletePlayerQueryFieldButton_Click"
+                                                                Style="{DynamicResource SmallDangerButtonStyle}"/>
+                                                    </Grid>
+                                                    </Border>
+                                                    <DataTemplate.Triggers>
+                                                        <DataTrigger Binding="{Binding IsDragging}" Value="True">
+                                                            <Setter TargetName="FieldRow" Property="Opacity" Value="0.45"/>
+                                                            <Setter TargetName="FieldRow" Property="Background" Value="{DynamicResource Surface2Brush}"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding IsDragging}" Value="True">
+                                                            <!-- 原行变淡：残影已经把这一行"拿"到鼠标上了，原地只留一个淡影，避免看起来有两份 -->
+                                                            <Setter TargetName="FieldRow" Property="Opacity" Value="0.32"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding DropTarget}" Value="Before">
+                                                            <Setter TargetName="FieldRow" Property="BorderThickness" Value="0,2,0,0"/>
+                                                            <Setter TargetName="FieldRow" Property="BorderBrush" Value="{DynamicResource PrimaryBrush}"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding DropTarget}" Value="After">
+                                                            <Setter TargetName="FieldRow" Property="BorderThickness" Value="0,0,0,2"/>
+                                                            <Setter TargetName="FieldRow" Property="BorderBrush" Value="{DynamicResource PrimaryBrush}"/>
+                                                        </DataTrigger>
+                                                    </DataTemplate.Triggers>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                                            <Button Content="添加一行" Click="AddPlayerQueryFieldButton_Click" Style="{DynamicResource SmallPrimaryButtonStyle}" Margin="0,0,8,0"/>
+                                            <Button Content="起床预设" Click="ApplyBedwarsPlayerQueryPresetButton_Click" Style="{DynamicResource SmallButtonStyle}" Margin="0,0,8,0"/>
+                                            <Button Content="空岛预设" Click="ApplySkywarsPlayerQueryPresetButton_Click" Style="{DynamicResource SmallButtonStyle}"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Style="{DynamicResource CardStyle}">
+                                    <StackPanel>
+                                        <TextBlock Text="查询结果" Style="{DynamicResource CardTitleStyle}"/>
+                                        <TextBlock x:Name="PlayerQueryHintText"
+                                                   Text="输入 API KEY 和玩家 ID 后开始查询"
+                                                   Style="{DynamicResource CardDescStyle}"
+                                                   Margin="0,3,0,14"/>
+                                        <StackPanel x:Name="PlayerQueryResultPanel" Margin="0,2,0,0"/>
+                                    </StackPanel>
+                                </Border>
+    </StackPanel>
+</UserControl>

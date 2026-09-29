@@ -11,6 +11,7 @@ using System.Windows.Threading;
 using MinecraftChatOverlay.Models;
 using MinecraftChatOverlay.Services;
 using MinecraftChatOverlay.ViewModels;
+using MinecraftChatOverlay.Controls;
 
 namespace MinecraftChatOverlay;
 
@@ -19,21 +20,13 @@ public partial class OverlayWindow : Window
     private const int GwlExStyle = -20;
     private const int WsExTransparent = 0x00000020;
 
-    /// <summary>
-    /// <c>WS_EX_NOACTIVATE</c>：硬保证悬浮窗永远不成为前台窗口，不会把游戏顶到后台
-    /// （Minecraft 一旦失焦就自己弹 ESC 菜单，看起来像"被切了窗口"）。
-    ///
-    /// XAML 上的 <c>ShowActivated="False"</c> **只在窗口第一次显示时可靠**，
-    /// 而本窗口是「<c>Hide()</c> 了下次再 <c>Show()</c>」的复用窗口（见 DEV-NOTES 坑 40）。
-    /// </summary>
-    private const int WsExNoActivate = 0x08000000;
-
     private const int MonitorDefaultToNearest = 0x00000002;
     private const uint SwpNoSize = 0x0001;
     private const uint SwpNoMove = 0x0002;
     private const uint SwpNoZOrder = 0x0004;
     private const uint SwpNoActivate = 0x0010;
     private const uint SwpFrameChanged = 0x0020;
+
 
     /// <summary><c>SetWindowPos</c> 用的 <c>HWND_TOPMOST</c>。</summary>
     private static readonly IntPtr HwndTopmost = new(-1);
@@ -109,11 +102,6 @@ public partial class OverlayWindow : Window
         // 丢到 DispatcherPriority.Loaded（布局/渲染之后）执行即可。
         IsVisibleChanged += (_, _) =>
         {
-            if (!IsVisible)
-            {
-                return;
-            }
-
             Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() => EnsureTopmost()));
         };
     }
@@ -334,9 +322,6 @@ public partial class OverlayWindow : Window
     {
         base.OnSourceInitialized(e);
 
-        // 1) 永不抢焦点（硬保证，见 WsExNoActivate 的注释）。越早打越好。
-        ApplyNoActivate();
-
         // 2) 挂窗口消息钩子，收 WM_DISPLAYCHANGE —— 游戏进全屏切分辨率时全靠它把窗口拉回来。
         var handle = new WindowInteropHelper(this).Handle;
         if (handle != IntPtr.Zero)
@@ -414,22 +399,6 @@ public partial class OverlayWindow : Window
         {
             SetWindowPos(handle, HwndTopmost, 0, 0, 0, 0,
                          SwpNoMove | SwpNoSize | SwpNoActivate | SwpFrameChanged);
-        }
-    }
-
-    /// <summary>打上 <c>WS_EX_NOACTIVATE</c>：悬浮窗永不成为前台窗口。</summary>
-    private void ApplyNoActivate()
-    {
-        var handle = new WindowInteropHelper(this).Handle;
-        if (handle == IntPtr.Zero)
-        {
-            return;
-        }
-
-        var style = GetWindowLong(handle, GwlExStyle);
-        if ((style & WsExNoActivate) == 0)
-        {
-            SetWindowLong(handle, GwlExStyle, style | WsExNoActivate);
         }
     }
 
@@ -852,6 +821,7 @@ public partial class OverlayWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
+
         _keepAliveTimer?.Stop();
         _keepAliveTimer = null;
 
@@ -927,4 +897,6 @@ public partial class OverlayWindow : Window
         public Win32Rect rcWork;
         public uint dwFlags;
     }
+
+
 }

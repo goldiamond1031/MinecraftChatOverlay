@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Minecraft Chat Overlay 插件开发文档（apiVersion 1）</title>
+<style>
+  :root{
+    --bg:#f6f7fb; --card:#ffffff; --text:#1f2330; --muted:#6b7280; --line:#e5e7eb;
+    --accent:#6e56cf; --accent-soft:#f0edff; --ok:#0f9d58; --warn:#b45309; --danger:#c0392b;
+    --code-bg:#0f172a; --code-text:#e6e9f0;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+       font:15px/1.75 -apple-system,"Segoe UI","Microsoft YaHei UI","Microsoft YaHei",sans-serif;}
+  .layout{display:flex;gap:26px;max-width:1400px;margin:0 auto;padding:22px 20px 90px;align-items:flex-start}
+
+  /* ---------- 左侧导航（滚动时固定在左侧） ---------- */
+  .sidebar{position:sticky;top:18px;flex:0 0 262px;width:262px;
+           max-height:calc(100vh - 36px);overflow:auto;
+           background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 12px;
+           box-shadow:0 2px 10px rgba(31,35,48,.04)}
+  .side-brand{padding:2px 10px 10px;border-bottom:1px solid var(--line);margin-bottom:8px}
+  .side-title{font-weight:700;font-size:15px;line-height:1.4}
+  .side-sub{color:var(--muted);font-size:11.5px;margin-top:3px}
+  .sidebar nav{display:flex;flex-direction:column}
+  .sidebar nav a{display:block;padding:6px 10px;margin:1px 0;border-radius:8px;
+                 border-left:3px solid transparent;color:var(--text);font-size:13.5px;
+                 text-decoration:none;line-height:1.5}
+  .sidebar nav a:hover{background:#f1f2f8;text-decoration:none}
+  .sidebar nav a.active{background:var(--accent-soft);border-left-color:var(--accent);
+                        color:var(--accent);font-weight:600}
+  .side-foot{padding:10px 10px 2px;border-top:1px solid var(--line);margin-top:8px;
+             color:var(--muted);font-size:11.5px}
+
+  .content{flex:1 1 auto;min-width:0}
+
+  header.top{background:linear-gradient(135deg,#6e56cf,#8f6ed5);color:#fff;border-radius:16px;
+             padding:26px 28px;box-shadow:0 10px 30px rgba(110,86,207,.25)}
+  header.top h1{margin:0 0 8px;font-size:26px;letter-spacing:.5px}
+  header.top p{margin:4px 0;opacity:.95}
+  .badge{display:inline-block;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.45);
+         border-radius:999px;padding:2px 10px;font-size:12.5px;margin:4px 6px 0 0}
+  h2{margin:38px 0 12px;font-size:21px;padding-bottom:8px;border-bottom:2px solid var(--line);
+     scroll-margin-top:16px}
+  h3{margin:24px 0 8px;font-size:17px}
+  h4{margin:18px 0 6px;font-size:15px;color:#374151}
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+  code{background:#eef0f6;border-radius:5px;padding:1px 5px;font-size:13px;
+       font-family:Consolas,"Cascadia Mono","Microsoft YaHei UI",monospace}
+  pre{background:var(--code-bg);color:var(--code-text);border-radius:12px;padding:16px 18px;overflow:auto;
+      font:13px/1.65 Consolas,"Cascadia Mono","Microsoft YaHei UI",monospace;margin:10px 0}
+  pre code{background:none;color:inherit;padding:0}
+  table{width:100%;border-collapse:collapse;margin:12px 0;background:var(--card);border-radius:10px;overflow:hidden}
+  th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top;font-size:14px}
+  th{background:#f1f2f8;font-weight:600}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin:14px 0}
+  .note,.warn,.danger{border-left:4px solid var(--accent);background:var(--accent-soft);
+       border-radius:0 10px 10px 0;padding:10px 14px;margin:12px 0}
+  .warn{border-color:#f59e0b;background:#fffbeb}
+  .danger{border-color:var(--danger);background:#fef2f2}
+  .ok{color:var(--ok);font-weight:600}
+  .bad{color:var(--danger);font-weight:600}
+  .muted{color:var(--muted)}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  hr{border:none;border-top:1px dashed var(--line);margin:26px 0}
+  footer{margin-top:40px;color:var(--muted);font-size:13px;text-align:center}
+
+  /* 窄屏：导航折到顶部变成两列 */
+  @media (max-width:980px){
+    .layout{flex-direction:column;gap:14px;padding-top:14px}
+    .sidebar{position:static;width:100%;flex:none;max-height:none}
+    .sidebar nav{display:grid;grid-template-columns:1fr 1fr;column-gap:8px}
+    .grid{grid-template-columns:1fr}
+  }
+  /* 打印：不要导航 */
+  @media print{
+    body{background:#fff}
+    .layout{display:block;max-width:none;padding:0}
+    .sidebar{display:none}
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+
+  <aside class="sidebar">
+    <div class="side-brand">
+      <div class="side-title">插件开发文档</div>
+      <div class="side-sub">apiVersion 1 · net8.0-windows</div>
+    </div>
+    <nav id="toc">
+      <a href="#overview">0. 一句话总览</a>
+      <a href="#quickstart">1. 5 分钟写出第一个插件</a>
+      <a href="#layout">2. 工程与目录约定</a>
+      <a href="#lifecycle">3. 生命周期与宿主行为</a>
+      <a href="#api">4. API 参考（契约全文）</a>
+      <a href="#form">5. 页面写法 A：表单式</a>
+      <a href="#custom">6. 页面写法 B：自绘页面</a>
+      <a href="#manifest">7. plugin.json 参考</a>
+      <a href="#package">8. 打包、安装与分发</a>
+      <a href="#trouble">9. 排错表（踩过的坑）</a>
+      <a href="#samples">10. 现有插件索引</a>
+      <a href="#ai">11. 附录：AI 速查规范</a>
+    </nav>
+    <div class="side-foot">文档与代码不一致时，以 <code>PluginApi.cs</code> 为准</div>
+  </aside>
+
+  <main class="content">
+
+<header class="top">
+  <h1>Minecraft Chat Overlay · 插件开发文档</h1>
+  <p>给插件作者，也给 AI 看：这里写的是<strong>宿主真正认的规矩</strong>，不是设想。</p>
+  <p>
+    <span class="badge">apiVersion = 1</span>
+    <span class="badge">TargetFramework = net8.0-windows</span>
+    <span class="badge">契约程序集不引 WPF</span>
+    <span class="badge">插件 = dll + plugin.json + zip</span>
+  </p>
+</header>
+
+
+
+<h2 id="overview">0. 一句话总览</h2>
+
+<div class="card">
+  <p><strong>插件</strong>是一个独立编译的 C# 类库：<code>你的插件.dll</code> + <code>plugin.json</code>，压成一个 zip 发给别人，
+  用户在软件里「插件」页拖进去就装好了。装好后它<strong>不会另占一个导航卡片</strong>，而是出现在「插件」板块里的一张卡片上，
+  点「进入」才进它自己的页面。</p>
+  <p>插件<strong>只引用契约程序集</strong> <code>MinecraftChatOverlay.Plugin.Abstractions.dll</code>，
+  永远不要引用主程序 exe —— 这样主程序内部怎么改都不会把你的插件弄碎。</p>
+  <p>宿主给插件的界面是<strong>两种</strong>：交数据（表单式，宿主画）或交控件（自绘，你画）。其余能力（收聊天、发悬浮窗、列窗口、写日志、弹提示、存配置）
+  都由 <code>IPluginHost</code> 提供。</p>
+</div>
+
+
+<h2 id="quickstart">1. 5 分钟写出第一个插件</h2>
+
+<h3>1.1 建工程</h3>
+<p>新建类库，只引用契约程序集。<strong>不要</strong>引用主程序 exe。</p>
+<pre><code>&lt;Project Sdk="Microsoft.NET.Sdk"&gt;
+  &lt;PropertyGroup&gt;
+    &lt;TargetFramework&gt;net8.0-windows&lt;/TargetFramework&gt;
+    &lt;Nullable&gt;enable&lt;/Nullable&gt;
+    &lt;ImplicitUsings&gt;enable&lt;/ImplicitUsings&gt;
+    &lt;LangVersion&gt;latest&lt;/LangVersion&gt;
+    &lt;!-- 只在需要自己画界面时才开；纯逻辑插件可以不写 --&gt;
+    &lt;UseWPF&gt;true&lt;/UseWPF&gt;
+    &lt;AssemblyName&gt;MyPlugin&lt;/AssemblyName&gt;
+    &lt;EnableDefaultApplicationDefinition&gt;false&lt;/EnableDefaultApplicationDefinition&gt;
+  &lt;/PropertyGroup&gt;
+
+  &lt;ItemGroup&gt;
+    &lt;!-- 路径按你的目录调整；也可以直接引编译好的 dll --&gt;
+    &lt;ProjectReference Include="..\Abstractions\MinecraftChatOverlay.Plugin.Abstractions.csproj" /&gt;
+  &lt;/ItemGroup&gt;
+
+  &lt;ItemGroup&gt;
+    &lt;!-- 让 plugin.json 跟着输出目录，打包时省事 --&gt;
+    &lt;None Update="plugin.json" CopyToOutputDirectory="PreserveNewest" /&gt;
+  &lt;/ItemGroup&gt;
+&lt;/Project&gt;</code></pre>
+
+<div class="note">
+  <strong>两个必须：</strong>入口类要 <code>public</code>、非抽象、有公开无参构造函数；
+  插件<strong>一个插件只能注册一个页面</strong>（重复调用以最后一次为准）。
+</div>
+
+<h3>1.2 写入口（完整可跑）</h3>
+<pre><code>using MinecraftChatOverlay.Plugin;
+
+namespace My.First.Plugin;
+
+public sealed class MyPlugin : IPlugin
+{
+    private IPluginHost _host = null!;
+    private MySettings _settings = new();
+    private int _chatCount;
+    private PluginField _toggle = null!;
+    private PluginField _note = null!;
+
+    public string Id =&gt; "you.myplugin";              // 稳定唯一，决定安装目录名，别随便改
+    public string DisplayName =&gt; "我的插件";
+
+    public void Initialize(IPluginHost host)
+    {
+        _host = host;
+
+        // 1) 读自己的配置（文件在 %AppData%\MinecraftChatOverlay\plugin-data\you.myplugin\ 里）
+        _settings = PluginSettingsFile.Load&lt;MySettings&gt;(host.PluginDirectory);
+
+        // 2) 收聊天消息（事件在宿主 UI 线程触发，别做耗时操作）
+        host.ChatLineReceived += OnChatLine;
+
+        // 3) 注册页面：表单式 —— 你交数据，宿主画
+        var page = new PluginPage
+        {
+            Title = DisplayName,
+            Description = "演示插件：数一共收到多少条聊天，并往悬浮窗发消息。",
+            StatusText = () =&gt; $"已收到 {_chatCount} 条聊天",
+        };
+
+        _note = new PluginField
+        {
+            Key = "note", Label = "说明", Kind = PluginFieldKind.ReadOnly,
+            Text = "下面的开关改了会立刻存进插件自己的 settings.json。",
+        };
+
+        _toggle = new PluginField
+        {
+            Key = "echo", Label = "把聊天消息转发到悬浮窗", Kind = PluginFieldKind.Toggle,
+            Bool = _settings.EchoToOverlay,
+            Hint = "勾上之后，游戏里每收到一条聊天就往悬浮窗再发一条。",
+            Changed = f =&gt; { _settings.EchoToOverlay = f.Bool; Save(); },
+        };
+
+        page.Fields.Add(_note);
+        page.Fields.Add(_toggle);
+        page.Actions.Add(new PluginAction
+        {
+            Label = "发一条测试消息", Primary = true,
+            Invoke = () =&gt; { host.SendToOverlay("你好，我是插件"); return "已发送"; },
+        });
+
+        host.RegisterPage(page);
+        host.Log($"[我的插件] 已加载，数据目录：{host.PluginDirectory}");
+    }
+
+    public void Shutdown()
+    {
+        // 退订事件、关自己的窗口/定时器
+        _host.ChatLineReceived -= OnChatLine;
+    }
+
+    private void OnChatLine(ChatLine line)
+    {
+        _chatCount++;
+        if (_settings.EchoToOverlay)
+        {
+            _host.SendToOverlay("[我的插件] " + line.Raw);
+        }
+    }
+
+    private void Save() =&gt; PluginSettingsFile.Save(_host.PluginDirectory, _settings);
+
+    /// &lt;summary&gt;插件自己的配置（JSON 字段名就是属性名）&lt;/summary&gt;
+    private sealed class MySettings
+    {
+        public bool EchoToOverlay { get; set; }
+    }
+}</code></pre>
+
+<h3>1.3 plugin.json</h3>
+<pre><code>{
+  "id": "you.myplugin",
+  "name": "我的插件",
+  "version": "1.0.0",
+  "author": "你的名字",
+  "description": "一句话说明这个插件做什么。",
+  "apiVersion": 1,
+  "capabilities": [
+    "读取聊天消息",
+    "往悬浮窗发消息",
+    "在自己目录里读写配置"
+  ]
+}</code></pre>
+
+<h3>1.4 编译 + 打包</h3>
+<p>本仓库自带一键脚本，会编译契约 + 所有插件、装到本机、并打出可分发的 zip：</p>
+<pre><code>build-plugins.bat</code></pre>
+<p>产物：<code>%AppData%\MinecraftChatOverlay\plugin-packages\&lt;你的 id&gt;.zip</code>。
+手动打包就是：把 <strong>你的插件.dll + plugin.json</strong> 一起压成 zip（zip 里可以是根目录平铺，也可以套一层文件夹，两种宿主都认）。</p>
+
+<h3>1.5 安装与验证</h3>
+<ol>
+  <li>打开软件 → 左侧「插件」页 → 把 zip <strong>拖到这一页</strong>（或点「导入插件包（zip）」）</li>
+  <li>宿主会弹确认框，列出你 <code>plugin.json</code> 里写的 <code>capabilities</code> —— 用户点确定才装</li>
+  <li>装好后「已装的插件」里出现你的卡片：标题 / 作者 / 版本 / 用途，点「进入」就是你的页面</li>
+  <li>卡上还有「禁用 / 卸载 / 打开目录」；插件的数据在 <code>plugin-data\&lt;id&gt;\</code></li>
+</ol>
+
+<h2 id="layout">2. 工程与目录约定</h2>
+
+<table>
+  <tr><th>项目</th><th>要求</th></tr>
+  <tr><td>目标框架</td><td><code>net8.0-windows</code>（必须与宿主一致，否则装载时会报框架不匹配）</td></tr>
+  <tr><td>引用</td><td>只引 <code>MinecraftChatOverlay.Plugin.Abstractions</code>；<strong>永远不要引主程序 exe</strong></td></tr>
+  <tr><td>需要界面</td><td>自己的 csproj 开 <code>&lt;UseWPF&gt;true&lt;/UseWPF&gt;</code></td></tr>
+  <tr><td>需要模拟按键 / SendKeys</td><td>再开 <code>&lt;UseWindowsForms&gt;true&lt;/UseWindowsForms&gt;</code>，此时 <code>Clipboard</code>、<code>UserControl</code> 会二义，写全名</td></tr>
+  <tr><td>文件编码</td><td>.cs / .json / .xaml 一律 <strong>UTF-8 无 BOM</strong>、CRLF（与仓库其它文件一致）</td></tr>
+  <tr><td>zip 里放什么</td><td><code>你的插件.dll</code> + <code>plugin.json</code>（可选：资源文件、附属 dll）。<strong>不要</strong>把 <code>bin/obj</code>、其它插件的 dll 打进去</td></tr>
+</table>
+
+<h3>宿主侧的目录（插件运行时能看到什么）</h3>
+<table>
+  <tr><th>路径</th><th>含义</th></tr>
+  <tr><td><code>&lt;程序目录&gt;\plugins\&lt;id&gt;\</code></td><td>便携/内置插件根（跟着 exe 走，开发时用）</td></tr>
+  <tr><td><code>%AppData%\MinecraftChatOverlay\plugins\&lt;id&gt;\</code></td><td>用户导入安装的插件根（发布给用户走这里）</td></tr>
+  <tr><td><code>%AppData%\MinecraftChatOverlay\plugin-data\&lt;id&gt;\</code></td><td><strong>插件数据目录</strong>（<code>host.PluginDirectory</code>）。配置/图片/缓存放这里；<strong>更新插件不会动它</strong>，卸载时整目录删掉</td></tr>
+  <tr><td><code>%AppData%\MinecraftChatOverlay\plugin-packages\</code></td><td><code>build-plugins.bat</code> 打出的 zip（方便试装/分发）</td></tr>
+</table>
+
+<div class="warn">
+  <strong>为什么数据目录要和安装目录分开：</strong>更新插件是「整目录替换」（删旧目录 → 落新文件）。
+  配置如果放在安装目录里，用户设置会被换版吃掉 —— 这是宿主刻意做的隔离。
+</div>
+
+
+<h2 id="lifecycle">3. 生命周期与宿主行为</h2>
+
+<h3>3.1 装载流程（宿主真正做的顺序）</h3>
+<ol>
+  <li>扫描两个插件根目录（exe 旁 <code>plugins\</code> 与用户目录 <code>plugins\</code>），每个子目录当作一个插件</li>
+  <li>读 <code>plugin.json</code>；读不出来或缺 <code>id</code> → 跳过并记日志</li>
+  <li>校验 <code>apiVersion</code>：<strong>必须完全等于</strong> <code>PluginApi.Version</code>，不等就拒装并在界面上说明原因</li>
+  <li>找到主 dll（<code>assembly</code> 指定，或目录里第一个非契约程序集的 dll）</li>
+  <li>为这个插件建一个<strong>可卸载的 AssemblyLoadContext</strong>，在里面加载 dll；<strong>契约程序集回落到宿主那一份</strong>（否则 <code>IPlugin</code> 类型身份不一致，cast 必失败）</li>
+  <li>找入口类型：<code>entry</code> 指定，或自动找唯一实现 <code>IPlugin</code> 的 public 非抽象类</li>
+  <li><code>new</code> 出来 → 调 <code>Initialize(host)</code>。这一步抛异常 → 卡片显示「装载失败 + 原因」，其它插件与主程序不受影响</li>
+</ol>
+
+<h3>3.2 隔离与容错</h3>
+<ul>
+  <li>每个插件独立 ALC：插件之间的类型互不可见（除非通过契约）；卸载时尽量回收</li>
+  <li>宿主在<strong>每一次</strong>「宿主 → 插件」调用外面都包了 try/catch：<code>Initialize</code>、<code>Shutdown</code>、
+      <code>StatusText</code>、字段 <code>OptionsProvider</code>、<code>Changed</code>、按钮 <code>Invoke</code>、
+      <code>ChatLineReceived</code> 的每个订阅者。插件抛异常 → 只影响那一条操作，界面会显示原因</li>
+  <li>插件跑在主程序进程里，<strong>权限和主程序一样</strong>：能用 <code>HttpClient</code>、P/Invoke、WPF 窗口、读写文件。
+      安装 zip = 执行任意代码，所以宿主要在安装时把 <code>capabilities</code> 摊给用户看</li>
+</ul>
+
+<h3>3.3 线程</h3>
+<table>
+  <tr><th>回调</th><th>线程</th><th>注意</th></tr>
+  <tr><td><code>IPluginHost.ChatLineReceived</code></td><td>宿主 UI 线程</td><td><strong>别阻塞</strong>（会卡住整个界面和聊天显示）。耗时的丢 <code>Task.Run</code>，回到 UI 用 <code>Dispatcher.InvokeAsync</code></td></tr>
+  <tr><td><code>PluginField.Changed</code> / <code>PluginAction.Invoke</code></td><td>宿主 UI 线程</td><td>同上；<code>Invoke</code> 返回的字符串会当提示弹出来</td></tr>
+  <tr><td><code>PluginPage.StatusText</code></td><td>宿主 UI 线程，约每秒一次</td><td>只做取值+拼接，别在里面干活</td></tr>
+  <tr><td><code>PluginField.OptionsProvider</code></td><td>宿主 UI 线程</td><td>秒级刷新；取窗口列表这类"快"操作可以，联网请求请自己缓存</td></tr>
+</table>
+
+<h3>3.4 启用 / 禁用 / 卸载 / 更新</h3>
+<table>
+  <tr><th>动作</th><th>宿主行为</th></tr>
+  <tr><td>禁用</td><td>当前进程里立即 <code>Shutdown()</code> + 卸载；id 记进禁用列表，下次启动不再装载（插件看不见任何"被禁用"的迹象，因为根本没加载）</td></tr>
+  <tr><td>启用</td><td>立刻重新装载并 <code>Initialize</code></td></tr>
+  <tr><td>卸载</td><td>删插件安装目录 + <code>plugin-data\&lt;id&gt;\</code>。如果 dll 还被占用（插件正在运行），会禁用它并把目录排进"下次启动删"</td></tr>
+  <tr><td>更新（导入同 id 的新 zip）</td><td>旧版没在跑 → 直接覆盖；旧版在跑（dll 被操作系统锁住）→ 新版本整包放到 <code>&lt;id&gt;.new\</code>，<strong>下次启动自动换上去</strong>，数据目录不动</td></tr>
+</table>
+
+<div class="note">
+  <strong>给作者的建议：</strong>把「更新插件」当成常态设计 —— 用户数据（配置、下载的图片、缓存）一律写进 <code>host.PluginDirectory</code>，
+  不要写在安装目录里；这样用户更新你的插件时，设置和缓存都还在。
+</div>
+
+<h3>3.5 契约版本与兼容</h3>
+<ul>
+  <li><code>PluginApi.Version</code> 当前是 <strong>1</strong>；<code>plugin.json</code> 的 <code>apiVersion</code> 必须一致</li>
+  <li>契约原则是<strong>只增不减</strong>：接口加成员、加字段没问题；删/改签名必须把 <code>Version</code> 加 1</li>
+  <li>版本不匹配的表现是「明确告知 + 拒装」，不会出现"装上了但一调用就崩"</li>
+</ul>
+
+
+<h2 id="api">4. API 参考（契约全文）</h2>
+<p class="muted">命名空间 <code>MinecraftChatOverlay.Plugin</code>，全部在契约程序集里。
+源码就是唯一事实来源：<code>Plugins\Abstractions\PluginApi.cs</code>。</p>
+
+<h3>4.1 PluginApi</h3>
+<table>
+  <tr><th>成员</th><th>说明</th></tr>
+  <tr><td><code>const int Version = 1</code></td><td>契约版本。<code>plugin.json</code> 的 <code>apiVersion</code> 必须等于它</td></tr>
+</table>
+
+<h3>4.2 IPlugin —— 插件入口</h3>
+<table>
+  <tr><th>成员</th><th>类型</th><th>说明</th></tr>
+  <tr><td><code>Id</code></td><td><code>string</code></td><td>稳定唯一 id，形如 <code>goldiamond.autogg</code>。装插件、数据目录、禁用列表都用它，发布后不要改</td></tr>
+  <tr><td><code>DisplayName</code></td><td><code>string</code></td><td>插件卡片和页面标题上显示的名字</td></tr>
+  <tr><td><code>Initialize(IPluginHost host)</code></td><td><code>void</code></td><td>装载时调用一次。抛异常 → 被标成"装载失败"（不影响主程序）</td></tr>
+  <tr><td><code>Shutdown()</code></td><td><code>void</code></td><td>禁用 / 卸载 / 退出时调用。窗口、定时器、线程、事件订阅都要在这里收干净</td></tr>
+</table>
+<div class="warn">入口类必须是 <code>public</code>、非抽象、有<strong>公开无参构造函数</strong>；一个 dll 里只放一个实现 <code>IPlugin</code> 的公开类（多了就自动找不到，得用 <code>plugin.json</code> 的 <code>entry</code> 指定）。</div>
+
+<h3>4.3 IPluginHost —— 宿主给插件的能力</h3>
+<table>
+  <tr><th>成员</th><th>签名</th><th>说明</th></tr>
+  <tr><td><code>ApiVersion</code></td><td><code>int</code></td><td>宿主的契约版本，正常等于 <code>PluginApi.Version</code></td></tr>
+  <tr><td><code>PluginDirectory</code></td><td><code>string</code></td><td>插件数据目录（可读可写）。更新插件不会动它，卸载时整目录删掉</td></tr>
+  <tr><td><code>PluginsRootDirectory</code></td><td><code>string</code></td><td>所有插件的根目录（做插件间共享文件才需要）</td></tr>
+  <tr><td><code>RegisterPage(PluginPage page)</code></td><td><code>void</code></td><td>注册插件页面，<strong>一个插件一个</strong>；重复调用以最后一次为准</td></tr>
+  <tr><td><code>Log(string message)</code></td><td><code>void</code></td><td>写一行到宿主的「调试后台」页（用户开了"启用后端日志"才可见）</td></tr>
+  <tr><td><code>SendToOverlay(string text)</code></td><td><code>void</code></td><td>往聊天悬浮窗发一条消息（插件自己的输出走这里）</td></tr>
+  <tr><td><code>ReassertOverlayTopmost()</code></td><td><code>void</code></td><td>把悬浮窗重新抬到最前（不抢焦点、不改尺寸）。你动过窗口层级（例如全屏了游戏窗口）之后叫一下；没开悬浮窗时调用也安全</td></tr>
+  <tr><td><code>ShowToast(string message)</code></td><td><code>void</code></td><td>弹一条右下角提示</td></tr>
+  <tr><td><code>ChatLineReceived</code></td><td><code>event Action&lt;ChatLine&gt;?</code></td><td>收到一条聊天消息，在宿主 UI 线程触发。<strong>记得在 Shutdown 里退订</strong></td></tr>
+  <tr><td><code>RecentChatLines</code></td><td><code>IReadOnlyList&lt;ChatLine&gt;</code></td><td>最近 200 条聊天，插件初始化时用来回填状态</td></tr>
+  <tr><td><code>GetGameWindows()</code></td><td><code>IReadOnlyList&lt;GameWindowInfo&gt;</code></td><td>当前可见的游戏类窗口（宿主已过滤工具窗、无标题窗、本程序自己）</td></tr>
+</table>
+
+<h3>4.4 数据记录</h3>
+<pre><code>public sealed record ChatLine(string Raw, DateTime Time);
+public sealed record GameWindowInfo(IntPtr Handle, int ProcessId, string ProcessName, string Title, int Width, int Height);
+public sealed record PluginOption(string Key, string Text);</code></pre>
+<table>
+  <tr><th>类型</th><th>说明</th></tr>
+  <tr><td><code>ChatLine.Raw</code></td><td>原始文本：已按日志编码解码、已去掉时间戳和日志前缀</td></tr>
+  <tr><td><code>ChatLine.Time</code></td><td>宿主收到的时间（不是游戏里的时间戳）</td></tr>
+  <tr><td><code>GameWindowInfo.Handle</code></td><td>HWND。要操作窗口时用它（<code>ProcessId</code> 给用户看已足够，但句柄才是可靠的）</td></tr>
+  <tr><td><code>GameWindowInfo.ToString()</code></td><td>已经是给下拉框看的格式：<code>进程名  窗口标题  (PID 1234)  1920×1080</code></td></tr>
+  <tr><td><code>PluginOption</code></td><td>下拉项：<code>Key</code> 是插件自己定义的值（存配置用），<code>Text</code> 是界面显示</td></tr>
+</table>
+
+<h3>4.5 PluginPage —— 一个插件页面</h3>
+<table>
+  <tr><th>成员</th><th>类型</th><th>说明</th></tr>
+  <tr><td><code>Title</code></td><td><code>string</code>（required）</td><td>插件卡片标题 + 页面标题（必填）</td></tr>
+  <tr><td><code>Description</code></td><td><code>string?</code></td><td>标题下面那句说明；也用作插件卡片的「用途」</td></tr>
+  <tr><td><code>Fields</code></td><td><code>List&lt;PluginField&gt;</code></td><td>表单式字段，按顺序画在同一张「设置」卡片里</td></tr>
+  <tr><td><code>Actions</code></td><td><code>List&lt;PluginAction&gt;</code></td><td>按钮，画在「操作」卡片里</td></tr>
+  <tr><td><code>StatusText</code></td><td><code>Func&lt;string&gt;?</code></td><td>页头状态行，宿主约每秒问一次。<strong>留着不写就不显示这一行</strong></td></tr>
+  <tr><td><code>ContentFactory</code></td><td><code>Func&lt;object&gt;?</code></td><td>自绘页面：返回一个 WPF 控件（<code>FrameworkElement</code>）。设了它就<strong>不走</strong>表单和按钮</td></tr>
+</table>
+
+<h3>4.6 PluginField —— 表单字段</h3>
+<p>五种类型：<code>Toggle</code>（开关）、<code>Slider</code>（滑块）、<code>Select</code>（下拉框）、<code>Text</code>（单行输入）、<code>ReadOnly</code>（只读文本）。</p>
+<table>
+  <tr><th>属性</th><th>类型</th><th>适用</th><th>说明</th></tr>
+  <tr><td><code>Key</code></td><td><code>string</code>（required）</td><td>全部</td><td>插件内部用的键，随便起，自己认得就行</td></tr>
+  <tr><td><code>Label</code></td><td><code>string</code></td><td>全部</td><td>界面上显示的名字</td></tr>
+  <tr><td><code>Kind</code></td><td><code>PluginFieldKind</code></td><td>全部</td><td>默认 <code>Toggle</code></td></tr>
+  <tr><td><code>Hint</code></td><td><code>string?</code></td><td>全部</td><td>字段下面那行小字说明</td></tr>
+  <tr><td><code>Bool</code></td><td><code>bool</code>（可读写）</td><td>Toggle</td><td>开关状态</td></tr>
+  <tr><td><code>Number</code></td><td><code>double</code>（可读写）</td><td>Slider</td><td>当前值</td></tr>
+  <tr><td><code>Minimum</code> / <code>Maximum</code> / <code>Step</code></td><td><code>double</code></td><td>Slider</td><td>下限（默认 0）/ 上限（默认 100）/ 步进（默认 1）</td></tr>
+  <tr><td><code>Suffix</code></td><td><code>string</code></td><td>Slider</td><td>数值后缀，例如 <code>"×"</code>、<code>" fps"</code></td></tr>
+  <tr><td><code>NumberFormat</code></td><td><code>string</code></td><td>Slider</td><td>数值格式，默认 <code>"0.#"</code>（整数不显示小数点）</td></tr>
+  <tr><td><code>Text</code></td><td><code>string</code>（可读写）</td><td>Text / ReadOnly</td><td>文本内容</td></tr>
+  <tr><td><code>SelectedKey</code></td><td><code>string?</code>（可读写）</td><td>Select</td><td>当前选中项的 <code>Key</code></td></tr>
+  <tr><td><code>OptionsProvider</code></td><td><code>Func&lt;IReadOnlyList&lt;PluginOption&gt;&gt;?</code></td><td>Select</td><td>候选项来源：渲染时取一次，之后按间隔自动刷新（宿主会加「刷新」按钮）</td></tr>
+  <tr><td><code>OptionsRefreshSeconds</code></td><td><code>double</code></td><td>Select</td><td>自动刷新间隔（秒）。<code>0</code> = 只在渲染时取一次</td></tr>
+  <tr><td><code>Changed</code></td><td><code>Action&lt;PluginField&gt;?</code></td><td>Toggle / Slider / Select / Text</td><td>值变了回调（UI 线程）。<strong>在这里存盘</strong>：<code>PluginSettingsFile.Save(...)</code></td></tr>
+  <tr><td><code>Enabled</code></td><td><code>bool</code>（可读写）</td><td>全部</td><td>字段是否可用；宿主每秒按它刷新（"没选目标就禁用"这种）</td></tr>
+</table>
+<pre><code>page.Fields.Add(new PluginField
+{
+    Key = "zoom", Label = "放大倍数", Kind = PluginFieldKind.Slider,
+    Number = _settings.Zoom, Minimum = 1, Maximum = 8, Step = 0.5, Suffix = "×",
+    Hint = "显示窗口大小 = 选区大小 × 倍数 ÷ 屏幕缩放。",
+    Changed = f =&gt; { _settings.Zoom = f.Number; Save(); },
+});</code></pre>
+
+<h3>4.7 PluginAction —— 按钮</h3>
+<table>
+  <tr><th>成员</th><th>类型</th><th>说明</th></tr>
+  <tr><td><code>Label</code></td><td><code>string</code>（required）</td><td>按钮文字</td></tr>
+  <tr><td><code>Primary</code></td><td><code>bool</code></td><td><code>true</code> = 主按钮（高亮）</td></tr>
+  <tr><td><code>Invoke</code></td><td><code>Func&lt;string?&gt;?</code></td><td>点了做什么。返回非空字符串 → 宿主弹提示；抛异常 → 宿主弹失败原因</td></tr>
+  <tr><td><code>Enabled</code></td><td><code>bool</code></td><td>按钮是否可用，宿主每秒刷新</td></tr>
+</table>
+
+<h3>4.8 PluginSettingsFile —— 存配置的工具</h3>
+<pre><code>// 读：文件不存在或 JSON 坏了都返回一份默认值（不抛异常）
+var settings = PluginSettingsFile.Load&lt;MySettings&gt;(host.PluginDirectory);
+
+// 写：写失败不抛异常（配置丢了不该让插件崩）
+PluginSettingsFile.Save(host.PluginDirectory, settings);
+
+// 也可以换文件名（默认 settings.json）
+PluginSettingsFile.Save(host.PluginDirectory, cache, "cache.json");</code></pre>
+<div class="note">存的是 <code>System.Text.Json</code> 的默认序列化结果：<strong>属性名就是 JSON 字段名</strong>，中文会被写成 <code>\uXXXX</code> 转义（读取正常）。
+文件落在 <code>host.PluginDirectory</code>。</div>
+
+
+<h2 id="form">5. 页面写法 A：表单式（推荐先试这个）</h2>
+<p>你只交数据，宿主用内置主题画。好处：外观永远和内置页一致，主程序换皮肤你也不用改。</p>
+<table>
+  <tr><th>宿主会画的</th><th>来自</th></tr>
+  <tr><td>页头：标题 + 说明</td><td><code>PluginPage.Title</code> / <code>Description</code></td></tr>
+  <tr><td>页头状态行（<strong>不给就不画</strong>）</td><td><code>StatusText</code>，宿主约每秒调一次</td></tr>
+  <tr><td>「设置」卡片</td><td><code>Fields</code>（按加入顺序）</td></tr>
+  <tr><td>「操作」卡片</td><td><code>Actions</code>（自动换行排列）</td></tr>
+</table>
+
+<h3>适合 / 不适合</h3>
+<div class="grid">
+  <div class="card"><strong class="ok">适合</strong>
+    <ul>
+      <li>开关、数值、下拉选择、文本输入</li>
+      <li>选目标（进程/窗口/自己写的下拉）</li>
+      <li>状态展示（<code>ReadOnly</code> 或 <code>StatusText</code>）</li>
+      <li>几个动作按钮（框选、显示、重置……）</li>
+    </ul>
+  </div>
+  <div class="card"><strong class="bad">不适合</strong>
+    <ul>
+      <li>可增删的规则列表、拖拽排序</li>
+      <li>实时预览、画布、图表</li>
+      <li>几十个控件的复杂面板</li>
+    </ul>
+    <p class="muted">这些用第 6 节的自绘页面。</p>
+  </div>
+</div>
+
+<h3>常用套路</h3>
+<pre><code>// ① 下拉框选游戏窗口：每次渲染取一次 + 每 3 秒自动刷新
+new PluginField
+{
+    Key = "target", Label = "游戏窗口", Kind = PluginFieldKind.Select,
+    SelectedKey = _settings.TargetProcessName,
+    OptionsRefreshSeconds = 3,
+    OptionsProvider = () =&gt; host.GetGameWindows()
+        .Select(w =&gt; new PluginOption(w.ProcessName, w.ToString()))   // ToString 已经是给人看的格式
+        .ToList(),
+    Hint = "游戏重启换了 PID 也没关系，按进程名重新找回来。",
+    Changed = f =&gt; { _settings.TargetProcessName = f.SelectedKey ?? ""; Save(); },
+}
+
+// ② 只读文本当"结果展示"（宿主每秒刷新一次 Text）
+new PluginField
+{
+    Key = "result", Label = "查询结果", Kind = PluginFieldKind.ReadOnly,
+    Text = _lastResult,      // 你改这个字段，页面下一秒就会显示出来
+}
+
+// ③ 联动禁用：没选目标就禁用某些字段 / 按钮（宿主每秒按 Enabled 刷新）
+_selectField.Enabled = !string.IsNullOrWhiteSpace(_settings.TargetProcessName);
+_action.Enabled = _window is { IsVisible: true };
+
+// ④ Changed 里存盘 + 立刻让效果生效（例如把新设置应用到自己的窗口）
+Changed = f =&gt; { _settings.Zoom = f.Number; PluginSettingsFile.Save(host.PluginDirectory, _settings); _window?.ApplySettings(); }</code></pre>
+
+<div class="note"><strong>状态行可以不要。</strong>如果你的页面已经用 <code>ReadOnly</code> 字段把状态讲清楚了，就别写
+<code>StatusText</code> —— 宿主不会画那一行，页面更干净（自动 GG 插件就是这么做的）。</div>
+
+<h2 id="custom">6. 页面写法 B：自绘页面</h2>
+<p>表单式表达不了时，给 <code>ContentFactory</code> 一个返回 WPF 控件的委托，这个控件会被当作页面的主体。</p>
+
+<h3>6.1 准确的调用时机（重要）</h3>
+<ul>
+  <li><code>ContentFactory()</code> 在<strong>插件装载/页面重建时调用一次</strong>，不是在每次点「进入」时调用；返回的控件会被保留复用
+      → 里面的<strong>状态请存在控件上</strong>（用户切走再切回来，控件还是同一个，状态不会丢）</li>
+  <li>页头（标题 + 说明）仍然是宿主画的；<code>StatusText</code> 非空时状态行也照画</li>
+  <li>设了 <code>ContentFactory</code> 后，<code>Fields</code> / <code>Actions</code> <strong>不会再渲染</strong>（想混用就自己在控件里画）</li>
+  <li>控件是在<strong>还没挂进窗口可视树</strong>的时候创建的 → 见下面第一条铁律</li>
+  <li>控件抛异常 → 宿主拦住并把页面显示成出错信息，不会带走主程序</li>
+</ul>
+
+<div class="danger"><strong>铁律 1：自绘页面里的样式 / 画刷一律用 <code>DynamicResource</code>，不能用 <code>StaticResource</code>。</strong><br>
+插件控件先创建、后挂树，<code>StaticResource</code> 在解析那一刻沿自身→父级→Application 找资源，
+而宿主的主题字典挂在 <strong>Window</strong> 上 → 直接抛 <code>XamlParseException</code>（整页白掉）。
+<code>DynamicResource</code> 是延迟解析的，挂上树再找，没问题。</div>
+
+<div class="danger"><strong>铁律 2：「控件值变化就存盘」的页面必须加加载闸门。</strong><br>
+<code>LoadFromSettings()</code> 里第一个 <code>IsChecked = true</code> 会触发 <code>Checked → SaveToSettings()</code>，
+此时后面的 TextBox 还是空的 → 把 <code>""</code>/<code>false</code> 写回设置，用户的配置被清空。
+写法：加一个 <code>_loading</code> 标志，填值期间让 <code>SaveToSettings()</code> 直接 return。</div>
+
+<h3>6.2 最小自绘页面</h3>
+<pre><code>// AutoGgPage.xaml —— UserControl，内容就是原来的页面 XAML
+&lt;UserControl x:Class="My.First.Plugin.MyPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"&gt;
+  &lt;StackPanel&gt;
+    &lt;Border Style="{DynamicResource CardStyle}"&gt;
+      &lt;StackPanel&gt;
+        &lt;CheckBox x:Name="EnableCheckBox" Style="{DynamicResource ToggleSwitchStyle}"&gt;
+          &lt;StackPanel&gt;
+            &lt;TextBlock Text="启用" FontSize="15" FontWeight="ExtraBold"/&gt;
+            &lt;TextBlock Text="说明文字" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/&gt;
+          &lt;/StackPanel&gt;
+        &lt;/CheckBox&gt;
+      &lt;/StackPanel&gt;
+    &lt;/Border&gt;
+  &lt;/StackPanel&gt;
+&lt;/UserControl&gt;</code></pre>
+
+<pre><code>// 插件里注册
+host.RegisterPage(new PluginPage
+{
+    Title = "我的插件",
+    Description = "一句话说明。",
+    ContentFactory = () =&gt; _page ??= new MyPage(this),   // 只建一次，复用
+});</code></pre>
+
+<h3>6.3 想长得像内置页面？用这些主题资源</h3>
+<p>资源名来自宿主的主题字典（<code>ModernControls.xaml</code>），在插件里用 <code>{DynamicResource 名字}</code> 引用即可：</p>
+<table>
+  <tr><th>类型</th><th>可用名字</th></tr>
+  <tr><td>样式（Style）</td><td><code>CardStyle</code>、<code>PanelTitleStyle</code>、<code>PanelDescStyle</code>、
+      <code>CardTitleStyle</code>、<code>CardDescStyle</code>、<code>FieldLabelStyle</code>、<code>HintStyle</code>、
+      <code>ToggleSwitchStyle</code>、<code>SmallButtonStyle</code>、<code>SmallPrimaryButtonStyle</code>、<code>SmallGhostButtonStyle</code></td></tr>
+  <tr><td>画刷（Brush）</td><td><code>AccentBrush</code>、<code>AccentSoftBrush</code>、<code>SurfaceBrush</code>、
+      <code>Surface2Brush</code>、<code>BorderBrush</code>、<code>TextSecondaryBrush</code>、<code>MintBrush</code></td></tr>
+  <tr><td>转换器</td><td><code>BoolToVis</code>（bool → Visibility）</td></tr>
+</table>
+<div class="warn">这些名字属于宿主的<strong>实现细节</strong>：主程序改主题时可能调整。
+自绘页面用它们能立刻和内置页一致，但要接受"以后可能要跟着改"；表单式没有这个问题。<br>完整名单见 <code>ModernControls.xaml</code> 里的 x:Key（还有 PluginCardStyle、InlineToggleStyle、NavRadioButtonStyle、PrimaryButtonStyle、IconButtonStyle、DangerButtonStyle、SmallDangerButtonStyle、BareTextBoxStyle、TextPrimaryBrush、Surface3Brush、BorderStrongBrush 等）。</div>
+
+
+<h2 id="manifest">7. plugin.json 参考</h2>
+<p>放在 zip 根目录（和你的 dll 同级）。宿主解析时<strong>宽容</strong>：字段名大小写不敏感、允许 <code>//</code> 注释和尾逗号。</p>
+<table>
+  <tr><th>字段</th><th>必需</th><th>说明</th></tr>
+  <tr><td><code>id</code></td><td class="bad">必需</td><td>稳定唯一 id，形如 <code>goldiamond.autogg</code>。建议 <code>作者前缀.插件名</code>；决定安装目录名，也是禁用/更新/卸载的键。<strong>发布后不要改</strong>（改了等于换了个插件）</td></tr>
+  <tr><td><code>name</code></td><td>强烈建议</td><td>界面显示名（插件卡片标题、页面标题）</td></tr>
+  <tr><td><code>version</code></td><td>强烈建议</td><td>你自己的版本号，显示在卡片上（<code>v1.0.0</code>）</td></tr>
+  <tr><td><code>author</code></td><td>建议</td><td>作者，显示在卡片上</td></tr>
+  <tr><td><code>description</code></td><td>建议</td><td>一句话用途，显示成卡片的「用途：……」</td></tr>
+  <tr><td><code>apiVersion</code></td><td class="bad">必需</td><td>必须是 <code>1</code>（= <code>PluginApi.Version</code>）。对不上一律拒装</td></tr>
+  <tr><td><code>capabilities</code></td><td>建议</td><td>字符串数组，说明"这个插件会做什么"（读日志 / 联网 / 操作窗口 / 模拟按键……）。<strong>安装确认框会逐条列给用户看</strong>（知情同意）。它<strong>不是</strong>权限系统，不写也能用</td></tr>
+  <tr><td><code>entry</code></td><td>可选</td><td>入口类型全名。不写就自动找 dll 里唯一实现 <code>IPlugin</code> 的公开类（推荐不写）</td></tr>
+  <tr><td><code>assembly</code></td><td>可选</td><td>主 dll 文件名。不写就取目录里第一个非契约程序集的 dll（推荐不写）</td></tr>
+</table>
+
+<pre><code>{
+  "id": "you.myplugin",
+  "name": "我的插件",
+  "version": "1.0.0",
+  "author": "你的名字",
+  "description": "一句话说明这个插件做什么。",
+  "apiVersion": 1,
+  "capabilities": [
+    "读取聊天消息",
+    "往悬浮窗发消息",
+    "在自己目录里读写配置"
+  ]
+}</code></pre>
+
+<h2 id="package">8. 打包、安装与分发</h2>
+
+<h3>8.1 zip 里放什么</h3>
+<div class="grid">
+  <div class="card"><strong>平铺（推荐）</strong>
+<pre><code>MyPlugin.zip
+├─ MyPlugin.dll
+├─ plugin.json
+└─ （可选）Assets\...
+</code></pre>
+  </div>
+  <div class="card"><strong>套一层文件夹也行</strong>
+<pre><code>MyPlugin.zip
+└─ MyPlugin\
+   ├─ MyPlugin.dll
+   └─ plugin.json
+</code></pre>
+  </div>
+</div>
+<ul>
+  <li><strong>不要</strong>把 <code>bin/</code>、<code>obj/</code>、<code>*.pdb</code>、其它插件的 dll 打进去</li>
+  <li>如果你引用了第三方 NuGet 包，把需要的 dll 一起放进 zip（宿主会解析同目录的依赖）</li>
+  <li><strong>不要</strong>把契约程序集 <code>MinecraftChatOverlay.Plugin.Abstractions.dll</code> 放进 zip —— 宿主会强制用自己那一份（放进去也不会用，放错版本反而混淆）</li>
+  <li>解压后宿主会删掉 <code>:Zone.Identifier</code>（从网上下载的 zip 会带这个"来自互联网"标记），不需要作者处理</li>
+</ul>
+
+<h3>8.2 用仓库自带脚本（省事）</h3>
+<pre><code>build-plugins.bat
+# 做的事：编译契约程序集 → 编译每个插件 → 装到 %AppData%\MinecraftChatOverlay\plugins\&lt;id&gt;\
+#        → 打包成 %AppData%\MinecraftChatOverlay\plugin-packages\&lt;id&gt;.zip
+</code></pre>
+<div class="warn">跑脚本前<strong>先把软件关掉</strong>：正在运行的插件 dll 被系统锁着，覆盖会失败。</div>
+
+<h3>8.3 手动打包（用自己的工具链）</h3>
+<pre><code>dotnet build MyPlugin.csproj -c Release
+# 产物在 bin\Release\net8.0-windows\
+# 把 MyPlugin.dll 和 plugin.json 压成 zip 即可</code></pre>
+
+<h3>8.4 安装时用户看到什么</h3>
+<ol>
+  <li>「插件」页 → 拖入 zip（或点「导入插件包（zip）」）</li>
+  <li>宿主读取 <code>plugin.json</code> 并校验：能不能解析、<code>id</code> 有没有、<code>apiVersion</code> 是否匹配、zip 里有没有越界路径</li>
+  <li>弹确认框：<code>名字 v版本 · 作者</code> + <code>description</code> + <strong>逐条列出 capabilities</strong> + 一句"插件权限和本程序一样，只装信任来源的"</li>
+  <li>确认后解压到 <code>%AppData%\MinecraftChatOverlay\plugins\&lt;id&gt;\</code> 并立刻装载；「已装的插件」里出现卡片</li>
+  <li>装载失败时卡片显示原因（例如"装载失败：找不到实现 IPlugin 的公开类"）</li>
+</ol>
+
+<h3>8.5 更新与卸载（给作者的正确预期）</h3>
+<table>
+  <tr><th>场景</th><th>结果</th></tr>
+  <tr><td>用户在插件<strong>没运行</strong>时导入同 id 新版本</td><td>直接覆盖安装目录，立刻生效</td></tr>
+  <tr><td>插件<strong>正在运行</strong>时导入新版本</td><td>dll 被锁删不掉 → 新版本排进 <code>&lt;id&gt;.new\</code> 队列，<strong>下次启动自动换上</strong>；数据目录不受影响</td></tr>
+  <tr><td>卸载</td><td>安装目录 + 数据目录一起删；若文件被占用则排队到下次启动删</td></tr>
+  <tr><td>禁用</td><td>立刻卸载（<code>Shutdown()</code> 会被调用），下次启动不再装载</td></tr>
+</table>
+
+
+<h2 id="trouble">9. 排错表（这些坑都真踩过）</h2>
+<table>
+  <tr><th>现象</th><th>原因</th><th>改法</th></tr>
+  <tr><td>自绘页面整片白 / 抛 <code>XamlParseException</code></td>
+      <td>用了 <code>StaticResource</code> 引宿主主题资源，而控件是先创建后挂树的</td>
+      <td>改成 <code>{DynamicResource 名字}</code>（见铁律 1）</td></tr>
+  <tr><td>用户的正则 / 文字设置被清空</td>
+      <td>填控件时触发了"值变即保存"，把还没填的空控件写回设置</td>
+      <td>加 <code>_loading</code> 闸门（见铁律 2）</td></tr>
+  <tr><td>编译报 <code>CS0103: File / Path / Directory 不存在</code></td>
+      <td><code>UseWPF</code> 的工程隐式 using 里<strong>没有</strong> <code>System.IO</code></td>
+      <td>相关文件加 <code>using System.IO;</code></td></tr>
+  <tr><td>编译报 <code>Clipboard</code> / <code>UserControl</code> 二义</td>
+      <td>同时开了 <code>UseWPF</code> + <code>UseWindowsForms</code>，两套同名类型</td>
+      <td>写全名：<code>System.Windows.Clipboard</code> / <code>System.Windows.Controls.UserControl</code></td></tr>
+  <tr><td>装载失败：找不到实现 <code>IPlugin</code> 的公开类</td>
+      <td>类不是 public / 是抽象类 / 没有公开无参构造 / 一个 dll 里有多个实现</td>
+      <td>按 4.2 的要求改；多个实现时用 <code>plugin.json</code> 的 <code>entry</code> 指定</td></tr>
+  <tr><td>拒装："版本对不上：这个插件要求契约版本 X"</td>
+      <td><code>apiVersion</code> 不等于宿主契约版本</td>
+      <td>改成 <code>1</code>（或按提示更新软件）</td></tr>
+  <tr><td>拒装："这个 zip 里没有 plugin.json"</td>
+      <td>打包时把 dll 单独压了，或压成了别的层级</td>
+      <td>确保 <code>plugin.json</code> 与主 dll 同目录（含套一层文件夹的情况）</td></tr>
+  <tr><td>拒装："zip 里有非法路径：../xxx"</td>
+      <td>zip 里带了相对上级路径（宿主防目录穿越）</td>
+      <td>重新打包，不要包含 <code>..\</code> 条目</td></tr>
+  <tr><td>覆盖安装失败："文件还被占用"</td>
+      <td>软件没关，插件 dll 被系统锁住</td>
+      <td>关掉软件再装；或接受宿主把新版本排队到下次启动</td></tr>
+  <tr><td>插件装了但什么都不发生</td>
+      <td>开关没开（例如自动 GG 的「启用」）／事件没订阅／逻辑里提前 return</td>
+      <td>用 <code>host.Log(...)</code> 写日志，在「调试后台」页（需开"启用后端日志"）看；也可用 <code>host.ShowToast</code> 直接确认回调有没有进来</td></tr>
+  <tr><td>编译出来的插件中文乱码</td>
+      <td>源文件存成了 GBK（或带 BOM）</td>
+      <td>存成 <strong>UTF-8 无 BOM</strong>、CRLF</td></tr>
+  <tr><td>游戏或界面卡顿</td>
+      <td>在 <code>ChatLineReceived</code> / <code>StatusText</code> 里干了耗时活（联网、抓屏、等锁）</td>
+      <td>搬去 <code>Task.Run</code>，结果回到 UI 线程再更新界面</td></tr>
+  <tr><td>改了代码但行为没变</td>
+      <td>没重新编译，或编译了没重新导入 zip；宿主只在启动时扫描插件</td>
+      <td>重新 <code>build-plugins.bat</code>（或重新导入），必要时用「重新扫描」</td></tr>
+</table>
+
+<h2 id="samples">10. 现有插件索引（照着抄最快）</h2>
+<table>
+  <tr><th>目录</th><th>id</th><th>页面</th><th>演示了什么</th></tr>
+  <tr><td><code>Plugins\SamplePlugin\</code></td><td><code>goldiamond.sample</code></td><td>表单式</td>
+      <td>最小骨架：注册页面、收聊天、往悬浮窗发消息、存配置、读 <code>RecentChatLines</code>。<strong>先看这个</strong></td></tr>
+  <tr><td><code>Plugins\AutoGg\</code></td><td><code>goldiamond.autogg</code></td><td>自绘</td>
+      <td><strong>自绘页面的标准写法</strong>（原页面 XAML 整块搬过来）+ <code>SendKeys</code>/剪贴板发送 + 低级键盘钩子阻断真人按键 + 加载闸门</td></tr>
+  <tr><td><code>Plugins\RegionMagnifier\</code></td><td><code>goldiamond.regionmagnifier</code></td><td>自绘</td>
+      <td>自己开置顶小窗 + 抓屏（屏幕 DC + CAPTUREBLT）+ 全屏框选层 + 拖拽微调 + 物理像素/DIP 换算</td></tr>
+  <tr><td><code>Plugins\WindowFullscreen\</code></td><td><code>goldiamond.windowfullscreen</code></td><td>自绘</td>
+      <td>枚举游戏窗口、改别人窗口的样式/位置（可还原）、改完叫 <code>ReassertOverlayTopmost()</code></td></tr>
+  <tr><td><code>Plugins\PlayerQuery\</code></td><td><code>goldiamond.playerquery</code></td><td>自绘</td>
+      <td>联网查询（<code>HttpClient</code>）+ 复杂界面（字段列表、拖拽排序）</td></tr>
+</table>
+
+<h2 id="ai">11. 附录：给 AI 的速查规范</h2>
+<p class="muted">这一节是纯文本规范，方便直接喂给 AI 或复制粘贴。契约以 <code>Plugins\Abstractions\PluginApi.cs</code> 为准。</p>
+
+<pre><code>【契约】命名空间 MinecraftChatOverlay.Plugin，程序集 MinecraftChatOverlay.Plugin.Abstractions（net8.0-windows，不引 WPF）
+【版本】PluginApi.Version = 1；plugin.json.apiVersion 必须 == 1
+【入口】public sealed class XxxPlugin : IPlugin { string Id; string DisplayName; void Initialize(IPluginHost); void Shutdown(); }
+        要求：public、非抽象、有公开无参构造；一个 dll 只放一个实现
+【宿主能力 IPluginHost】ApiVersion / PluginDirectory / PluginsRootDirectory / RegisterPage(PluginPage) / Log(string)
+        / SendToOverlay(string) / ReassertOverlayTopmost() / ShowToast(string)
+        / event Action&lt;ChatLine&gt;? ChatLineReceived / IReadOnlyList&lt;ChatLine&gt; RecentChatLines
+        / IReadOnlyList&lt;GameWindowInfo&gt; GetGameWindows()
+【数据】ChatLine(string Raw, DateTime Time)；GameWindowInfo(IntPtr Handle, int ProcessId, string ProcessName, string Title, int Width, int Height)
+        PluginOption(string Key, string Text)
+【页面 PluginPage】required string Title; string? Description; List&lt;PluginField&gt; Fields; List&lt;PluginAction&gt; Actions;
+        Func&lt;string&gt;? StatusText;   // 为 null 时宿主不画状态行
+        Func&lt;object&gt;? ContentFactory;  // 返回 WPF FrameworkElement = 自绘；设了它就不渲染 Fields/Actions
+【字段 PluginField】required string Key; string Label; PluginFieldKind Kind; string? Hint;
+        Toggle: bool Bool | Slider: double Number, Minimum, Maximum, Step, string Suffix, string NumberFormat
+        Text/ReadOnly: string Text | Select: string? SelectedKey, Func&lt;IReadOnlyList&lt;PluginOption&gt;&gt;? OptionsProvider, double OptionsRefreshSeconds
+        Action&lt;PluginField&gt;? Changed; bool Enabled
+【按钮 PluginAction】required string Label; bool Primary; Func&lt;string?&gt;? Invoke; bool Enabled
+【存配置】PluginSettingsFile.Load&lt;T&gt;(dir, "settings.json")；PluginSettingsFile.Save(dir, value, "settings.json")
+【硬规则】
+ 1) 只引用契约程序集，绝不引用主程序 exe
+ 2) TargetFramework = net8.0-windows；要界面才开 UseWPF；要 SendKeys 才开 UseWindowsForms
+ 3) 自绘页面里样式/画刷必须 DynamicResource（StaticResource 会 XamlParseException）
+ 4) 页面"值变即保存"必须加 _loading 闸门，否则填值时会把空值写回设置
+ 5) Shutdown() 里退订事件、关窗口/定时器（宿主会调，不清理会漏）
+ 6) 所有回调都在宿主 UI 线程：不要阻塞，耗时操作 Task.Run
+ 7) 用户数据只写 host.PluginDirectory（更新插件不会动它）；不要写插件安装目录
+ 8) 不写 StatusText 就不显示状态行；ReadOnly 字段也能展示状态
+ 9) 一个插件只注册一个页面（重复调用以最后一次为准）
+10) 插件包 zip 只放 dll + plugin.json（+依赖 dll/资源）；不要放 bin/obj/pdb/契约 dll
+【安装位置】%AppData%\MinecraftChatOverlay\plugins\&lt;id&gt;\ ；数据 %AppData%\MinecraftChatOverlay\plugin-data\&lt;id&gt;\
+【文档配套】仓库自带 build-plugins.bat（编译+装机+打 zip 到 plugin-packages\）</code></pre>
+
+<hr>
+<footer>
+  Minecraft Chat Overlay 插件开发文档 · 对应契约 <strong>apiVersion 1</strong> ·
+  权威来源：<code>Plugins\Abstractions\PluginApi.cs</code> 与 <code>Services\Plugins\PluginManager.cs</code><br>
+  遇到文档和代码不一致，<strong>以代码为准</strong>；发现文档漏了坑，回来补一条。
+</footer>
+
+  </main>
+</div>
+
+<script>
+// 左侧导航滚动高亮（纯原生，无依赖；浏览器禁用 JS 时导航依然可用）
+(function () {
+  var links = [].slice.call(document.querySelectorAll("#toc a"));
+  var sections = links
+    .map(function (a) { return document.getElementById(a.getAttribute("href").slice(1)); })
+    .filter(function (el) { return !!el; });
+  var byId = {};
+  links.forEach(function (a) { byId[a.getAttribute("href").slice(1)] = a; });
+
+  function setActive(id) {
+    links.forEach(function (a) { a.classList.remove("active"); });
+    if (byId[id]) { byId[id].classList.add("active"); }
+  }
+
+  function onScroll() {
+    var current = sections.length ? sections[0].id : null;
+    for (var i = 0; i < sections.length; i++) {
+      if (sections[i].getBoundingClientRect().top <= 140) { current = sections[i].id; }
+    }
+    setActive(current);
+  }
+
+  var queued = false;
+  function request() {
+    if (queued) { return; }
+    queued = true;
+    requestAnimationFrame(function () { queued = false; onScroll(); });
+  }
+
+  document.addEventListener("scroll", request, { passive: true });
+  window.addEventListener("resize", request);
+  onScroll();
+})();
+</script>
+
+</body>
+</html>

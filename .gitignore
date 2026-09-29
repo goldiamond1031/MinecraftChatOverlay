@@ -44,3 +44,6 @@ tools/**/obj/
 
 # 界面说明页（本地看的，不进仓库）
 GUI.html
+
+# WPF 编译期临时工程文件（每次构建都会生成新的随机名）
+*_wpftmp.csproj

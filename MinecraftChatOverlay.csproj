@@ -43,6 +43,20 @@
     <None Remove="tools\**" />
 
     <!-- native\ 只排除会被 C# 编译器误认的源码后缀，保留 dist\*.dll -->
+      <!--
+        Plugins\ 下面是插件工程（契约程序集 + 各个插件，各自有独立 csproj 和 obj\）。
+        两个必须整目录排除的理由：
+          1) 主工程的 **\*.cs / **\*.xaml 通配会把插件源码也编译一遍；
+          2) 插件 obj\ 里生成的 AssemblyInfo.cs 会被 wpftmp 临时工程当成"重复特性"报 CS0579
+             （根目录的 obj\** 排除规则管不到 Plugins\ 下面的 obj\）。
+        插件只在运行时被装载，不参与主工程编译。
+      -->
+      <Compile Remove="Plugins\**" />
+      <Page Remove="Plugins\**" />
+      <ApplicationDefinition Remove="Plugins\**" />
+      <EmbeddedResource Remove="Plugins\**" />
+      <None Remove="Plugins\**" />
+
     <Compile Remove="native\**" />
     <Page Remove="native\**" />
     <ApplicationDefinition Remove="native\**" />
@@ -121,6 +135,14 @@
     <Warning Condition="'$(_GmbSource)' == ''"
              Text="没找到 native\dist\GameMotionBlurHook(.v6).dll，发布包将不含动态模糊所需的原生钩子。" />
   </Target>
+
+  <ItemGroup>
+    <!--
+      插件契约程序集：宿主与插件共用同一份实现，插件编译时也只引用它。
+      插件本身不参与主工程编译，只在运行时被装载（见 Services\Plugins\PluginManager.cs）。
+    -->
+    <ProjectReference Include="Plugins\Abstractions\MinecraftChatOverlay.Plugin.Abstractions.csproj" />
+  </ItemGroup>
 
 </Project>
 

@@ -1,0 +1,14 @@
+{
+  "id": "goldiamond.regionmagnifier",
+  "name": "区域放大",
+  "version": "1.0.0",
+  "author": "MinecraftChatOverlay",
+  "description": "框选游戏画面的一块（比如物品栏最后一格），放大后钉在屏幕某个位置。第一个从内置功能改成插件的例子。",
+  "apiVersion": 1,
+  "capabilities": [
+    "读取当前窗口列表",
+    "抓取屏幕画面",
+    "自己开一个置顶小窗",
+    "在自己目录里读写配置"
+  ]
+}

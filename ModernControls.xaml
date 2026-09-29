@@ -199,6 +199,59 @@
     </Style>
 
     <!--
+        插件卡片（「插件」板块里两列网格那颗）：
+        悬停语言和 CardStyle 完全一致（阴影加深 + 描边变亮 + 上浮 2px、快进缓出），
+        只是更紧凑 —— 圆角、内边距、外边距都比大卡片小一号，好并排摆两列。
+    -->
+    <Style x:Key="PluginCardStyle" TargetType="Border">
+        <Setter Property="Background" Value="{DynamicResource Surface2Brush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="12"/>
+        <Setter Property="Padding" Value="16,14,16,14"/>
+        <Setter Property="Margin" Value="0,0,14,14"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Effect" Value="{DynamicResource CardShadow}"/>
+        <Setter Property="RenderTransform">
+            <Setter.Value>
+                <TranslateTransform Y="0"/>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Effect" Value="{DynamicResource CardHoverShadow}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+                <Trigger.EnterActions>
+                    <BeginStoryboard>
+                        <Storyboard>
+                            <!-- 和大卡片同一套节奏：只浮 2px，200ms 快速起步后极缓收尾 -->
+                            <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                                             To="-2" Duration="0:0:0.2">
+                                <DoubleAnimation.EasingFunction>
+                                    <QuinticEase EasingMode="EaseOut"/>
+                                </DoubleAnimation.EasingFunction>
+                            </DoubleAnimation>
+                        </Storyboard>
+                    </BeginStoryboard>
+                </Trigger.EnterActions>
+                <Trigger.ExitActions>
+                    <BeginStoryboard>
+                        <Storyboard>
+                            <!-- 离开略慢于进入，避免"啪"地弹回去 -->
+                            <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                                             To="0" Duration="0:0:0.24">
+                                <DoubleAnimation.EasingFunction>
+                                    <QuinticEase EasingMode="EaseOut"/>
+                                </DoubleAnimation.EasingFunction>
+                            </DoubleAnimation>
+                        </Storyboard>
+                    </BeginStoryboard>
+                </Trigger.ExitActions>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!--
         锁定卡片：总开关关掉时，整张卡降饱和 + 压暗，明确告诉用户"现在不生效"。
         跟"局部变灰"不一样 —— 这是卡级的整体状态提示，所以做成独立样式，
         由外面把对应总开关的锁定态绑到 Border.Tag 上（true = 锁定）。

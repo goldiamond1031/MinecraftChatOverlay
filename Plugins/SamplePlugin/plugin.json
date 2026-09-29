@@ -1,0 +1,13 @@
+{
+  "id": "goldiamond.sample",
+  "name": "示例插件",
+  "version": "1.0.0",
+  "author": "MinecraftChatOverlay",
+  "description": "演示插件平台：加一个自己的导航页、收聊天消息、往悬浮窗发消息、存自己的配置。",
+  "apiVersion": 1,
+  "capabilities": [
+    "读取聊天消息",
+    "往悬浮窗发消息",
+    "在自己目录里读写配置"
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "id": "goldiamond.playerquery",
+  "name": "玩家查询",
+  "version": "1.0.0",
+  "author": "MinecraftChatOverlay",
+  "description": "输入布吉岛 API KEY，查询起床战争 / 空岛战争战绩。显示哪些字段可以自己挑，也能拖着排序。",
+  "apiVersion": 1,
+  "capabilities": [
+    "联网访问布吉岛接口（api.mcbjd.net）查询玩家战绩",
+    "在自己目录里读写配置"
+  ]
+}

@@ -1,0 +1,50 @@
+<Window x:Class="MinecraftChatOverlay.Plugins.RegionMagnifier.RegionSelectorWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="框选要放大的区域"
+        WindowStyle="None" ResizeMode="NoResize" AllowsTransparency="True"
+        Background="Transparent" Topmost="True" ShowInTaskbar="False"
+        WindowStartupLocation="Manual" Cursor="Cross" UseLayoutRounding="False">
+    <Grid x:Name="Root" ClipToBounds="True">
+        <!-- 半透明遮罩 + EvenOdd 挖洞：选中的那块保持原亮度 -->
+        <Path x:Name="Dim" Fill="#66000000">
+            <Path.Data>
+                <GeometryGroup FillRule="EvenOdd">
+                    <RectangleGeometry x:Name="DimOuter" Rect="0,0,1,1" />
+                    <RectangleGeometry x:Name="DimHole" Rect="0,0,0,0" />
+                </GeometryGroup>
+            </Path.Data>
+        </Path>
+
+        <!-- 游戏窗口客户区轮廓（提示"选区是相对客户区的"） -->
+        <Rectangle x:Name="ClientOutline" Stroke="#88FFD166" StrokeThickness="1"
+                   StrokeDashArray="5 4" Visibility="Collapsed" IsHitTestVisible="False" />
+
+        <!-- 选区边框 -->
+        <Rectangle x:Name="SelBand" Stroke="#FF6E56CF" StrokeThickness="1.5" Fill="#14FFFFFF"
+                   Visibility="Collapsed" IsHitTestVisible="False" />
+
+        <!-- 尺寸读数 -->
+        <Border x:Name="Readout" Background="#E6101014" BorderBrush="#FF6E56CF" BorderThickness="1"
+                CornerRadius="3" Padding="6,3" Visibility="Collapsed" IsHitTestVisible="False">
+            <TextBlock x:Name="ReadoutText" Foreground="#FFF0F0F5" FontSize="12" FontFamily="Consolas" />
+        </Border>
+
+        <!-- 光标附近的放大镜（对准物品栏那种小格子用） -->
+        <Border x:Name="LoupeBox" Width="152" Height="152" Background="#FF101014"
+                BorderBrush="#FF6E56CF" BorderThickness="1" Visibility="Collapsed" IsHitTestVisible="False">
+            <Image x:Name="Loupe" Stretch="Fill">
+                <RenderOptions.BitmapScalingMode>NearestNeighbor</RenderOptions.BitmapScalingMode>
+            </Image>
+        </Border>
+
+        <!-- 底部操作提示 -->
+        <Border Background="#CC101014" CornerRadius="4" Padding="10,6"
+                HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,40"
+                IsHitTestVisible="False">
+            <TextBlock Foreground="#FFE8E8F0" FontSize="13">
+                拖拽框选要放大的区域 · 方向键微调（Shift=10 像素） · 回车或双击确认 · Esc 取消
+            </TextBlock>
+        </Border>
+    </Grid>
+</Window>

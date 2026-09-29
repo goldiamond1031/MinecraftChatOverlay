@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    样例插件工程 —— 想写插件就照这个改。
+
+    它就是一个普通 C# 类库（这里开了 UseWPF，因为要写界面窗口的插件才需要；
+    纯逻辑插件可以不开），只引用契约程序集，然后：
+      1. 写一个实现 IPlugin 的公开类
+      2. 编出 dll
+      3. 和 plugin.json 一起压成 zip
+      4. 丢进软件的「插件」页导入
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>SamplePlugin</AssemblyName>
+    <RootNamespace>MinecraftChatOverlay.Plugins.Sample</RootNamespace>
+    <EnableDefaultApplicationDefinition>false</EnableDefaultApplicationDefinition>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Abstractions\MinecraftChatOverlay.Plugin.Abstractions.csproj" />
+  </ItemGroup>
+
+</Project>
