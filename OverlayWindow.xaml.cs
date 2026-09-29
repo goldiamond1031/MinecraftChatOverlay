@@ -7,6 +7,7 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
+using System.Windows.Threading;
 using MinecraftChatOverlay.Models;
 using MinecraftChatOverlay.Services;
 using MinecraftChatOverlay.ViewModels;
@@ -18,10 +19,30 @@ public partial class OverlayWindow : Window
     private const int GwlExStyle = -20;
     private const int WsExTransparent = 0x00000020;
 
+    /// <summary>
+    /// <c>WS_EX_NOACTIVATE</c>：硬保证悬浮窗永远不成为前台窗口，不会把游戏顶到后台
+    /// （Minecraft 一旦失焦就自己弹 ESC 菜单，看起来像"被切了窗口"）。
+    ///
+    /// XAML 上的 <c>ShowActivated="False"</c> **只在窗口第一次显示时可靠**，
+    /// 而本窗口是「<c>Hide()</c> 了下次再 <c>Show()</c>」的复用窗口（见 DEV-NOTES 坑 40）。
+    /// </summary>
+    private const int WsExNoActivate = 0x08000000;
+
     private const int MonitorDefaultToNearest = 0x00000002;
     private const uint SwpNoSize = 0x0001;
+    private const uint SwpNoMove = 0x0002;
     private const uint SwpNoZOrder = 0x0004;
     private const uint SwpNoActivate = 0x0010;
+    private const uint SwpFrameChanged = 0x0020;
+
+    /// <summary><c>SetWindowPos</c> 用的 <c>HWND_TOPMOST</c>。</summary>
+    private static readonly IntPtr HwndTopmost = new(-1);
+
+    /// <summary>
+    /// 显示模式变化时系统广播给所有顶层窗口的消息。
+    /// 游戏按 F11 进全屏会切分辨率，桌面坐标系随之重排 —— 这就是"全屏后悬浮窗看不到"的主因。
+    /// </summary>
+    private const int WmDisplayChange = 0x007E;
 
     private readonly AppSettings _settings;
     private readonly ObservableCollection<ChatMessageViewModel> _messages = new();
@@ -36,6 +57,24 @@ public partial class OverlayWindow : Window
 
     /// <summary>程序正在自行调整位置（吸底 / 拉回屏幕）时为 true，此时不重算停靠点。</summary>
     private bool _suppressAnchor;
+
+    /// <summary>窗口消息钩子，用来收 <c>WM_DISPLAYCHANGE</c>。</summary>
+    private HwndSource? _hwndSource;
+
+    /// <summary>
+    /// 置顶 + 越界巡检定时器（1 秒一轮）。
+    ///
+    /// 两件事一起做，成本极低：
+    ///   1. <b>重申置顶</b>：全屏游戏切分辨率 / 切前后台时会重排 z-order，
+    ///      Topmost 有可能被挤掉，而 WPF 的 <c>Topmost</c> 属性为 true 时不会重发窗口消息。
+    ///   2. <b>越界校正</b>：万一分辨率切换的那一刻没算准，下一轮把它拉回屏幕内。
+    ///
+    /// <c>KeepOnScreen</c> 只在真的越界时才动窗口，所以不会干扰用户拖动。
+    /// </summary>
+    private DispatcherTimer? _keepAliveTimer;
+
+    /// <summary>分辨率切换后的延迟重排（等系统把显示模式切稳再算坐标）。</summary>
+    private DispatcherTimer? _displayChangeTimer;
 
     public OverlayWindow(AppSettings settings)
     {
@@ -60,6 +99,23 @@ public partial class OverlayWindow : Window
 
         LocationChanged += OverlayWindow_LocationChanged;
         SizeChanged += OverlayWindow_SizeChanged;
+
+        // 本窗口走 Hide()/Show() 复用模式，重新 Show() 时不保证置顶还在 —— 一显示就重申一次。
+        //
+        // 坑 43：这里必须等第一次布局跑完再重申。窗口刚变可见时布局还没算尺寸，
+        // 此时调 SetWindowPos 会让 WPF 按"未布局"的尺寸提交窗口，把悬浮窗冻成一条
+        // 2px 宽的竖线；之后 SizeToContent 只更新高度，宽度再也回不来
+        // （现象：一条越拖越长、发消息也不变宽的细线）。
+        // 丢到 DispatcherPriority.Loaded（布局/渲染之后）执行即可。
+        IsVisibleChanged += (_, _) =>
+        {
+            if (!IsVisible)
+            {
+                return;
+            }
+
+            Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() => EnsureTopmost()));
+        };
     }
 
     private void OverlayWindow_LocationChanged(object? sender, EventArgs e)
@@ -277,14 +333,172 @@ public partial class OverlayWindow : Window
     protected override void OnSourceInitialized(EventArgs e)
     {
         base.OnSourceInitialized(e);
+
+        // 1) 永不抢焦点（硬保证，见 WsExNoActivate 的注释）。越早打越好。
+        ApplyNoActivate();
+
+        // 2) 挂窗口消息钩子，收 WM_DISPLAYCHANGE —— 游戏进全屏切分辨率时全靠它把窗口拉回来。
+        var handle = new WindowInteropHelper(this).Handle;
+        if (handle != IntPtr.Zero)
+        {
+            _hwndSource = HwndSource.FromHwnd(handle);
+            _hwndSource?.AddHook(WndProcHook);
+        }
+
         UpdateClickThrough();
         RefreshContentLimit();
         KeepOnScreen();
+        EnsureTopmost();
+        StartKeepAlive();
+    }
+
+    // ===================== 全屏 / 显示器变化 =====================
+
+    /// <summary>
+    /// 窗口消息钩子。只关心"显示模式变了"，其它消息一律放行（返回 0、不动 handled）。
+    /// </summary>
+    private IntPtr WndProcHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (msg == WmDisplayChange)
+        {
+            OnDisplayChanged();
+        }
+
+        return IntPtr.Zero;
+    }
+
+    /// <summary>
+    /// 显示器分辨率 / 色深变了 —— 游戏按 F11 进全屏就会触发这个。
+    ///
+    /// 为什么要处理它：悬浮窗记的是**绝对坐标**（存进配置里的 <c>Left</c>/<c>Top</c>）。
+    /// 桌面从 2560×1440 切到 1920×1080 后，那个坐标可能已经在屏幕外，
+    /// 而 WPF 不会因为分辨率变化就触发 <c>SizeChanged</c>/<c>LocationChanged</c>，
+    /// 于是窗口就"消失"了 —— 其实只是跑到了看不见的地方。
+    ///
+    /// 延迟一拍再算：系统切显示模式不是瞬时的，立刻读 <c>rcWork</c> 可能拿到中间态。
+    /// </summary>
+    private void OnDisplayChanged()
+    {
+        _displayChangeTimer?.Stop();
+        _displayChangeTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromMilliseconds(250)
+        };
+        _displayChangeTimer.Tick += (_, _) =>
+        {
+            _displayChangeTimer!.Stop();
+            RelayoutAfterDisplayChange();
+        };
+        _displayChangeTimer.Start();
+    }
+
+    /// <summary>分辨率变化后的重排：重算可用高度 → 拉回新工作区 → 重记停靠底边 → 重申置顶。</summary>
+    private void RelayoutAfterDisplayChange()
+    {
+        RefreshContentLimit();
+
+        // 把窗口拉进新的工作区（越界才动）。
+        KeepOnScreen();
+
+        // 旧坐标系下的停靠底边已经没有意义，按拉回后的实际位置重记，
+        // 否则下一条消息进来自动吸底会把它算到屏幕外。
+        if (ActualHeight > 0 && !double.IsNaN(Top))
+        {
+            _anchorBottom = Top + ActualHeight;
+        }
+
+        // 分辨率切换会重建 DWM 合成，layered surface 需要重新提交；
+        // SWP_FRAMECHANGED 让系统重算窗口框架并刷新合成。
+        var handle = new WindowInteropHelper(this).Handle;
+        if (handle != IntPtr.Zero)
+        {
+            SetWindowPos(handle, HwndTopmost, 0, 0, 0, 0,
+                         SwpNoMove | SwpNoSize | SwpNoActivate | SwpFrameChanged);
+        }
+    }
+
+    /// <summary>打上 <c>WS_EX_NOACTIVATE</c>：悬浮窗永不成为前台窗口。</summary>
+    private void ApplyNoActivate()
+    {
+        var handle = new WindowInteropHelper(this).Handle;
+        if (handle == IntPtr.Zero)
+        {
+            return;
+        }
+
+        var style = GetWindowLong(handle, GwlExStyle);
+        if ((style & WsExNoActivate) == 0)
+        {
+            SetWindowLong(handle, GwlExStyle, style | WsExNoActivate);
+        }
+    }
+
+    /// <summary>
+    /// 强制把窗口放回最顶层。
+    ///
+    /// <b>不用</b> WPF 的 <c>Topmost = true</c>：属性本来就是 true 时 WPF 不会重发窗口消息，
+    /// 而我们要的恰恰是"再抬一次"。直接走 <c>SetWindowPos(HWND_TOPMOST)</c> 最可靠。
+    /// 带 <c>SWP_NOACTIVATE</c>，绝不抢焦点。
+    /// </summary>
+    private void EnsureTopmost()
+    {
+        var handle = new WindowInteropHelper(this).Handle;
+        if (handle == IntPtr.Zero || !IsVisible)
+        {
+            return;
+        }
+
+        SetWindowPos(handle, HwndTopmost, 0, 0, 0, 0,
+                     SwpNoMove | SwpNoSize | SwpNoActivate);
+    }
+
+    /// <summary>启动"置顶 + 越界"巡检定时器，只启一次。</summary>
+    private void StartKeepAlive()
+    {
+        if (_keepAliveTimer != null)
+        {
+            return;
+        }
+
+        _keepAliveTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromSeconds(1)
+        };
+        _keepAliveTimer.Tick += (_, _) =>
+        {
+            EnsureTopmost();
+
+            // 兜底：万一分辨率切换那一刻 250ms 的延迟重排没算准，下一轮补上。
+            // KeepOnScreen 只在真的越界时才动窗口，不干扰用户拖动。
+            KeepOnScreen();
+        };
+        _keepAliveTimer.Start();
+    }
+
+    /// <summary>
+    /// 外部主动把悬浮窗再抬一次置顶。
+    ///
+    /// 「窗口全屏」把游戏窗口铺满整块屏幕后，悬浮窗可能被挤到下面；
+    /// 这种情况下由那边调一次，比让用户手动重开悬浮窗省事。
+    /// </summary>
+    public void ReassertTopmost()
+    {
+        try
+        {
+            EnsureTopmost();
+        }
+        catch
+        {
+            // 抬不起来也不该让调用方崩
+        }
     }
 
     public void ApplySettings()
     {
-        Width = Math.Clamp(_settings.OverlayWidth, 120, 2000);
+        var overlayWidth = Math.Clamp(_settings.OverlayWidth, 120, 2000);
+        // MinWidth 兜底（见坑 43）：无论发生什么，窗口都不允许被压得比配置更窄。
+        MinWidth = overlayWidth;
+        Width = overlayWidth;
         Opacity = Math.Clamp(_settings.OverlayOpacity, 0.1, 1.0);
         RootBorder.Background = BuildBackgroundBrush();
         ChatScroll.MaxHeight = ResolveContentLimit();
@@ -638,6 +852,18 @@ public partial class OverlayWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
+        _keepAliveTimer?.Stop();
+        _keepAliveTimer = null;
+
+        _displayChangeTimer?.Stop();
+        _displayChangeTimer = null;
+
+        if (_hwndSource != null)
+        {
+            _hwndSource.RemoveHook(WndProcHook);
+            _hwndSource = null;
+        }
+
         SavePosition();
         base.OnClosed(e);
     }

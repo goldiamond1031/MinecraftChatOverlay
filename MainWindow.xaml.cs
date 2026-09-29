@@ -154,6 +154,7 @@ private void MainWindow_Loaded(object sender, RoutedEventArgs e)
         InitializeSoundNotifyUi();
         InitializeKillFeedUi();
         InitializeKillSoundUi();
+        InitializeWindowFullscreenUi();
 
         AppVersionText.Text = Copy.AppVersionPrefix + Copy.AppVersion;
 
@@ -4432,6 +4433,7 @@ private void SaveThemePreference(bool darkMode)
         else if (NavPlayerQuery.IsChecked == true) selected = NavPlayerQuery;
         else if (NavBili.IsChecked == true) selected = NavBili;
         else if (NavMotionBlur.IsChecked == true) selected = NavMotionBlur;
+        else if (NavWindowFullscreen.IsChecked == true) selected = NavWindowFullscreen;
         else if (NavKillFeed.IsChecked == true) selected = NavKillFeed;
         else if (NavDebug.IsChecked == true) selected = NavDebug;
 
@@ -4466,6 +4468,7 @@ private void SaveThemePreference(bool darkMode)
         else if (NavPlayerQuery.IsChecked == true) activePanel = PlayerQueryPanel;
         else if (NavBili.IsChecked == true) activePanel = BiliPanel;
         else if (NavMotionBlur.IsChecked == true) activePanel = MotionBlurPanel;
+        else if (NavWindowFullscreen.IsChecked == true) activePanel = WindowFullscreenPanel;
         else if (NavKillFeed.IsChecked == true) activePanel = KillFeedPanel;
         else if (NavDebug.IsChecked == true) activePanel = DebugPanel;
 
@@ -4506,6 +4509,9 @@ private void SaveThemePreference(bool darkMode)
     private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
     {
         SaveSettingsFromUi(false);
+
+        // 游戏窗口还是无边框全屏的话，按设置还回去（见 MainWindow.WindowFullscreen.xaml.cs）
+        RestoreGameWindowOnExit();
         StopListening();
         _overlay?.Close();
 

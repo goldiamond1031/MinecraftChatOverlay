@@ -485,6 +485,21 @@ cd C:/MinecraftChatOverlayDSUI3/native
     代价：得在退出路径显式 `Close()`，否则常驻窗口让进程退不干净。
     **验证方式**：连续多次触发，断言 HWND 不变 + `IsVisible` 始终 true。
 
+  43. **刚「变可见」就调 `SetWindowPos`，会把窗口尺寸冻死在"还没布局"的 2px 宽** ——
+      **现象**：悬浮窗启动后是一条**只长高、不长宽**的 2px 细线，发消息也不会变宽；
+      只要触发一次重新布局（例如开关「启用后端日志」→ `SaveSettingsFromUi()` → `ApplySettings()`）就恢复正常。
+      **原因**：`IsVisibleChanged` 里直接调 `EnsureTopmost()`（即 `SetWindowPos(HWND_TOPMOST, …, SWP_NOSIZE)`）。
+      那一刻 WPF 还没跑第一次布局、尺寸还没算，窗口被按"空内容"提交成 2px；
+      之后 `SizeToContent="Height"` 只更新高度，宽度再也回不来。
+      （`OnSourceInitialized` 里那次同样的调用无害：那时 `IsVisible=false`，`EnsureTopmost` 直接 return。）
+      **修法**：把那句丢到 `Dispatcher.BeginInvoke(DispatcherPriority.Loaded, …)`（布局/渲染之后）再执行；
+      并在 `ApplySettings()` 里给 `Width` 配一个同值的 `MinWidth` 做硬兜底。
+      **验证**：重启后**空**悬浮窗 = 540×27（坏时 2×27）；发消息后 540×67 且有文字；
+      ex-style 仍有 `WS_EX_NOACTIVATE` + `WS_EX_TOPMOST`，窗口中心仍命中自己（压得住铺满屏的游戏）。
+      **定位过程**：两版 `OverlayWindow.xaml.cs` 只差 215 行新增、0 行删改；整体换回旧版 → 恢复正常，
+      再单独停用这一条订阅 → 也恢复正常。
+
+
 ---
 
 ## 5. 协作习惯（gold_）

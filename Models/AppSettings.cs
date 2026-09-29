@@ -216,6 +216,11 @@ public sealed class AppSettings
     /// <summary>击杀反馈的设置（效果 + 匹配规则）。</summary>
     public KillFeedbackSettings KillFeedback { get; set; } = new();
 
+    // ---------- 游戏窗口无边框全屏 ----------
+
+    /// <summary>「窗口全屏」页的设置（把游戏窗口变无边框全屏，让悬浮窗能盖上去）。</summary>
+    public WindowFullscreenSettings WindowFullscreen { get; set; } = new();
+
 
 
     public AppSettings Clone() => (AppSettings)MemberwiseClone();
