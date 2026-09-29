@@ -33,43 +33,64 @@ public static class PluginMarketClient
         return http;
     }
 
-    /// <summary>先试主源，不行再试备用源；都失败就把每个源的失败原因拼起来返回。</summary>
-    public static async Task<MarketFetchResult> FetchIndexAsync(string primaryUrl, string fallbackUrl, CancellationToken token)
-    {
-        var errors = new List<string>();
-        var urls = new[] { primaryUrl, fallbackUrl }
-            .Where(u => !string.IsNullOrWhiteSpace(u))
-            .Select(u => u.Trim()!)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        foreach (var url in urls)
-        {
-            try
-            {
-                // 加时间戳绕开 CDN 缓存：jsDelivr 对同一个分支 URL 会缓存一阵子，
-                // 刚推完新清单时如果直接请求旧地址，刷新多少次都是旧的。
-                // 注意 SourceUrl 仍记干净地址，免得相对路径解析带上这个参数。
-                var requestUrl = url + (url.Contains('?') ? "&" : "?") + "t=" + DateTime.UtcNow.Ticks;
-                var json = await Http.GetStringAsync(requestUrl, token).ConfigureAwait(false);
-                var index = MarketIndex.TryParse(json, url);
-                if (index is null)
-                {
-                    errors.Add($"{Shorten(url)}：清单格式不对");
-                    continue;
-                }
-
-                return new MarketFetchResult(index, url, json, null);
-            }
-            catch (Exception ex)
-            {
-                errors.Add($"{Shorten(url)}：{Describe(ex)}");
-            }
-        }
-
-        return new MarketFetchResult(null, "", "", errors.Count > 0 ? string.Join("；", errors) : "没有填市场地址");
-    }
-
+    /// <summary>
+    /// 拉清单。
+    ///
+    /// 主源（jsDelivr）和备用源（GitHub raw）**都查**，然后取 <c>updatedAt</c> 更新的那一份 —— 原因是
+    /// jsDelivr 对分支 URL 的缓存能压很久：刚推完新清单时 primary 可能还是旧的，而 raw 通常几分钟内就是新的。
+    /// 谁新用谁，并且把胜出者的地址记下来当下载基准，保证清单和插件包来自同一个源。
+    /// </summary>
+    public static async Task<MarketFetchResult> FetchIndexAsync(string primaryUrl, string fallbackUrl, CancellationToken token)
+    {
+        var urls = new[] { primaryUrl, fallbackUrl }
+            .Where(u => !string.IsNullOrWhiteSpace(u))
+            .Select(u => u.Trim()!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (urls.Count == 0)
+        {
+            return new MarketFetchResult(null, "", "", "没有填市场地址");
+        }
+
+        var attempts = await Task.WhenAll(urls.Select(u => FetchOneAsync(u, token))).ConfigureAwait(false);
+
+        var ok = attempts
+            .Where(a => a.Index is not null)
+            .OrderByDescending(a => a.Index!.UpdatedAt ?? DateTime.MinValue)
+            .ToList();
+
+        if (ok.Count == 0)
+        {
+            var reasons = attempts.Select(a => $"{Shorten(a.Url)}：{a.Error}");
+            return new MarketFetchResult(null, "", "", string.Join("；", reasons));
+        }
+
+        var best = ok[0];
+        return new MarketFetchResult(best.Index, best.Url, best.Raw, null);
+    }
+
+    /// <summary>拉单个源。10 秒上限，失败返回原因（不抛）。</summary>
+    private static async Task<(MarketIndex? Index, string Raw, string Url, string? Error)> FetchOneAsync(string url, CancellationToken token)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
+        timeout.CancelAfter(TimeSpan.FromSeconds(10));
+
+        try
+        {
+            // 时间戳绕开 CDN 缓存；SourceUrl 仍记干净地址，免得相对路径解析带上参数
+            var requestUrl = url + (url.Contains('?') ? "&" : "?") + "t=" + DateTime.UtcNow.Ticks;
+            var json = await Http.GetStringAsync(requestUrl, timeout.Token).ConfigureAwait(false);
+            var index = MarketIndex.TryParse(json, url);
+            return index is null
+                ? (null, "", url, "清单格式不对")
+                : (index, json, url, null);
+        }
+        catch (Exception ex)
+        {
+            return (null, "", url, Describe(ex));
+        }
+    }
     /// <summary>下载插件包到 destPath。清单里有大小/SHA256 就顺手校验，对不上删掉并返回失败。</summary>
     public static async Task<(bool Ok, string Error)> DownloadAsync(
         string url, string destPath, long? expectedSize, string? expectedSha256, CancellationToken token)
