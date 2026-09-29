@@ -1,6 +1,6 @@
 {
     "schemaVersion":  1,
-    "updatedAt":  "2026-09-29T23:59:02+08:00",
+    "updatedAt":  "2026-09-30T00:14:37+08:00",
     "plugins":  [
                     {
                         "id":  "goldiamond.autogg",
@@ -17,6 +17,82 @@
                         "downloadUrl":  "packages/AutoGG-1.1.0.zip",
                         "sha256":  "34BC9FEC9EA60FF86D033C0995734B5D07D73E6D09F471FAC6E70E51C739BBE1",
                         "size":  10730,
+                        "tags":  [
+
+                                 ]
+                    },
+                    {
+                        "id":  "goldiamond.playerquery",
+                        "name":  "玩家查询",
+                        "version":  "1.0.0",
+                        "author":  "MinecraftChatOverlay",
+                        "description":  "输入布吉岛 API KEY，查询起床战争 / 空岛战争战绩。显示哪些字段可以自己挑，也能拖着排序。",
+                        "apiVersion":  1,
+                        "capabilities":  [
+                                             "联网访问布吉岛接口（api.mcbjd.net）查询玩家战绩",
+                                             "在自己目录里读写配置"
+                                         ],
+                        "downloadUrl":  "packages/goldiamond.playerquery-1.0.0.zip",
+                        "sha256":  "66B1C3BADF8D154579A35E49ECF844EA3C7B0A8A6711A6C3B81D7D4031C944BD",
+                        "size":  29272,
+                        "tags":  [
+
+                                 ]
+                    },
+                    {
+                        "id":  "goldiamond.regionmagnifier",
+                        "name":  "区域放大",
+                        "version":  "1.0.0",
+                        "author":  "MinecraftChatOverlay",
+                        "description":  "框选游戏画面的一块（比如物品栏最后一格），放大后钉在屏幕某个位置。第一个从内置功能改成插件的例子。",
+                        "apiVersion":  1,
+                        "capabilities":  [
+                                             "读取当前窗口列表",
+                                             "抓取屏幕画面",
+                                             "自己开一个置顶小窗",
+                                             "在自己目录里读写配置"
+                                         ],
+                        "downloadUrl":  "packages/goldiamond.regionmagnifier.zip",
+                        "sha256":  "3676B6EA375A9E12361B4F7778D34BCE30133BCC4A2F20F8670D7BD77441F5BC",
+                        "size":  20523,
+                        "tags":  [
+
+                                 ]
+                    },
+                    {
+                        "id":  "goldiamond.sample",
+                        "name":  "示例插件",
+                        "version":  "1.0.0",
+                        "author":  "MinecraftChatOverlay",
+                        "description":  "演示插件平台：加一个自己的导航页、收聊天消息、往悬浮窗发消息、存自己的配置。",
+                        "apiVersion":  1,
+                        "capabilities":  [
+                                             "读取聊天消息",
+                                             "往悬浮窗发消息",
+                                             "在自己目录里读写配置"
+                                         ],
+                        "downloadUrl":  "packages/goldiamond.sample.zip",
+                        "sha256":  "5C1ED1FCFA73C60C1B7882071B870D0FE51840310C53DA003DB7D23786943B15",
+                        "size":  4942,
+                        "tags":  [
+
+                                 ]
+                    },
+                    {
+                        "id":  "goldiamond.windowfullscreen",
+                        "name":  "窗口全屏",
+                        "version":  "1.0.0",
+                        "author":  "MinecraftChatOverlay",
+                        "description":  "把游戏窗口改成无边框全屏，这样聊天悬浮窗才能盖在游戏画面上。只改窗口样式和位置，不注入进程、不碰游戏画面。",
+                        "apiVersion":  1,
+                        "capabilities":  [
+                                             "枚举系统里带窗口的进程",
+                                             "修改目标窗口的边框、位置和置顶状态（可还原）",
+                                             "在自己目录里读写配置"
+                                         ],
+                        "downloadUrl":  "packages/goldiamond.windowfullscreen.zip",
+                        "sha256":  "2A1AB21EEB890F60EEFFE6DEE6ABE85050A31D44EE4B3ED56AFCEFFD3E7848C3",
+                        "size":  14273,
                         "tags":  [
 
                                  ]
