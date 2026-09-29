@@ -1,5 +1,36 @@
 # 更新内容清单
 
+## v1.2.1
+
+### 插件市场（新）
+
+- 插件页右上角新增【插件市场】：清单是仓库里的 `market/index.json`，插件包就是仓库里的 zip —— **没有服务器**。
+- 客户端两个源都查（jsDelivr 镜像 + GitHub raw），取 `updatedAt` 更新的那一份
+  （jsDelivr 对分支 URL 缓存很久，只认它就会一直看到旧清单）。
+- 缓存到 `%AppData%\MinecraftChatOverlay\market\`，断网时显示上次的列表；启动时缓存超过 6 小时会后台预热。
+- 清单里的下载地址写相对路径，换镜像 / 换分支 / 换仓库只改软件里那一个地址。
+- 下载后校验 SHA256 和大小，对不上直接丢弃；安装复用现有 zip 导入流程（确认框、校验、文件占用排队全都一致）。
+- 卡片状态由版本号比较得出：未安装 / 已安装 vX（已是最新）/ 可更新到 vY / 依赖的契约版本不符。
+
+### 插件发布工具（新）
+
+- `tools\publish-plugin.bat <插件名>`：编译 → 打包 `market\packages\<id>-<版本>.zip` → 删掉旧版本包 → 重建清单，一条命令。
+- `tools\pack-market-package.ps1`：底层打包（认主 dll：`assembly` 字段 → `<插件名>Plugin.dll` → 唯一的非契约 dll）。
+- `tools\rebuild-market-index.bat`：扫 zip 重建 `market\index.json`（兼容反斜杠的 zip、同一个 id 只留版本最高的）。
+- `push.bat`：推送被拒时自动 `fetch` + `pull --rebase` 重试（最多 3 轮），真冲突才停下并打印手动步骤。
+
+### 修复
+
+- **robocopy 的 `/XD packages` 裸名会匹配任意层级的同名目录**，把 `market\packages` 也排除了 ——
+  市场的插件包根本推不上去且不报错。已改成全路径 `/XD "%DEV%\packages"`。
+- 插件页「想自己写一个插件？」卡片换成按钮，点击打开在线开发文档 <https://goldiamond1031.github.io/MCO>。
+
+### 版本
+
+- `Copy.cs` 的 `AppVersion`：`1.2.0` → `1.2.1`（`publish.bat` 据此产出 `release_v1.2.1.zip`）。
+
+---
+
 ## v1.1.0（相对 v1.0.5）
 
 这是从 MinecraftChatOverlayDSUI3 同步过来的一个大版本：新增「游戏动态模糊」和「击杀反馈」两个完整模块，
@@ -128,3 +159,4 @@
 - 击杀横幅窗口改为**常驻悬浮窗**：程序启动时就创建并显示，只在识别到击杀时露图标，
   其余时间完全透明。这样避免了反复 `Hide()`/`Show()` 全屏分层窗口本身造成的干扰；
   同时通过 `WS_EX_NOACTIVATE + WS_EX_TRANSPARENT` 保证窗口既不抢游戏焦点、也不吃鼠标
+

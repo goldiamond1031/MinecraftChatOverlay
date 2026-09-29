@@ -1,6 +1,6 @@
 {
     "schemaVersion":  1,
-    "updatedAt":  "2026-09-30T00:14:37+08:00",
+    "updatedAt":  "2026-09-30T00:26:23+08:00",
     "plugins":  [
                     {
                         "id":  "goldiamond.autogg",
@@ -14,9 +14,9 @@
                                              "模拟键盘输入与剪贴板（往游戏里发消息）",
                                              "在自己目录里读写配置"
                                          ],
-                        "downloadUrl":  "packages/AutoGG-1.1.0.zip",
-                        "sha256":  "34BC9FEC9EA60FF86D033C0995734B5D07D73E6D09F471FAC6E70E51C739BBE1",
-                        "size":  10730,
+                        "downloadUrl":  "packages/goldiamond.autogg-1.1.0.zip",
+                        "sha256":  "5EF45BD36664F36F5EE785642524EE2358B1C703BE957AA0BE814B9AF10F5E9C",
+                        "size":  10522,
                         "tags":  [
 
                                  ]
@@ -33,7 +33,7 @@
                                              "在自己目录里读写配置"
                                          ],
                         "downloadUrl":  "packages/goldiamond.playerquery-1.0.0.zip",
-                        "sha256":  "66B1C3BADF8D154579A35E49ECF844EA3C7B0A8A6711A6C3B81D7D4031C944BD",
+                        "sha256":  "8C548ABB34518D317ECA46CA88228323AB26A204F0BC7493A32ECEE561AD473E",
                         "size":  29272,
                         "tags":  [
 
@@ -52,9 +52,9 @@
                                              "自己开一个置顶小窗",
                                              "在自己目录里读写配置"
                                          ],
-                        "downloadUrl":  "packages/goldiamond.regionmagnifier.zip",
-                        "sha256":  "3676B6EA375A9E12361B4F7778D34BCE30133BCC4A2F20F8670D7BD77441F5BC",
-                        "size":  20523,
+                        "downloadUrl":  "packages/goldiamond.regionmagnifier-1.0.0.zip",
+                        "sha256":  "17C839E6142D6D2E725D912A0733E33CDA5000AD10B1D9FC1A3130B3926236E3",
+                        "size":  20390,
                         "tags":  [
 
                                  ]
@@ -71,9 +71,9 @@
                                              "往悬浮窗发消息",
                                              "在自己目录里读写配置"
                                          ],
-                        "downloadUrl":  "packages/goldiamond.sample.zip",
-                        "sha256":  "5C1ED1FCFA73C60C1B7882071B870D0FE51840310C53DA003DB7D23786943B15",
-                        "size":  4942,
+                        "downloadUrl":  "packages/goldiamond.sample-1.0.0.zip",
+                        "sha256":  "FC821F3D4F2744161D7A87F485DA5B4403BC78AA0A15E0ADCFA05B8C20E406DF",
+                        "size":  4729,
                         "tags":  [
 
                                  ]
@@ -90,9 +90,9 @@
                                              "修改目标窗口的边框、位置和置顶状态（可还原）",
                                              "在自己目录里读写配置"
                                          ],
-                        "downloadUrl":  "packages/goldiamond.windowfullscreen.zip",
-                        "sha256":  "2A1AB21EEB890F60EEFFE6DEE6ABE85050A31D44EE4B3ED56AFCEFFD3E7848C3",
-                        "size":  14273,
+                        "downloadUrl":  "packages/goldiamond.windowfullscreen-1.0.0.zip",
+                        "sha256":  "7C46B64EF56F78371CAB359C2AD53BDCA3F39821CA2E161470FD26D3BF9380D8",
+                        "size":  14040,
                         "tags":  [
 
                                  ]
