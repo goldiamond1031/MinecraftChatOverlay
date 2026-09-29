@@ -1,7 +1,7 @@
 {
   "id": "goldiamond.autogg",
   "name": "自动 GG",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "MinecraftChatOverlay",
   "description": "检测到胜利消息后，自动打开游戏聊天栏并发送 gg（模拟按键，需要游戏窗口在前台）。",
   "apiVersion": 1,

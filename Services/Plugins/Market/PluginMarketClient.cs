@@ -47,7 +47,11 @@ public static class PluginMarketClient
         {
             try
             {
-                var json = await Http.GetStringAsync(url, token).ConfigureAwait(false);
+                // 加时间戳绕开 CDN 缓存：jsDelivr 对同一个分支 URL 会缓存一阵子，
+                // 刚推完新清单时如果直接请求旧地址，刷新多少次都是旧的。
+                // 注意 SourceUrl 仍记干净地址，免得相对路径解析带上这个参数。
+                var requestUrl = url + (url.Contains('?') ? "&" : "?") + "t=" + DateTime.UtcNow.Ticks;
+                var json = await Http.GetStringAsync(requestUrl, token).ConfigureAwait(false);
                 var index = MarketIndex.TryParse(json, url);
                 if (index is null)
                 {
