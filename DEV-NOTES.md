@@ -1327,3 +1327,34 @@ Release / Debug 均 0 警告 0 错误。
   （`powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0xxx.ps1" %*`，和 `build-plugins.bat` 一样）。
 - `dotnet run --project X -c Release --nologo` 里的 `--nologo` 会被当成**传给程序的参数**；
   要给程序传参得用 `--` 分隔。（探针里踩到过：程序把 "--nologo" 当 URL，报 "invalid request URI"。）
+
+## 【新增】发布插件：两条命令搞定
+
+### 1) tools\publish-plugin.bat <插件目录名>
+
+一条命令把某个插件发布到市场（例：publish-plugin.bat AutoGg）：
+
+1. 编译 Plugins\<插件名>
+2. 打包 market\packages\<插件id>-<版本>.zip（条目是 <id>/<dll> + <id>/plugin.json，正斜杠标准 zip）
+3. 删掉这个插件的旧版本包（一个 id 只留最新那个）
+4. 重建 market\index.json
+
+故意不把插件装进本机 —— 否则市场卡片会直接显示「已装最新」，就没法验证"更新"这条路了。
+底层干活的是 tools\pack-market-package.ps1（认主 dll 的顺序：plugin.json 的 assembly → <插件名>Plugin.dll → 输出目录里唯一的非契约 dll）。
+
+### 2) push.bat
+
+4/4 段加了自动重试：git push 被拒（远程有本地没有的提交，最常见的就是"在网页上直接改过仓库"）
+→ 自动 git fetch + git pull --rebase origin main → 重推，最多 3 轮；
+rebase 真出冲突就停下，并打印手动处理步骤。推完还会打印 origin/main 的最新提交和本地/远程状态。
+
+## 坑 71：robocopy 的 /XD 裸名会匹配任意层级的同名目录
+
+push.bat 里原来写着 /XD ... packages ...，本意是排除打包产物，结果把 market\packages 也一起排除了 ——
+以后 publish-plugin.bat 产出的市场包根本推不上去，而且不报错、静默不同步。
+
+实测：源目录里同时放 packages\b.txt 和 market\packages\a.zip，/XD packages 之后两个都没同步。
+修法：写成全路径 /XD "%DEV%\packages"。
+
+教训：给 robocopy 加排除项之后，一定要干跑验证（/L，而且不要加 /NFL ——
+加了它就只统计不列文件名，看起来像"没匹配到"，其实只是没打印）。
