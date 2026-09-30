@@ -106,6 +106,9 @@ private void MainWindow_Loaded(object sender, RoutedEventArgs e)
         // 每次打开软件顺手查一次更新（失败不弹窗）
         _ = AutoCheckUpdateAsync();
 
+        // 顺手看一眼仓库里有没有新公告（拉不到就是没公告，不打扰）
+        _ = CheckAnnouncementAsync();
+
         // 启动时检查 B站登录态：Cookie 会过期，早提醒比连不上才发现好
         _ = CheckBiliLoginStateAsync();
     

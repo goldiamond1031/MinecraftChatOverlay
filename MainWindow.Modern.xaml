@@ -2712,7 +2712,7 @@
                                                 <TextBlock Style="{StaticResource BodyTextStyle}" Margin="0,12,0,0"
                                                            Text="如果觉得这个软件帮到了你，可以给gd赏杯奶茶，哪怕gd其实肠胃不好不能喝奶茶("/>
                                                 <TextBlock Style="{StaticResource BodyTextStyle}" Margin="0,12,0,0"
-                                                           Text="这里的打赏一样算进直播时组队优先的打赏榜中，不要忘了备注自己的游戏ID噢"/>
+                                                           Text="这里的打赏一样算进直播时组队优先的打赏榜中，不要忘了备注自己的游戏ID噢，也可以备注一句话，会显示在鸣谢名单上噢"/>
                                             </StackPanel>
 
                                             <Image Grid.Column="1"
@@ -2743,7 +2743,7 @@
                                 <Border Style="{StaticResource CardStyle}" Margin="0,18,0,0">
                                     <StackPanel>
                                         <TextBlock Text="打赏鸣谢" Style="{StaticResource CardTitleStyle}"/>
-                                        <TextBlock Text="感谢这些朋友的支持（按金额从大到小自动排序；名单来自 GitHub 仓库，点右上角【刷新名单】更新）" Style="{StaticResource CardDescStyle}" TextWrapping="Wrap" Margin="0,3,0,8"/>
+                                        <TextBlock Text="感谢这些朋友的支持（名单来自 GitHub 仓库，点右上角【刷新名单】更新）" Style="{StaticResource CardDescStyle}" TextWrapping="Wrap" Margin="0,3,0,8"/>
                                         <TextBlock x:Name="AboutRewardsStatusText" Style="{StaticResource HintStyle}" TextWrapping="Wrap"/>
                                         <StackPanel x:Name="AboutRewardsList" Margin="0,8,0,0"/>
                                         <TextBlock x:Name="AboutRewardsEmptyText" Style="{StaticResource CardDescStyle}" TextWrapping="Wrap" Visibility="Collapsed"/>

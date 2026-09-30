@@ -198,6 +198,13 @@ public sealed class AppSettings
     public PluginMarketSettings PluginMarket { get; set; } = new();
 
     public List<string> DisabledPlugins { get; set; } = new();
+
+    /// <summary>
+    /// 已经弹过窗的公告 id。启动时拉到公告后，只有 id 和这里不一样才弹
+    /// —— 否则同一条公告每次开机都弹，很快就成了骚扰。
+    /// </summary>
+    public string LastSeenAnnouncementId { get; set; } = "";
+
     public AppSettings Clone() => (AppSettings)MemberwiseClone();
 
     private static string GetDefaultLogPath()

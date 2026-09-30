@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
+using MinecraftChatOverlay.Services;
 using MinecraftChatOverlay.Services.About;
 
 namespace MinecraftChatOverlay;
@@ -22,6 +23,41 @@ public partial class MainWindow
 
     /// <summary>懒加载只做一次（拉到过数据就不再自动拉）。</summary>
     private bool _aboutAutoLoadStarted;
+
+    // ------------------------------------------------------------ 启动时的公告检查
+
+    /// <summary>
+    /// 启动时静默拉一次公告：拉到了、而且这条还没弹过，就弹窗。
+    /// 全程不打扰用户 —— 网络失败、没公告、格式不对，都当无事发生（只写调试日志）。
+    /// </summary>
+    private async Task CheckAnnouncementAsync()
+    {
+        try
+        {
+            var announcement = await AnnouncementClient.FetchAsync(CancellationToken.None).ConfigureAwait(true);
+            if (announcement is null)
+            {
+                return;
+            }
+
+            // 同一条公告只弹一次，否则每次开机都弹，很快就成骚扰
+            if (string.Equals(announcement.Id.Trim(), (_settings.LastSeenAnnouncementId ?? "").Trim(), StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            var dialog = new AnnouncementWindow(announcement) { Owner = this };
+            dialog.ShowDialog();
+
+            _settings.LastSeenAnnouncementId = announcement.Id.Trim();
+            SettingsService.Save(_settings);
+            AppendDebugLog("[公告] 已显示并标记：" + announcement.Id);
+        }
+        catch (Exception ex)
+        {
+            AppendDebugLog("[公告] 检查失败：" + ex.Message);
+        }
+    }
 
     // ------------------------------------------------------------ 加载
 
