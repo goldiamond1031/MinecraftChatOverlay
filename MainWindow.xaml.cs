@@ -2534,6 +2534,7 @@ private void SaveThemePreference(bool darkMode)
         else if (NavKillFeed.IsChecked == true) selected = NavKillFeed;
         else if (NavPlugins.IsChecked == true) selected = NavPlugins;
         else if (NavDebug.IsChecked == true) selected = NavDebug;
+        else if (NavAbout.IsChecked == true) selected = NavAbout;
 
         if (selected == null || NavIndicator == null || IndicatorTranslate == null)
         {
@@ -2567,6 +2568,7 @@ private void SaveThemePreference(bool darkMode)
         else if (NavKillFeed.IsChecked == true) activePanel = KillFeedPanel;
         else if (NavPlugins.IsChecked == true) activePanel = PluginsPanel;
         else if (NavDebug.IsChecked == true) activePanel = DebugPanel;
+        else if (NavAbout.IsChecked == true) activePanel = AboutPanel;
 
         if (activePanel == null)
         {

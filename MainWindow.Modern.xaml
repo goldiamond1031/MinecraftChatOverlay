@@ -170,6 +170,11 @@
                                              Style="{StaticResource NavRadioButtonStyle}"
                                              Content="调试后台"
                                              Checked="NavRadioButton_Checked"/>
+                                <RadioButton x:Name="NavAbout"
+                                             GroupName="MainNav"
+                                             Style="{StaticResource NavRadioButtonStyle}"
+                                             Content="关于"
+                                             Checked="NavRadioButton_Checked"/>
                             </StackPanel>
                         </Grid>
 
@@ -2668,6 +2673,80 @@
                                         </StackPanel>
                                     </Border>
                                 </StackPanel>                            </StackPanel>
+                        </ScrollViewer>
+
+                        <!-- ========== 面板 8：关于 ========== -->
+                        <ScrollViewer x:Name="AboutPanel"
+                                      VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled"
+                                      Visibility="{Binding IsChecked, ElementName=NavAbout, Converter={StaticResource BoolToVis}}">
+                            <StackPanel Margin="22,22,24,30">
+                                <Grid Margin="0,0,0,18">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="关于" Style="{StaticResource PanelTitleStyle}"/>
+                                        <TextBlock Text="开源声明、打赏，以及要感谢的人" Style="{StaticResource PanelDescStyle}"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
+                                        <Button x:Name="AboutRefreshButton" Content="刷新名单" ToolTip="重新从 GitHub 拉一遍鸣谢名单"
+                                                Style="{StaticResource SmallButtonStyle}" Click="AboutRefreshButton_Click"/>
+                                    </StackPanel>
+                                </Grid>
+
+                                <!-- 开源声明 + 打赏 -->
+                                <Border Style="{StaticResource CardStyle}">
+                                    <StackPanel>
+                                        <TextBlock Text="本软件与打赏" Style="{StaticResource CardTitleStyle}"/>
+                                        <TextBlock Style="{StaticResource CardDescStyle}" TextWrapping="Wrap" Margin="0,4,0,0"
+                                                   Text="本软件完全开源免费，源码在 GitHub 上。如果你是通过付费获得本软件的，说明你被骗了——请立即退款，并向原作者举报卖家。"/>
+                                        <TextBlock Style="{StaticResource CardDescStyle}" TextWrapping="Wrap" Margin="0,8,0,0"
+                                                   Text="愿意支持的话可以扫下面的二维码打赏，金额随意。在此处的打赏一样算进直播时组队优先的打赏榜中。"/>
+                                        <Border Background="{DynamicResource Surface2Brush}"
+                                                BorderBrush="{DynamicResource BorderBrush}"
+                                                BorderThickness="1"
+                                                CornerRadius="12"
+                                                Padding="16"
+                                                HorizontalAlignment="Center"
+                                                Margin="0,14,0,0">
+                                            <StackPanel>
+                                                <Image Source="/res/reward_qrcode.png"
+                                                       Width="190" Height="190"
+                                                       Stretch="Uniform"
+                                                       RenderOptions.BitmapScalingMode="HighQuality"/>
+                                                <TextBlock Text="微信扫码打赏"
+                                                           Style="{StaticResource HintStyle}"
+                                                           HorizontalAlignment="Center"
+                                                           Margin="0,8,0,0"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- 打赏鸣谢 -->
+                                <Border Style="{StaticResource CardStyle}" Margin="0,18,0,0">
+                                    <StackPanel>
+                                        <TextBlock Text="打赏鸣谢" Style="{StaticResource CardTitleStyle}"/>
+                                        <TextBlock Text="感谢这些朋友的支持（名单来自 GitHub 仓库，点右上角【刷新名单】更新）" Style="{StaticResource CardDescStyle}" TextWrapping="Wrap" Margin="0,3,0,8"/>
+                                        <TextBlock x:Name="AboutRewardsStatusText" Style="{StaticResource HintStyle}" TextWrapping="Wrap"/>
+                                        <StackPanel x:Name="AboutRewardsList" Margin="0,8,0,0"/>
+                                        <TextBlock x:Name="AboutRewardsEmptyText" Style="{StaticResource CardDescStyle}" TextWrapping="Wrap" Visibility="Collapsed"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- 插件开发鸣谢 -->
+                                <Border Style="{StaticResource CardStyle}" Margin="0,18,0,0">
+                                    <StackPanel>
+                                        <TextBlock Text="插件开发鸣谢" Style="{StaticResource CardTitleStyle}"/>
+                                        <TextBlock Text="感谢这些开发者给 MCO 写插件。想上榜？写个插件发到仓库的 about/about.json 里就行。" Style="{StaticResource CardDescStyle}" TextWrapping="Wrap" Margin="0,3,0,8"/>
+                                        <TextBlock x:Name="AboutDevsStatusText" Style="{StaticResource HintStyle}" TextWrapping="Wrap"/>
+                                        <StackPanel x:Name="AboutDevsList" Margin="0,8,0,0"/>
+                                        <TextBlock x:Name="AboutDevsEmptyText" Style="{StaticResource CardDescStyle}" TextWrapping="Wrap" Visibility="Collapsed"/>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
                         </ScrollViewer>
                     </Grid>
 

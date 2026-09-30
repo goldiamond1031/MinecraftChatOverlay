@@ -23,6 +23,8 @@
 
     <ItemGroup>
       <Resource Include="MinecraftChatOverlay.ico" />
+      <!-- 「关于」页的打赏二维码：编译进程序集，按 pack URI 加载（不随目录丢文件） -->
+      <Resource Include="res\reward_qrcode.png" />
     </ItemGroup>
   <ItemGroup>
     <!--
