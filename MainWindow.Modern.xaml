@@ -2713,7 +2713,7 @@
                                                 Margin="0,14,0,0">
                                             <StackPanel>
                                                 <Image Source="/res/reward_qrcode.png"
-                                                       Width="190" Height="190"
+                                                       Width="240" Height="240"
                                                        Stretch="Uniform"
                                                        RenderOptions.BitmapScalingMode="HighQuality"/>
                                                 <TextBlock Text="微信扫码打赏"

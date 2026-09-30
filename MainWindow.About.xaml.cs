@@ -1,4 +1,5 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
@@ -18,18 +19,20 @@ public partial class MainWindow
     private DateTime? _aboutFetchedAt;
     private string _aboutNotice = "";
     private bool _aboutBusy;
-    private bool _aboutUiReady;
+
+    /// <summary>懒加载只做一次（拉到过数据就不再自动拉）。</summary>
+    private bool _aboutAutoLoadStarted;
 
     // ------------------------------------------------------------ 加载
 
     private async Task EnsureAboutLoadedAsync()
     {
-        if (_aboutUiReady)
+        if (_aboutAutoLoadStarted)
         {
             return;
         }
 
-        _aboutUiReady = true;
+        _aboutAutoLoadStarted = true;
 
         if (_aboutIndex is null)
         {
@@ -71,11 +74,17 @@ public partial class MainWindow
                 return;
             }
 
-            _aboutIndex = result.Index;
+            var index = result.Index!;
+            _aboutIndex = index;
             _aboutFetchedAt = DateTime.Now;
             _aboutNotice = "";
             RebuildAboutLists();
             UpdateAboutStatus();
+
+            if (manual)
+            {
+                ShowToast($"名单已更新：{index.Rewards.Count} 条打赏鸣谢 · {index.PluginDevs.Count} 位插件开发者");
+            }
         }
         catch (Exception ex)
         {
@@ -93,11 +102,6 @@ public partial class MainWindow
 
     private void UpdateAboutStatus()
     {
-        if (!_aboutUiReady)
-        {
-            return;
-        }
-
         var parts = new List<string>();
         if (_aboutFetchedAt is not null)
         {
@@ -126,11 +130,6 @@ public partial class MainWindow
 
     private void RebuildAboutLists()
     {
-        if (!_aboutUiReady)
-        {
-            return;
-        }
-
         try
         {
             AboutRewardsList.Children.Clear();

@@ -2521,6 +2521,14 @@ private void SaveThemePreference(bool darkMode)
         if (IsLoaded)
         {
             MoveIndicatorToSelected();
+
+            // 「关于」页懒加载：第一次点到才去拉 GitHub 名单。
+            // 注意：刷新按钮本身不依赖这里 —— 就算这一步因为任何原因没跑到，
+            // 点【刷新名单】也能正常拉取并渲染（渲染那边不再有"初始化过没有"的门槛）。
+            if (NavAbout.IsChecked == true)
+            {
+                _ = EnsureAboutLoadedAsync();
+            }
         }
     }
 

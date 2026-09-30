@@ -1,11 +1,11 @@
 {
     "schemaVersion": 1,
-    "updatedAt": "2026-09-30T00:00:00+08:00",
+    "updatedAt": "2026-09-30T00:01:00+08:00",
     "rewards": [
         {
-            "name": "示例：某位不愿意透露姓名的朋友",
-            "amount": "¥20",
-            "message": "软件很好用，加油",
+            "name": "测试",
+            "amount": "¥114514",
+            "message": "你好",
             "time": "2026-09-30"
         }
     ],
@@ -14,7 +14,7 @@
             "name": "goldiamond1031",
             "plugin": "自动 GG / 玩家查询 / 区域放大 / 窗口全屏",
             "link": "https://github.com/goldiamond1031",
-            "note": "作者本人，先把示例占个位，你可以随时改"
+            "note": "作者本人"
         }
     ]
 }
