@@ -46,6 +46,13 @@ public sealed class AboutIndex
             index.PluginDevs ??= new List<AboutDevEntry>();
             index.Rewards.RemoveAll(r => string.IsNullOrWhiteSpace(r.Name));
             index.PluginDevs.RemoveAll(d => string.IsNullOrWhiteSpace(d.Name));
+
+            // 打赏榜按金额从大到小排（OrderByDescending 是稳定排序：金额相同/都读不出数字的，
+            // 保持作者在 JSON 里写的相对顺序，所以没写金额的那些不会被搅乱）
+            index.Rewards = index.Rewards
+                .OrderByDescending(r => AboutRewardEntry.ParseAmount(r.Amount))
+                .ToList();
+
             return index;
         }
         catch
@@ -68,6 +75,24 @@ public sealed class AboutRewardEntry
 
     /// <summary>时间（可选，随便写，比如 "2026-09-01"）。</summary>
     public string? Time { get; set; }
+
+    /// <summary>
+    /// 把金额读成数字，用来排序。
+    /// 容错写法都认：`¥20`、`￥ 6.66`、`20元`、`1,000`；读不出来（没写、写"一杯奶茶"之类）返回
+    /// <see cref="double.NegativeInfinity"/> —— 排序时统一沉到最后。
+    /// </summary>
+    public static double ParseAmount(string? amount)
+    {
+        if (string.IsNullOrWhiteSpace(amount))
+        {
+            return double.NegativeInfinity;
+        }
+
+        var digits = new string(amount.Where(c => char.IsDigit(c) || c == '.').ToArray());
+        return double.TryParse(digits, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var value)
+            ? value
+            : double.NegativeInfinity;
+    }
 }
 
 /// <summary>插件开发鸣谢里的一条。</summary>

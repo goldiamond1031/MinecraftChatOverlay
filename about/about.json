@@ -3,15 +3,42 @@
     "updatedAt": "2026-09-30T10:05:30+08:00",
     "rewards": [
         {
-            "name": "测试",
-            "amount": "¥114514",
-            "message": "你好",
-            "time": "2026-09-30"
+            "name": "墨染",
+            "amount": "¥20"
+        },
+        {
+            "name":"骑单车的鸡",
+            "amount":"¥124"
+        },
+        {
+            "name":"Mike_Mo",
+            "amount":"¥10"
+        },
+        {
+            "name":"小江",
+            "amount":"¥30"
+        },
+        {
+            "name":"like",
+            "amount":"¥10"
+        },
+        {
+            "name":"schen404",
+            "amount":"¥50"
+        },
+        {
+            "name":"天浅浅呀",
+            "amount":"¥30"
+        },
+        {
+            "name":"雪染墨色",
+            "amount":"¥15"
         }
+        
     ],
     "pluginDevs": [
         {
-            "name": "goldiamond1031",
+            "name": "gold_diamonda",
             "plugin": "自动 GG / 玩家查询 / 区域放大 / 窗口全屏",
             "link": "https://github.com/goldiamond1031",
             "note": "作者本人"

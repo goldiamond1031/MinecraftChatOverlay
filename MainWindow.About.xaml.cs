@@ -46,6 +46,29 @@ public partial class MainWindow
 
     private async void AboutRefreshButton_Click(object sender, RoutedEventArgs e) => await RefreshAboutAsync(manual: true);
 
+    /// <summary>「我的 B 站主页」「QQ 闲聊群」这类按钮：地址写在 Tag 里，点了拿系统默认浏览器打开。</summary>
+    private void AboutOpenLink_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement element && element.Tag is string url && !string.IsNullOrWhiteSpace(url))
+        {
+            OpenExternalLink(url);
+        }
+    }
+
+    /// <summary>用系统默认程序打开链接（浏览器 / QQ / B站客户端都行）。</summary>
+    private void OpenExternalLink(string url)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            AppendDebugLog("[关于] 打开链接失败：" + ex.Message);
+            ShowToast("打开链接失败，详情见调试后台");
+        }
+    }
+
     private async Task RefreshAboutAsync(bool manual)
     {
         if (_aboutBusy)
@@ -263,15 +286,7 @@ public partial class MainWindow
             };
             hyperlink.RequestNavigate += (_, e) =>
             {
-                try
-                {
-                    Process.Start(new ProcessStartInfo(e.Uri.ToString()) { UseShellExecute = true });
-                }
-                catch (Exception ex)
-                {
-                    AppendDebugLog("[关于] 打开链接失败：" + ex.Message);
-                }
-
+                OpenExternalLink(e.Uri.ToString());
                 e.Handled = true;
             };
 
