@@ -1,0 +1,15 @@
+{
+  "id": "goldiamond.neteaselyric",
+  "name": "网易云歌词",
+  "version": "1.0.0",
+  "author": "MinecraftChatOverlay",
+  "description": "把正在播放的网易云歌词显示成自己的置顶悬浮窗：带影子描边、可调字号配色，锁定后鼠标穿透，玩游戏不挡操作。",
+  "apiVersion": 1,
+  "capabilities": [
+    "读取系统媒体会话（需要在网易云设置里打开\u201c系统媒体控制\u201d）",
+    "联网访问网易云公开接口（搜歌 + 取歌词）",
+    "自己开一个置顶小窗",
+    "在自己目录里读写配置"
+  ],
+  "assembly": "NetEaseLyricPlugin.dll"
+}

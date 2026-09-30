@@ -1,6 +1,6 @@
 {
     "schemaVersion":  1,
-    "updatedAt":  "2026-09-30T00:26:23+08:00",
+    "updatedAt":  "2026-09-30T21:48:52+08:00",
     "plugins":  [
                     {
                         "id":  "goldiamond.autogg",
@@ -17,6 +17,26 @@
                         "downloadUrl":  "packages/goldiamond.autogg-1.1.0.zip",
                         "sha256":  "5EF45BD36664F36F5EE785642524EE2358B1C703BE957AA0BE814B9AF10F5E9C",
                         "size":  10522,
+                        "tags":  [
+
+                                 ]
+                    },
+                    {
+                        "id":  "goldiamond.neteaselyric",
+                        "name":  "网易云歌词",
+                        "version":  "1.0.0",
+                        "author":  "MinecraftChatOverlay",
+                        "description":  "把正在播放的网易云歌词显示成自己的置顶悬浮窗：带影子描边、可调字号配色，锁定后鼠标穿透，玩游戏不挡操作。",
+                        "apiVersion":  1,
+                        "capabilities":  [
+                                             "读取系统媒体会话（需要在网易云设置里打开“系统媒体控制”）",
+                                             "联网访问网易云公开接口（搜歌 + 取歌词）",
+                                             "自己开一个置顶小窗",
+                                             "在自己目录里读写配置"
+                                         ],
+                        "downloadUrl":  "packages/goldiamond.neteaselyric-1.0.0.zip",
+                        "sha256":  "5192219714160EA9EEB4F80BBEF372A928BEB49D46600E45EBA3825412EBD322",
+                        "size":  6364202,
                         "tags":  [
 
                                  ]

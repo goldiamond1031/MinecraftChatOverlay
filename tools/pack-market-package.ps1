@@ -34,8 +34,18 @@ if ([string]::IsNullOrWhiteSpace($id)) { throw 'plugin.json 里没有 id' }
 if ([string]::IsNullOrWhiteSpace($version)) { throw 'plugin.json 里没有 version' }
 
 # ---- 找主 dll ----
-$outDir = Join-Path $PluginDir 'bin\Release\net8.0-windows'
-if (-not (Test-Path -LiteralPath $outDir)) { throw "没有编译产物：$outDir（先编译插件）" }
+# 输出目录按 TFM 子目录自动找，别写死 net8.0-windows：
+# 有的插件需要 WinRT 投影，TFM 会是 net8.0-windows10.0.19041.0。
+$releaseRoot = Join-Path $PluginDir 'bin\Release'
+$outDir = $null
+if (Test-Path -LiteralPath $releaseRoot) {
+    $outDir = Get-ChildItem -LiteralPath $releaseRoot -Directory |
+        Where-Object { $_.Name -like 'net8.0-windows*' } |
+        Sort-Object LastWriteTime -Descending |
+        Select-Object -First 1 |
+        ForEach-Object { $_.FullName }
+}
+if (-not $outDir) { throw "没有编译产物：$releaseRoot\net8.0-windows*（先编译插件）" }
 
 $dllName = "$($manifest.assembly)"
 if ([string]::IsNullOrWhiteSpace($dllName)) {
@@ -52,6 +62,16 @@ if ([string]::IsNullOrWhiteSpace($dllName)) {
 $dllPath = Join-Path $outDir $dllName
 if (-not (Test-Path -LiteralPath $dllPath)) { throw "找不到 dll：$dllPath" }
 
+# ---- 附属 dll ----
+# 有的插件要带额外 dll（最典型的是 WinRT 投影：Microsoft.Windows.SDK.NET.dll + WinRT.Runtime.dll）。
+# 宿主加载插件时会优先从插件目录解析依赖，所以这些 dll 必须一起装进包里，
+# 否则用户那边一跑就 FileNotFoundException。
+# 约定：输出目录里除主 dll 和契约 dll 之外的所有 dll 都算附属 dll。
+# 注意：带附属 dll 的插件**必须**在 plugin.json 里写明 assembly 字段，
+# 否则宿主按文件名排序挑主 dll 时会挑错（比如挑中 Microsoft.Windows.SDK.NET.dll）。
+$extraDlls = @(Get-ChildItem -LiteralPath $outDir -Filter '*.dll' |
+    Where-Object { $_.Name -ne $dllName -and $_.Name -ne 'MinecraftChatOverlay.Plugin.Abstractions.dll' })
+
 # ---- 打 zip ----
 $zipPath = Join-Path $packagesDir "$id-$version.zip"
 if (Test-Path -LiteralPath $zipPath) { Remove-Item -LiteralPath $zipPath -Force }
@@ -59,7 +79,15 @@ if (Test-Path -LiteralPath $zipPath) { Remove-Item -LiteralPath $zipPath -Force 
 $stream = [System.IO.File]::Open($zipPath, [System.IO.FileMode]::Create)
 $archive = New-Object System.IO.Compression.ZipArchive($stream, [System.IO.Compression.ZipArchiveMode]::Create)
 try {
-    $pairs = @(@($dllPath, "$id/$dllName"), @($manifestPath, "$id/plugin.json"))
+    # 用 ArrayList 明确装"每一项都是一对(源文件, zip 内路径)"。
+    # 注意别写成 $pairs = @(@($a,$b))：单个内层数组会被 PowerShell 展平成字符串数组，
+    # 后面 $pair[0] 取到的是第一个字符，报"找不到文件 C:\...\C"这种莫名其妙的错。
+    $pairs = New-Object System.Collections.ArrayList
+    [void]$pairs.Add(@($dllPath, "$id/$dllName"))
+    foreach ($extra in $extraDlls) {
+        [void]$pairs.Add(@($extra.FullName, "$id/$($extra.Name)"))
+    }
+    [void]$pairs.Add(@($manifestPath, "$id/plugin.json"))
     foreach ($pair in $pairs) {
         $entry = $archive.CreateEntry($pair[1], [System.IO.Compression.CompressionLevel]::Optimal)
         $entryStream = $entry.Open()

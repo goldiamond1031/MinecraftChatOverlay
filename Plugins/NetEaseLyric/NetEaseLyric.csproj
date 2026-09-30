@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!--
+      注意：这里比其它插件多带了 Windows SDK 版本号（10.0.19041.0）。
+      带上它，SDK 才会把 WinRT 投影（Windows.Media.Control 那套）交给我们用 ——
+      读系统媒体会话（SMTC）拿曲名/歌手/进度就靠它。
+      代价：编译时会多拉一个 Microsoft.Windows.SDK.NET.Ref 投影包，
+      发布时要把它和 WinRT.Runtime.dll 一起装进插件包（见 README / 打包说明）。
+    -->
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>NetEaseLyricPlugin</AssemblyName>
+    <RootNamespace>MinecraftChatOverlay.Plugins.NetEaseLyric</RootNamespace>
+    <EnableDefaultApplicationDefinition>false</EnableDefaultApplicationDefinition>
+
+    <!--
+      插件是"库"工程，SDK 默认认为 WinRT 投影由运行时提供，不会把
+      Microsoft.Windows.SDK.NET.dll / WinRT.Runtime.dll 复制到输出目录。
+      但我们的运行环境是宿主的 .NET 桌面运行时（里面没有这两份），
+      所以必须让它们跟着插件走：CopyLocalLockFileAssemblies 会把引用到的
+      运行时依赖一并复制到 bin，打包脚本再把它们装进插件包。
+    -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Abstractions\MinecraftChatOverlay.Plugin.Abstractions.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="plugin.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>
