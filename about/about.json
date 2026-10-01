@@ -1,6 +1,6 @@
 {
     "schemaVersion": 1,
-    "updatedAt": "2026-09-30T10:05:30+08:00",
+    "updatedAt": "2026-10-01T10:05:30+08:00",
     "rewards": [
         {
             "name": "墨染",
@@ -41,7 +41,7 @@
     "pluginDevs": [
         {
             "name": "gold_diamonda",
-            "plugin": "自动 GG / 玩家查询 / 区域放大 / 窗口全屏",
+            "plugin": "自动 GG / 玩家查询 / 区域放大 / 窗口全屏 / 网易云音乐",
             "link": "https://github.com/goldiamond1031",
             "note": "作者本人"
         }
