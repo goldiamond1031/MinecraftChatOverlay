@@ -110,10 +110,41 @@ public sealed class NeteaseLyricsPlugin : IPlugin
         {
             _settings.OnboardingShown = true;
             SaveSettings();
-            // 首次装载弹一次引导（告诉用户网易云那边需要装什么）
-            // 首次装载：让插件页面顶部显示引导卡片（用宿主自己的样式渲染，不弹系统 MessageBox）
+
+            // 首次装载（**卸载后重装也算** —— 卸载会把 plugin-data\<id>\ 整个删掉，
+            // 这个开关跟着回到默认值，所以重装时会再走一遍这里）：
+            //   1) 插件页面顶部展开"使用引导"卡片
+            //   2) 弹一次「使用说明」窗 —— 用户光看插件页根本不知道网易云那边还要装东西
+            //
+            // 为什么排到 ApplicationIdle 而不是在这儿直接弹：
+            //   Initialize 跑在宿主启动阶段，主窗口可能还没 Show()，
+            //   这时候 ShowDialog 会把启动流程一起卡住。等 UI 空闲了再弹最稳。
             GuideVisible = true;
-            Log("[歌词] 首次装载，已展开页面内的使用引导");
+            Log("[歌词] 首次装载：已展开页面内引导，稍后弹一次使用说明窗");
+
+            try
+            {
+                Application.Current?.Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    try
+                    {
+                        if (_help is { IsLoaded: true })
+                        {
+                            return;
+                        }
+
+                        ShowHelp(null);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log("[歌词] 自动弹出使用说明失败：" + ex);
+                    }
+                }), DispatcherPriority.ApplicationIdle);
+            }
+            catch (Exception ex)
+            {
+                Log("[歌词] 安排使用说明窗失败：" + ex);
+            }
         }
 
         _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };

@@ -22,6 +22,9 @@ public partial class LyricsHelpWindow : Window
 {
     private readonly NeteaseLyricsPlugin _plugin;
 
+    /// <summary>BetterNCM 安装器的下载页 —— 网易云的插件框架，MCOBridge 中继插件挂在它下面。</summary>
+    private const string BetterNcmInstallUrl = "https://github.com/std-microblock/BetterNCM-Installer";
+
     public LyricsHelpWindow(NeteaseLyricsPlugin plugin)
     {
         _plugin = plugin;
@@ -114,6 +117,24 @@ public partial class LyricsHelpWindow : Window
             StatusBox.Visibility = Visibility.Visible;
         }
     }
+
+    /// <summary>【打开 BetterNCM 安装器下载页】：用系统默认浏览器打开，不开新窗口、不走 Shell 之外的路径。</summary>
+    private void BetterNcmButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(BetterNcmInstallUrl)
+            {
+                UseShellExecute = true,
+            });
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = "打不开浏览器：" + ex.Message;
+            StatusBox.Visibility = Visibility.Visible;
+        }
+    }
+
 
     private void CloseButton_Click(object sender, RoutedEventArgs e) => Close();
 }
