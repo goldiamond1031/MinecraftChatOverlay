@@ -1784,7 +1784,7 @@
                                                    Margin="0,0,9,0"
                                                    Foreground="{DynamicResource DangerBrush}"/>
                                         <StackPanel Grid.Column="1">
-                                            <TextBlock Text="有封禁风险，用之前请自行斟酌"
+                                            <TextBlock Text="只有「画面效果」有封禁风险，图标和提示音没有"
                                                        FontSize="12.5"
                                                        FontWeight="ExtraBold"
                                                        TextWrapping="Wrap"
@@ -1793,7 +1793,12 @@
                                                        TextWrapping="Wrap"
                                                        Margin="0,3,0,0"
                                                        Foreground="{DynamicResource TextSecondaryBrush}"
-                                                       Text="击杀反馈的画面效果同样是靠注入 DLL 改游戏画面实现的，在服务端和反作弊眼里属于灰色地带，有可能被判定成作弊并封号。本身具有封禁记录的机器、以及被人举报，都会进一步加大封禁风险，要不要用请自行斟酌。"/>
+                                                       Text="封禁风险只来自上面那 8 个画面效果 —— 它们是靠注入 DLL 改游戏画面实现的，在服务端和反作弊眼里属于灰色地带，有可能被判定成作弊并封号。本身具有封禁记录的机器、以及被人举报，都会进一步加大这一边的封禁风险。"/>
+                                            <TextBlock FontSize="11.5"
+                                                       TextWrapping="Wrap"
+                                                       Margin="0,3,0,0"
+                                                       Foreground="{DynamicResource MintBrush}"
+                                                       Text="击杀图标和击杀提示音是在本机自己弹、自己播的，不碰游戏进程，没有这个风险 —— 怕的话可以只留这两样，把画面效果全关掉。"/>
                                         </StackPanel>
                                     </Grid>
                                 </Border>
