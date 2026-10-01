@@ -901,7 +901,16 @@ public partial class MainWindow
 
         _pluginManager.Uninstall(entry, out var message);
         SavePluginsDisabledState();
-        ShowToast(message);
+        // 文件被占用那种情况会明说"要重启一次才彻底删掉"：这种必须用弹窗，
+        // 一个飘过去的 toast 用户看不到，回头还得来问"为什么文件夹还在"。
+        if (message.Contains("重启"))
+        {
+            MessageBox.Show(this, message, "卸载插件", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        else
+        {
+            ShowToast(message);
+        }
         RefreshPluginsManagerList();
     }
 

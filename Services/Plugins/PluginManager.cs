@@ -573,7 +573,9 @@ public sealed class PluginManager
     
                     RaiseChanged();
                     AddPendingDelete(entry.Directory);
-                    message = $"已卸载 {entry.DisplayName}（文件当时还被占用，残留目录会在下次启动软件时自动清掉）";
+                    message = $"已卸载 {entry.DisplayName}。" + Environment.NewLine + Environment.NewLine
+                        + "这个插件的文件当时还被程序占用着，没能立刻删掉。" + Environment.NewLine
+                        + "它已经排进删除队列 —— 重启一次软件就会彻底删掉，在那之前不用再管它。";
                     try
                     {
                         var dataDir = Path.Combine(DataRoot, SafeFolderName(entry.Manifest.Id));
