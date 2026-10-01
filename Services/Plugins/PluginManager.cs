@@ -168,7 +168,8 @@ public sealed class PluginManager
                     var entry = new PluginEntry { Manifest = manifest, Directory = directory };
                     if (_disabled.Contains(manifest.Id))
                     {
-                        entry.State = PluginState.Disabled;
+                    // 文件删不掉是 dll 被运行时锁着，那是宿主自己的事，不该让用户"卸载完还要重启才看不到它"：
+                    // 直接把条目从列表里摘掉（界面上立刻消失），目录记进 pending-delete，下次启动自动清。
                         entry.Error = "被用户禁用";
                         Add(entry);
                         continue;
@@ -510,11 +511,13 @@ public sealed class PluginManager
             }
 
             Unload(entry);
-            entry.State = PluginState.Disabled;
+                    // 文件删不掉是 dll 被运行时锁着，那是宿主自己的事，不该让用户"卸载完还要重启才看不到它"：
+                    // 直接把条目从列表里摘掉（界面上立刻消失），目录记进 pending-delete，下次启动自动清。
             entry.Error = "被用户禁用";
             lock (_lock)
             {
-                _disabled.Add(entry.Manifest.Id);
+                        _entries.Remove(entry);
+                        _disabled.Remove(entry.Manifest.Id);
             }
 
             message = $"已禁用 {entry.DisplayName}（下次启动不会再装载）";
@@ -532,6 +535,7 @@ public sealed class PluginManager
     public bool Uninstall(PluginEntry entry, out string message)
     {
         message = "";
+        var movedToTrash = false;
         try
         {
             if (entry.State == PluginState.Loaded)
@@ -549,18 +553,42 @@ public sealed class PluginManager
                     Directory.Delete(entry.Directory, recursive: true);
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                entry.State = PluginState.Disabled;
-                lock (_lock)
+                // 删不掉（dll 还被运行时锁着）就改名搬走：Windows 允许给装着被占用文件的目录改名，
+                // 搬出插件根目录之后这边就当它卸载完了，不用让用户重启软件。
+                if (TryMoveToTrash(entry.Directory, entry.Manifest.Id))
                 {
-                    _disabled.Add(entry.Manifest.Id);
+                    movedToTrash = true;
                 }
+                else
+                {
+                    // 文件删不掉是 dll 被运行时锁着，那是宿主自己的事，不该让用户"卸载完还要重启才看不到它"：
+                    // 直接把条目从列表里摘掉（界面上立刻消失），目录记进 pending-delete，下次启动自动清。
+                    lock (_lock)
+                    {
+                        _entries.Remove(entry);
+                        _disabled.Remove(entry.Manifest.Id);
+                    }
+    
+                    RaiseChanged();
+                    AddPendingDelete(entry.Directory);
+                    message = $"已卸载 {entry.DisplayName}（文件当时还被占用，残留目录会在下次启动软件时自动清掉）";
+                    try
+                    {
+                        var dataDir = Path.Combine(DataRoot, SafeFolderName(entry.Manifest.Id));
+                        if (Directory.Exists(dataDir))
+                        {
+                            Directory.Delete(dataDir, recursive: true);
+                        }
+                    }
+                    catch
+                    {
+                        // 数据目录留着也不碍事
+                    }
 
-                RaiseChanged();
-                AddPendingDelete(entry.Directory);
-                message = $"文件还被占用，删不掉（{ex.Message}）。已经帮你禁用它并排进队列，重启软件后会自动删掉。";
-                return false;
+                    return true;
+                    }
             }
 
             lock (_lock)
@@ -583,7 +611,9 @@ public sealed class PluginManager
             }
 
             RaiseChanged();
-            message = $"已卸载 {entry.DisplayName}";
+            message = movedToTrash
+                ? $"已卸载 {entry.DisplayName}（文件当时还被占用，先搬进了回收目录，下次启动会自动清掉）"
+                : $"已卸载 {entry.DisplayName}";
             return true;
         }
         catch (Exception ex)
@@ -615,6 +645,9 @@ public sealed class PluginManager
     /// </summary>
     public void ProcessPendingChanges()
     {
+        // 先把上次"删不掉、改名搬进回收目录"的残留清掉（那时 dll 还被占用）
+        CleanTrash();
+
         foreach (var root in new[] { PortableRoot, UserRoot })
         {
             try
@@ -700,6 +733,71 @@ public sealed class PluginManager
         CopyDirectory(sourceDirectory, stagedDirectory);
         UnblockFiles(stagedDirectory);
     }
+
+    /// <summary>
+    /// 卸载时"删不掉但搬得动"的临时落脚点。放在插件根目录<strong>外面</strong> —— 扫描插件时不会看它。
+    /// </summary>
+    private string TrashRoot => Path.Combine(Path.GetDirectoryName(UserRoot) ?? UserRoot, "plugin-trash");
+
+    /// <summary>
+    /// 把删不掉的插件目录"改名搬走"。
+    ///
+    /// Windows 允许给装着"被占用文件"的目录改名（改名只动目录项，不碰被锁的文件本身），
+    /// 所以这一步几乎总能成功 —— 搬出插件根目录之后，用户这边立刻就当它卸载完了，不用重启软件。
+    /// 搬到回收目录里的残留会在下次启动时清掉（那时 dll 没被加载，删得掉）。
+    /// </summary>
+    private bool TryMoveToTrash(string directory, string pluginId)
+    {
+        try
+        {
+            if (!Directory.Exists(directory))
+            {
+                return true;
+            }
+
+            var trash = TrashRoot;
+            Directory.CreateDirectory(trash);
+            var target = Path.Combine(trash, SafeFolderName(pluginId) + "-" + DateTime.Now.ToString("yyyyMMdd-HHmmssfff"));
+            Directory.Move(directory, target);
+            RaiseLog($"[插件] {pluginId} 的目录删不掉，已经先搬进回收目录：{target}");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            RaiseLog($"[插件] 回收目录也搬不进去（{pluginId}）：{ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>清掉上次卸载时搬进回收目录的残留（那次 dll 还被占用，删不掉）。</summary>
+    private void CleanTrash()
+    {
+        try
+        {
+            var trash = TrashRoot;
+            if (!Directory.Exists(trash))
+            {
+                return;
+            }
+
+            foreach (var dir in Directory.GetDirectories(trash))
+            {
+                try
+                {
+                    Directory.Delete(dir, recursive: true);
+                    RaiseLog($"[插件] 已清掉卸载残留：{Path.GetFileName(dir)}");
+                }
+                catch (Exception ex)
+                {
+                    RaiseLog($"[插件] 卸载残留这次还是删不掉（{Path.GetFileName(dir)}）：{ex.Message}");
+                }
+            }
+        }
+        catch
+        {
+        }
+    }
+
 
     /// <summary>把删不掉的目录记进"下次启动删"名单。</summary>
     private void AddPendingDelete(string directory)
