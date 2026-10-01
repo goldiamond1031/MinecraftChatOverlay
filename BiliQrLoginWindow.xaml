@@ -4,6 +4,7 @@
         Title="扫码登录 B站"
         Width="380"
         SizeToContent="Height"
+        MaxHeight="600"
         ResizeMode="NoResize"
         WindowStartupLocation="CenterOwner"
         Background="{DynamicResource WindowBgBrush}"
@@ -19,58 +20,83 @@
         </ResourceDictionary>
     </Window.Resources>
 
-    <StackPanel Margin="22,20,22,22">
-        <TextBlock Text="扫码登录 B站"
-                   Style="{StaticResource PanelTitleStyle}"/>
-        <TextBlock Text="打开哔哩哔哩 App → 右上角「+」→ 扫一扫"
-                   Style="{StaticResource PanelDescStyle}"
-                   Margin="0,6,0,0"/>
+    <!--
+        布局要点：根是 Grid 三行 —— 标题 Auto / 卡片 Star / 按钮 Auto。
+        SizeToContent="Height" 会让窗口按内容长高，但长到 MaxHeight 就顶住；
+        顶住之后被压缩的是中间那行的 ScrollViewer，按钮行永远钉在底部。
 
-        <Border Style="{StaticResource CardStyle}" Margin="0,16,0,0" Padding="16">
-            <StackPanel>
-                <!-- 二维码需要浅底才好扫，这里固定白底 -->
-                <Border Background="White"
-                        CornerRadius="10"
-                        Padding="10"
-                        HorizontalAlignment="Center">
-                    <Grid Width="230" Height="230">
-                        <Image x:Name="QrImage" Stretch="Uniform"/>
-                        <TextBlock x:Name="QrPlaceholder"
-                                   Text="正在获取二维码…"
-                                   Foreground="#888888"
-                                   FontSize="13"
-                                   TextWrapping="Wrap"
-                                   TextAlignment="Center"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center"/>
-                    </Grid>
-                </Border>
+        以前整窗是一个 StackPanel：登录状态文字一变长（"已扫码，请在手机上确认"、报错信息等），
+        下面的按钮和脚注就被一路顶出屏幕，溢出部分直接裁掉 —— 用户只能关窗重开。
+        插件弹窗（Plugins\NeteaseLyrics\LyricsHelpWindow.xaml）犯过同一个毛病，
+        正确写法见 Plugins\PLUGIN-DEV-GUIDE.html 的 6.4「弹窗」。
+    -->
+    <Grid Margin="22,20,22,22">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
 
-                <TextBlock x:Name="StatusText"
-                           Text=""
-                           Margin="0,14,0,0"
-                           FontSize="12.5"
-                           TextWrapping="Wrap"
-                           TextAlignment="Center"
-                           Foreground="{DynamicResource TextSecondaryBrush}"/>
-            </StackPanel>
-        </Border>
-
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,18,0,0">
-            <Button Content="刷新二维码"
-                    Click="RefreshButton_Click"
-                    Style="{StaticResource PrimaryButtonStyle}"
-                    MinWidth="110"/>
-            <Button Content="取消"
-                    Click="CancelButton_Click"
-                    Style="{StaticResource SmallButtonStyle}"
-                    MinWidth="80"
-                    Margin="10,0,0,0"/>
+        <StackPanel Grid.Row="0">
+            <TextBlock Text="扫码登录 B站"
+                       Style="{StaticResource PanelTitleStyle}"/>
+            <TextBlock Text="打开哔哩哔哩 App → 右上角「+」→ 扫一扫"
+                       Style="{StaticResource PanelDescStyle}"
+                       Margin="0,6,0,0"/>
         </StackPanel>
 
-        <TextBlock Text="登录信息只保存在本机配置里，不会上传。"
-                   Style="{StaticResource HintStyle}"
-                   HorizontalAlignment="Center"
-                   Margin="0,12,0,0"/>
-    </StackPanel>
+        <ScrollViewer Grid.Row="1"
+                      Margin="0,16,0,0"
+                      VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled">
+            <Border Style="{StaticResource CardStyle}" Padding="16">
+                <StackPanel>
+                    <!-- 二维码需要浅底才好扫，这里固定白底 -->
+                    <Border Background="White"
+                            CornerRadius="10"
+                            Padding="10"
+                            HorizontalAlignment="Center">
+                        <Grid Width="230" Height="230">
+                            <Image x:Name="QrImage" Stretch="Uniform"/>
+                            <TextBlock x:Name="QrPlaceholder"
+                                       Text="正在获取二维码…"
+                                       Foreground="#888888"
+                                       FontSize="13"
+                                       TextWrapping="Wrap"
+                                       TextAlignment="Center"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"/>
+                        </Grid>
+                    </Border>
+
+                    <TextBlock x:Name="StatusText"
+                               Text=""
+                               Margin="0,14,0,0"
+                               FontSize="12.5"
+                               TextWrapping="Wrap"
+                               TextAlignment="Center"
+                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                </StackPanel>
+            </Border>
+        </ScrollViewer>
+
+        <StackPanel Grid.Row="2">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,18,0,0">
+                <Button Content="刷新二维码"
+                        Click="RefreshButton_Click"
+                        Style="{StaticResource PrimaryButtonStyle}"
+                        MinWidth="110"/>
+                <Button Content="取消"
+                        Click="CancelButton_Click"
+                        Style="{StaticResource SmallButtonStyle}"
+                        MinWidth="80"
+                        Margin="10,0,0,0"/>
+            </StackPanel>
+
+            <TextBlock Text="登录信息只保存在本机配置里，不会上传。"
+                       Style="{StaticResource HintStyle}"
+                       HorizontalAlignment="Center"
+                       Margin="0,12,0,0"/>
+        </StackPanel>
+    </Grid>
 </Window>

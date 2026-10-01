@@ -105,6 +105,7 @@ public partial class NeteaseLyricsPage : System.Windows.Controls.UserControl
         LyricOffsetText.Text = ((int)LyricOffsetSlider.Value) + " ms";
         WidthText.Text = ((int)WidthSlider.Value) + " px";
         BoldText.Text = _plugin.Settings.Bold ? "已开" : "已关";
+        RomajiItalicButton.Content = _plugin.Settings.RomajiItalic ? "斜体：开" : "斜体：关";
         FontTipText.Text = _plugin.Settings.FontFamily;
 
         // 色块 = 真颜色 + 色值文本（照软件本体的做法：Border 当色块，旁边 Consolas 写 hex）

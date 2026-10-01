@@ -75,7 +75,15 @@ public partial class LyricsWindow : Window
 
         TranslationText.FontFamily = family;
         TranslationText.FontSize = translationSize;
-        TranslationText.Foreground = ParseBrush(settings.TranslationColor, textColor);
+        // 翻译跟"文字颜色"走 —— 不再用 settings.TranslationColor：
+        // 那个字段界面上根本没地方改，默认值 #FFDDEEFF 又和罗马音色很接近，
+        // 结果看起来就像"翻译跟着罗马音颜色走"。
+        // 这里拿文字色压到 90% 不透明度：跟着文字色变，又比当前行稍微轻一点。
+        TranslationText.Foreground = new SolidColorBrush(Color.FromArgb(
+            (byte)Math.Clamp((int)Math.Round(textColor.A * 0.9), 0, 255),
+            textColor.R,
+            textColor.G,
+            textColor.B));
         ApplyShadow(TranslationShadow, shadow, settings);
 
         RomajiText.FontFamily = family;

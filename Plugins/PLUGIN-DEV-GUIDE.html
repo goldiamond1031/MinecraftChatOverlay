@@ -663,24 +663,47 @@ public partial class HelpWindow : Window
     &lt;/ResourceDictionary&gt;
   &lt;/Window.Resources&gt;
 
-  &lt;StackPanel Margin="22,20,22,22"&gt;
-    &lt;TextBlock Text="标题" Style="{StaticResource PanelTitleStyle}"/&gt;
-    &lt;Border Style="{StaticResource CardStyle}" Margin="0,14,0,0" Padding="16"&gt;
-      &lt;ScrollViewer MaxHeight="380" VerticalScrollBarVisibility="Auto"
-                    HorizontalScrollBarVisibility="Disabled"&gt;
+  &lt;Grid Margin="22,20,22,22"&gt;
+    &lt;Grid.RowDefinitions&gt;
+      &lt;RowDefinition Height="Auto"/&gt;   &lt;!-- 标题：钉在顶上 --&gt;
+      &lt;RowDefinition Height="*"/&gt;      &lt;!-- 会长的那块：窗口顶住时压缩的是这一行 --&gt;
+      &lt;RowDefinition Height="Auto"/&gt;   &lt;!-- 按钮行：永远钉在底部 --&gt;
+    &lt;/Grid.RowDefinitions&gt;
+
+    &lt;TextBlock Grid.Row="0" Text="标题" Style="{StaticResource PanelTitleStyle}"/&gt;
+
+    &lt;ScrollViewer Grid.Row="1" Margin="0,14,0,0"
+                  VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Disabled"&gt;
+      &lt;Border Style="{StaticResource CardStyle}" Padding="16"&gt;
         &lt;TextBlock Text="正文" Style="{StaticResource BodyTextStyle}"/&gt;
-      &lt;/ScrollViewer&gt;
-    &lt;/Border&gt;
-    &lt;StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0"&gt;
+      &lt;/Border&gt;
+    &lt;/ScrollViewer&gt;
+
+    &lt;StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0"&gt;
       &lt;Button Content="知道了" Click="Close_Click"
               Style="{StaticResource PrimaryButtonStyle}" MinWidth="100"/&gt;
     &lt;/StackPanel&gt;
-  &lt;/StackPanel&gt;
-&lt;/Window&gt;</code></pre>
+  &lt;/Grid&gt;</code></pre>
 <div class="danger"><strong>弹窗必须有 <code>MaxHeight</code>。</strong>用户机器上很常见 150% 显示缩放，
 此时屏幕的工作区只有<strong>约 680 DIP 高</strong> —— <code>SizeToContent="Height"</code> 配一段长正文，
 窗口能长到 900+ DIP，标题栏跑出屏幕外面去、还关不掉。正文一律放进
-<code>ScrollViewer MaxHeight="380"</code>，窗口整体 <code>MaxHeight</code> 压在 620 上下。</div>
+<code>ScrollViewer MaxHeight="380"</code>，窗口整体 <code>MaxHeight</code> 压在 600~620。</div>
+<div class="danger"><strong>别用"整窗一个 StackPanel 从上往下堆"。</strong>
+<code>SizeToContent="Height"</code> 只负责"按内容长高"；长到 <code>MaxHeight</code> 就<strong>顶住了 ——
+顶住之后多出来的内容会被直接裁掉，并不会自己变成滚动条</strong>。
+所以只要窗口里有<strong>运行时才会变长的文字</strong>（点了按钮才出的状态 / 结果 / 报错 / 日志），
+底部那排按钮就会被它一路挤出窗口：用户点一下按钮，按钮自己没了，连结果都看不到。</div>
+<div class="note"><strong>正确写法（照上面那段 <code>&lt;Grid&gt;</code> 抄）：</strong>
+<ol>
+  <li>根换成 <code>Grid</code>，三行：<code>Auto</code>（标题）/ <code>*</code>（<strong>会长的那块</strong>）/ <code>Auto</code>（按钮行）。</li>
+  <li>会长的那块放进 <code>ScrollViewer</code>：窗口顶到 <code>MaxHeight</code> 之后被压缩的是它，按钮行不动。</li>
+  <li>如果那段状态是"点了按钮要当场看到"的，就再给它单独套一个
+      <code>&lt;ScrollViewer MaxHeight="130"&gt;</code> 钉在按钮<strong>上面</strong>（没内容时
+      <code>Visibility="Collapsed"</code>，高度是 0）—— 它最多占 130，按钮永远留在窗口里。</li>
+</ol>
+现成可抄的例子：<code>Plugins\NeteaseLyrics\LyricsHelpWindow.xaml</code>（插件的使用说明窗）、
+<code>BiliQrLoginWindow.xaml</code>（本体的扫码登录窗，登录状态文字就是会变长的那种）。</div>
 <div class="note"><strong>记得设 <code>Owner</code>：</strong>设了才会居中于主窗口、跟着主窗口一起最小化。
 <pre><code>var dlg = new HelpWindow { Owner = Window.GetWindow(this) };   // 从页面控件拿主窗口
 dlg.ShowDialog();                 // 模态
@@ -901,6 +924,12 @@ private static string? PickColorHex(string currentHex)
   <tr><td>插件窗口比屏幕还高，下面一半看不见 / 关不掉</td>
       <td><code>SizeToContent="Height"</code> 没配 <code>MaxHeight</code>；150% 缩放下工作区只有约 680 DIP 高</td>
       <td>正文放进 <code>ScrollViewer MaxHeight="380"</code>，窗口加 <code>MaxHeight</code>（≤620）</td></tr>
+  <tr><td>弹窗里点一下按钮，按钮自己被顶出窗口 / 结果文字看不见（窗口甚至跑出屏幕）</td>
+      <td>整窗一个 <code>StackPanel</code> + <code>SizeToContent="Height"</code>：运行时长出来的那段文字把下面的按钮一路往下挤；<code>MaxHeight</code> 顶住之后，溢出部分是被<strong>裁掉</strong>的，不会自己变成滚动条</td>
+      <td>根换成三行 <code>Grid</code>（标题 <code>Auto</code> / 会长的那块 <code>*</code> 里放 <code>ScrollViewer</code> / 按钮行 <code>Auto</code>）；状态文字再单独套一个 <code>&lt;ScrollViewer MaxHeight="130"&gt;</code> 钉在按钮上面（见 6.4）</td></tr>
+  <tr><td>自绘页面上的开关 / 按钮点了"没反应"</td>
+      <td>处理函数只改了设置，没把状态刷回控件 —— 按钮文案、旁边那行"已开 / 已关"还是旧值，看着就像装饰</td>
+      <td>所有会变状态的控件都收进一个 <code>UpdateLabels()</code> 统一刷（按钮文案 + 色块 + 滑块数值），处理函数里改完设置就调它</td></tr>
 </table>
 
 <h2 id="samples">10. 现有插件索引（照着抄最快）</h2>
@@ -957,6 +986,13 @@ private static string? PickColorHex(string currentHex)
  12) 弹窗属性：SizeToContent=Height + MaxHeight&lt;=620（150% 缩放下工作区只有约 680 DIP 高）+ WindowStartupLocation=CenterOwner + 能设就设 Owner（主窗口没显示过时不能设，会抛）
  13) 取色：用 System.Windows.Forms.ColorDialog（工程要 UseWindowsForms），alpha 沿用旧值；hex 不透明存 #RRGGBB、带 alpha 存 #AARRGGBB，解析两种都要吃；禁用 ColorTranslator.FromHtml 解 #AARRGGBB
  14) WPF + WinForms 同开会有一批同名类型二义：Color / FontFamily / Brushes / ColorConverter / Application / UserControl / Clipboard 等，在文件头加 using 别名写全名
+ 15) 弹窗布局：根用 Grid 三行 —— 标题 Auto / "会长的那块" * （里面套 ScrollViewer）/ 按钮行 Auto；
+     任何"点了按钮才会长出来"的状态、结果、报错文字都要放进 ScrollViewer（要贴着按钮当场看到，就再
+     单独套一个 ScrollViewer MaxHeight=130 钉在按钮上面，没内容时 Visibility=Collapsed）。
+     反面：整窗一个 StackPanel 从上往下堆 + SizeToContent=Height + MaxHeight —— 长到 MaxHeight 就被裁掉，
+     按钮会被一路挤出窗口，用户点一下按钮连结果都看不见
+ 16) 自绘页面上的开关 / 按钮，处理函数里改完设置一定要把状态刷回控件（按钮文案、旁边那行"已开 / 已关"、
+     色块），统一收进一个 UpdateLabels() 里；只改设置不刷界面，用户看到的就是"点了没反应"
 【安装位置】%AppData%\MinecraftChatOverlay\plugins\&lt;id&gt;\ ；数据 %AppData%\MinecraftChatOverlay\plugin-data\&lt;id&gt;\
 【文档配套】仓库自带 build-plugins.bat（编译+装机+打 zip 到 plugin-packages\）</code></pre>
 

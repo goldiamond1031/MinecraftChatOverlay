@@ -4,7 +4,7 @@
         Title="网易云歌词 · 使用说明"
         Width="480"
         SizeToContent="Height"
-        MaxHeight="660"
+        MaxHeight="600"
         ResizeMode="NoResize"
         WindowStartupLocation="CenterOwner"
         Background="{DynamicResource WindowBgBrush}"
@@ -12,32 +12,52 @@
         UseLayoutRounding="True"
         SnapsToDevicePixels="True">
 
-    <StackPanel Margin="22,20,22,22">
-        <StackPanel Orientation="Horizontal">
-            <Border Background="{DynamicResource PrimarySoftBrush}"
-                    CornerRadius="9"
-                    Padding="9,3"
-                    VerticalAlignment="Center">
-                <TextBlock Text="使用说明"
-                           FontSize="11.5"
-                           FontWeight="Bold"
-                           Foreground="{DynamicResource TextPrimaryBrush}"/>
-            </Border>
-            <TextBlock x:Name="SourceText"
-                       Style="{DynamicResource HintStyle}"
-                       VerticalAlignment="Center"
-                       Margin="10,0,0,0"/>
+    <!--
+        布局要点（插件开发文档 6.4「弹窗」里也写了同一条）：
+        根是 Grid 三行 —— 标题行 Auto、中间"会变长的那块"是 Star、按钮行 Auto。
+        SizeToContent=Height 会让窗口按内容长高，但长到 MaxHeight 就顶住了；
+        顶住之后只有 Star 行会被压缩（里面是 ScrollViewer，于是变成滚动条），
+        按钮行永远钉在底部 —— 不会出现"点一下按钮，按钮自己被顶出窗口"。
+
+        反面教材：整窗一个 StackPanel 从上往下堆 + SizeToContent=Height + MaxHeight，
+        运行时长出来的那行（状态文字 / 错误信息 / 日志）会把下面的按钮一路挤到窗口外，
+        溢出部分直接被裁掉，用户就只能关窗重开。
+    -->
+    <Grid Margin="22,20,22,22">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0">
+            <StackPanel Orientation="Horizontal">
+                <Border Background="{DynamicResource PrimarySoftBrush}"
+                        CornerRadius="9"
+                        Padding="9,3"
+                        VerticalAlignment="Center">
+                    <TextBlock Text="使用说明"
+                               FontSize="11.5"
+                               FontWeight="Bold"
+                               Foreground="{DynamicResource TextPrimaryBrush}"/>
+                </Border>
+                <TextBlock x:Name="SourceText"
+                           Style="{DynamicResource HintStyle}"
+                           VerticalAlignment="Center"
+                           Margin="10,0,0,0"/>
+            </StackPanel>
+
+            <TextBlock Text="让歌词滚动起来"
+                       Style="{DynamicResource PanelTitleStyle}"
+                       TextWrapping="Wrap"
+                       Margin="0,12,0,0"/>
         </StackPanel>
 
-        <TextBlock Text="让歌词滚动起来"
-                   Style="{DynamicResource PanelTitleStyle}"
-                   TextWrapping="Wrap"
-                   Margin="0,12,0,0"/>
-
-        <Border Style="{DynamicResource CardStyle}" Margin="0,14,0,0" Padding="16">
-            <ScrollViewer MaxHeight="360"
-                          VerticalScrollBarVisibility="Auto"
-                          HorizontalScrollBarVisibility="Disabled">
+        <ScrollViewer Grid.Row="1"
+                      Margin="0,14,0,0"
+                      VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled">
+            <Border Style="{DynamicResource CardStyle}" Padding="16">
                 <StackPanel>
                     <TextBlock Style="{DynamicResource BodyTextStyle}"
                                TextWrapping="Wrap"
@@ -79,25 +99,37 @@
                                Margin="0,6,0,0"
                                Text="逐字歌词（卡拉 OK）：只有一部分歌有逐字数据（网易云的 yrc）。有的话当前行会按字染色 —— 已唱的亮、未唱的暗，可以在「2. 字体与颜色」里调已唱的颜色。"/>
                 </StackPanel>
+            </Border>
+        </ScrollViewer>
+
+        <!--
+            状态文字钉在按钮上面（不再往下挤按钮），并且自己限高 + 可滚：
+            装中继插件的结果可能是一大段（包含路径和后续步骤），写多长都不会撑破窗口。
+            没内容时 Visibility=Collapsed，这一块高度是 0。
+        -->
+        <StackPanel Grid.Row="2">
+            <ScrollViewer x:Name="StatusBox"
+                          MaxHeight="130"
+                          Margin="0,12,0,0"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled"
+                          Visibility="Collapsed">
+                <TextBlock x:Name="StatusText"
+                           Style="{DynamicResource HintStyle}"
+                           TextWrapping="Wrap"/>
             </ScrollViewer>
-        </Border>
 
-        <TextBlock x:Name="StatusText"
-                   Style="{DynamicResource HintStyle}"
-                   TextWrapping="Wrap"
-                   Margin="0,12,0,0"
-                   Visibility="Collapsed"/>
-
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
-            <Button x:Name="InstallButton"
-                    Content="把中继插件装到网易云"
-                    Click="InstallButton_Click"
-                    Style="{DynamicResource SmallPrimaryButtonStyle}"
-                    Margin="0,0,10,0"/>
-            <Button Content="知道了"
-                    Click="CloseButton_Click"
-                    Style="{DynamicResource PrimaryButtonStyle}"
-                    MinWidth="100"/>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
+                <Button x:Name="InstallButton"
+                        Content="把中继插件装到网易云"
+                        Click="InstallButton_Click"
+                        Style="{DynamicResource SmallPrimaryButtonStyle}"
+                        Margin="0,0,10,0"/>
+                <Button Content="知道了"
+                        Click="CloseButton_Click"
+                        Style="{DynamicResource PrimaryButtonStyle}"
+                        MinWidth="100"/>
+            </StackPanel>
         </StackPanel>
-    </StackPanel>
+    </Grid>
 </Window>

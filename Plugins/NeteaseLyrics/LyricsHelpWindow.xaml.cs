@@ -37,7 +37,7 @@ public partial class LyricsHelpWindow : Window
         if (!string.IsNullOrWhiteSpace(result))
         {
             StatusText.Text = result;
-            StatusText.Visibility = Visibility.Visible;
+            StatusBox.Visibility = Visibility.Visible;
         }
     }
 
@@ -111,7 +111,7 @@ public partial class LyricsHelpWindow : Window
         finally
         {
             InstallButton.IsEnabled = true;
-            StatusText.Visibility = Visibility.Visible;
+            StatusBox.Visibility = Visibility.Visible;
         }
     }
 
