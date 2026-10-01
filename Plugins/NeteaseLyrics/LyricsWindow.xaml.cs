@@ -15,13 +15,15 @@ namespace MinecraftChatOverlay.Plugins.NeteaseLyrics;
 
 /// <summary>
 /// 歌词窗：无边框、透明、置顶、不占任务栏；纯文字 + 模糊偏移阴影（外观参考 netease_lyric_shadow）。
-/// 不设 WS_EX_NOACTIVATE / WS_EX_TOOLWINDOW（会让窗口在系统层面不可见），并清掉所有者窗口。
+/// 不设 WS_EX_NOACTIVATE（那是"点了也不激活"，跟这个窗没关系）；WS_EX_TOOLWINDOW 是**要设的**，
+/// 不设的话它会被算成一个独立窗口、跑到任务栏里去 —— 见 MakeToolWindow。
 /// </summary>
 public partial class LyricsWindow : Window
 {
     private const int GwlExStyle = -20;
     private const int GwlpHwndParent = -8;
     private const int WsExTransparent = 0x00000020;
+    private const int WsExToolWindow = 0x00000080;
 
     [DllImport("user32.dll")] private static extern int GetWindowLong(IntPtr hWnd, int index);
     [DllImport("user32.dll")] private static extern int SetWindowLong(IntPtr hWnd, int index, int value);
@@ -200,11 +202,48 @@ public partial class LyricsWindow : Window
             {
                 SetWindowLongPtr32(handle, GwlpHwndParent, IntPtr.Zero);
             }
+
+            // 顺手把"不占任务栏"钉死 —— 见 MakeToolWindow 的注释
+            MakeToolWindow();
         }
         catch
         {
         }
     }
+
+    /// <summary>
+    /// 不让它出现在任务栏 / Alt+Tab 里。
+    ///
+    /// 为什么不靠 WPF 的 ShowInTaskbar="False"：那个是靠"给窗口挂一个隐藏所有者"实现的，
+    /// 而我们为了让歌词窗不被主窗口带着最小化，又必须把所有者清掉（DetachFromOwner）——
+    /// 一清掉就退回成普通顶层窗口：任务栏里立刻多出一个按钮，用户还能右键把它关掉，
+    /// 关掉之后这个 Window 实例就废了（WPF 不允许 Show 一个已 Close 的窗口）。
+    /// 所以这里直接上 WS_EX_TOOLWINDOW：系统层面"这不是一个应用主窗口"的标记，
+    /// 和所有者是谁无关，任务栏和 Alt+Tab 都会跳过它。
+    /// </summary>
+    public void MakeToolWindow()
+    {
+        try
+        {
+            var handle = new WindowInteropHelper(this).Handle;
+            if (handle == IntPtr.Zero)
+            {
+                return;
+            }
+
+            var style = GetWindowLong(handle, GwlExStyle);
+            if ((style & WsExToolWindow) != 0)
+            {
+                return;
+            }
+
+            SetWindowLong(handle, GwlExStyle, style | WsExToolWindow);
+        }
+        catch
+        {
+        }
+    }
+
 
     protected override void OnSourceInitialized(EventArgs e)
     {

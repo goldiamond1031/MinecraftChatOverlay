@@ -45,6 +45,7 @@ public sealed class NeteaseLyricsPlugin : IPlugin
 
     /// <summary>用户刚点过【隐藏窗口】：在被显式叫出来之前，每秒的自动显示不许再把窗口放出来。</summary>
     private bool _autoShowSuppressed;
+    private bool _shuttingDown;
 
     /// <summary>使用说明窗（同时只开一个）。</summary>
     private LyricsHelpWindow? _help;
@@ -169,6 +170,8 @@ public sealed class NeteaseLyricsPlugin : IPlugin
 
     public void Shutdown()
     {
+            // 退出流程里要真关窗，别被下面的 Closing 拦下来
+            _shuttingDown = true;
         try
         {
             _timer?.Stop();
@@ -249,7 +252,7 @@ public sealed class NeteaseLyricsPlugin : IPlugin
 {
     "manifest_version": 1,
     "name": "MCOBridge",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "author": "goldiamond",
     "description": "把网易云当前的播放进度写成一个 JSON 文件，供 MinecraftChatOverlay 的歌词插件读取。只读 DOM、只写文件，不改客户端任何东西。",
     "betterncm_version": ">=1.0.0",
@@ -265,46 +268,90 @@ public sealed class NeteaseLyricsPlugin : IPlugin
 //
 // 取进度按这个顺序，第一个能用的就用：
 //   1) BetterNCM 原生接口（有就最准）
-//   2) 页面里的 <audio>/<video>.currentTime
-//   3) 进度条 input[type=range].value（最早只有这一条路）
+//   2) <audio>/<video>.currentTime（含 iframe / shadow DOM 里挖一遍）
+//   3) 进度条 input[type=range].value（网易云没暴露播放器时只有这条路）
 //
-// 什么时候写文件：**事件回调为主，定时器只留 5 秒兜底**。
-//   为什么这么改：以前只有一个 setInterval(1000)，而网易云被游戏盖住 / 最小化时，
-//   Chromium 会把"隐藏页面"的定时器节流到**一分钟一次**（实测 state.json 只在
-//   每分钟的第 15 秒写一次）—— 于是暂停、拖动进度条、切歌这些最多要 60 秒才
-//   被外面发现。媒体事件和 DOM 事件不受这个节流影响，所以主路径换成事件。
+// 什么时候写文件：**事件回调 + Worker 轮询为主，页面定时器只留兜底**。
+//   为什么不用 setInterval：网易云被游戏盖住 / 最小化时，Chromium 会把"隐藏页面"的
+//   定时器节流到**一分钟一次**（实测 state.json 只在每分钟的第 15 秒写一次）——
+//   暂停、拖动进度条、切歌最多要 60 秒才被发现。事件不受这个节流影响；
+//   轮询交给 Worker 里的定时器（比页面定时器更不容易被节流）。
 const DIR = "./MCOBridge";
 const FILE = DIR + "/state.json";
-const HEARTBEAT_MS = 5000;
-const SETTLE_MS = 3500;
+const POLL_MS = 250;         // Worker 轮询间隔
+const HEARTBEAT_MS = 5000;   // 页面兜底
+const SETTLE_MS = 3500;      // 交互之后再补写一次，让"停下来了"这个判断落定
+const MIN_WRITE_GAP_MS = 180;
+const DEEP_SEARCH_GAP_MS = 5000;
 const EVENTS = ["input", "change", "click", "timeupdate", "seeking", "seeked",
                 "play", "playing", "pause", "ended", "ratechange", "durationchange", "loadedmetadata"];
 
 let dirReady = false, busy = false, pending = false;
-let lastPos = null, lastChangeAt = 0;
-let mediaEl = null, settleTimer = null;
+let lastPos = null, lastChangeAt = 0, lastWriteAt = 0, lastPlaying = null;
+let mediaEl = null, lastDeepSearchAt = 0, settleTimer = null, lastProbe = "";
+let lastWritten = null;
 
-function readMedia() {
+// --- 找播放器元素：本页 + iframe + shadow DOM 都翻一遍 ---
+function mediaIn(root, depth) {
+    if (!root || depth > 4) { return null; }
     try {
-        if (!mediaEl || !mediaEl.isConnected) { mediaEl = document.querySelector("audio, video"); }
-        if (mediaEl && isFinite(mediaEl.duration) && mediaEl.duration > 0) {
-            return { position: mediaEl.currentTime, duration: mediaEl.duration, source: "media" };
+        var direct = root.querySelector ? root.querySelector("audio, video") : null;
+        if (direct && isFinite(direct.duration) && direct.duration > 0) { return direct; }
+        var all = root.querySelectorAll ? root.querySelectorAll("*") : [];
+        for (var i = 0; i < all.length; i++) {
+            var el = all[i];
+            if (el.shadowRoot) {
+                var hit = mediaIn(el.shadowRoot, depth + 1);
+                if (hit) { return hit; }
+            }
+            if (el.tagName === "IFRAME" || el.tagName === "FRAME") {
+                try { var hit2 = mediaIn(el.contentDocument, depth + 1); if (hit2) { return hit2; } } catch (e) { }
+            }
         }
     } catch (e) { }
     return null;
 }
 
-function readSlider() {
+function findMedia() {
+    var now = Date.now();
+    if (mediaEl && mediaEl.isConnected) { return mediaEl; }
+    if (now - lastDeepSearchAt < DEEP_SEARCH_GAP_MS) { return null; }
+    lastDeepSearchAt = now;
+    try { mediaEl = mediaIn(document, 0); } catch (e) { mediaEl = null; }
+    return mediaEl;
+}
+
+function readMedia() {
+    try {
+        var el = findMedia();
+        if (el && isFinite(el.duration) && el.duration > 0) {
+            return { position: el.currentTime, duration: el.duration, source: "media" };
+        }
+    } catch (e) { }
+    return null;
+}
+
+function readRanges() {
+    var out = [];
     try {
         var inputs = document.querySelectorAll("input[type=range]");
         for (var i = 0; i < inputs.length; i++) {
             var max = parseFloat(inputs[i].max), val = parseFloat(inputs[i].value);
-            if (isFinite(max) && max > 0) {
-                return { position: isFinite(val) ? val : 0, duration: max, source: "slider" };
-            }
+            out.push({ max: isFinite(max) ? max : null, value: isFinite(val) ? val : null });
         }
     } catch (e) { }
-    return null;
+    return out;
+}
+
+function readSlider() {
+    var ranges = readRanges();
+    var best = null;
+    for (var i = 0; i < ranges.length; i++) {
+        var r = ranges[i];
+        if (r.max === null || r.max <= 0 || r.value === null) { continue; }
+        if (!best || r.max > best.max) { best = r; }   // 时长那个滑块 max 最大，音量一般只有 100/1
+    }
+    return best ? { position: best.value, duration: best.max, source: "slider" } : null;
 }
 
 function readNative() {
@@ -325,8 +372,19 @@ function readNative() {
     return null;
 }
 
-function readProgress() {
-    return readNative() || readMedia() || readSlider();
+function readProgress() { return readNative() || readMedia() || readSlider(); }
+
+// 给外面看：网易云到底暴露了什么（只写进 state.json 的 probe 字段，方便排查"进度是哪来的、准不准"）
+function buildProbe() {
+    try {
+        var ncm = betterncm && betterncm.ncm;
+        return JSON.stringify({
+            ranges: readRanges(),
+            media: (findMedia() ? "有" : "无"),
+            iframes: (document.querySelectorAll("iframe").length | 0),
+            ncmKeys: (ncm ? Object.keys(ncm).slice(0, 24) : []),
+        });
+    } catch (e) { return ""; }
 }
 
 function positionIsMoving() { return (Date.now() - lastChangeAt) < 3000; }
@@ -338,59 +396,70 @@ function playingNow() {
 
 async function ensureDir() { if (dirReady) return; try { await betterncm.fs.mkdir(DIR + "/"); } catch (e) { } dirReady = true; }
 
-async function writeState() {
-    if (busy) { pending = true; return; }   // 上一次还没写完：记一笔，写完立刻补一次（不靠定时器）
+// force = 事件驱动那次（一定要写）；否则只有"位置动了 / 播放状态变了 / 兜底时间到了"才写
+async function writeState(force) {
+    if (busy) { pending = true; return; }
     busy = true;
     try {
         var p = readProgress();
         var now = Date.now();
         if (p && p.position !== lastPos) { lastPos = p.position; lastChangeAt = now; }
+        var playing = p ? playingNow() : false;
+        var moved = !!p && (lastWritten === null || Math.abs(p.position - lastWritten.position) >= 0.02);
+        var changed = lastWritten === null || playing !== lastWritten.playing ||
+                      !p !== !lastWritten.none || (p && p.source !== lastWritten.source);
+        if (!force && !moved && !changed && (now - lastWriteAt) < HEARTBEAT_MS) { return; }
+
+        var probe = buildProbe();
         var state = p
-            ? { position: p.position, duration: p.duration, playing: playingNow(), title: document.title || "", source: p.source, updatedAt: now }
-            : { position: null, duration: null, playing: false, title: document.title || "", source: "none", updatedAt: now };
+            ? { position: p.position, duration: p.duration, playing: playing, title: document.title || "",
+                source: p.source, probe: probe, updatedAt: now }
+            : { position: null, duration: null, playing: false, title: document.title || "",
+                source: "none", probe: probe, updatedAt: now };
+
         await ensureDir();
         await betterncm.fs.writeFileText(FILE, JSON.stringify(state));
+        lastWriteAt = now;
+        lastWritten = { position: p ? p.position : null, playing: playing, source: p ? p.source : "none", none: !p };
+        lastProbe = probe;
     } catch (e) {
         console.warn("[MCOBridge] 写状态出错", e && e.message);
     } finally {
         busy = false;
-        if (pending) { pending = false; writeState(); }
+        if (pending) { pending = false; writeState(false); }
     }
 }
 
-// 交互之后再补写一次：位置"停下来了"要等 3 秒才看得出来，光靠事件那一刻判不出来。
-// 用户点暂停 / 拖进度条时窗口一定是可见的，这点 setTimeout 不会被节流。
 function scheduleSettle() {
     try {
         if (settleTimer) { clearTimeout(settleTimer); }
-        settleTimer = setTimeout(function () { settleTimer = null; writeState(); }, SETTLE_MS);
+        settleTimer = setTimeout(function () { settleTimer = null; writeState(false); }, SETTLE_MS);
     } catch (e) { }
 }
 
-function onEvent() { writeState(); scheduleSettle(); }
+function onEvent() { writeState(true); scheduleSettle(); }
 
-// 事件一律挂在 document 的捕获阶段：网易云切页会把滑块 / 播放器整个换掉，
-// 挂在元素身上的监听会跟着一起消失。
 for (var i = 0; i < EVENTS.length; i++) {
     try { document.addEventListener(EVENTS[i], onEvent, true); } catch (e) { }
 }
 
-// 兜底心跳：Worker 和页面计时器**两条都开** —— Worker 里的定时器在部分环境里更不容易
-// 被节流，但万一它建得起来却不出消息，页面计时器还能兜一层（重复触发会被 busy/pending 合并掉）
-function startHeartbeat() {
+// 轮询：Worker 里的定时器优先，页面定时器始终留一条兜底
+function startPolling() {
     try {
-        var src = "setInterval(function () { postMessage(1); }, " + HEARTBEAT_MS + ");";
+        var src = "setInterval(function () { postMessage(1); }, " + POLL_MS + ");";
         var url = URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
         var worker = new Worker(url);
-        worker.onmessage = function () { writeState(); };
-    } catch (e) { }
-    setInterval(writeState, HEARTBEAT_MS);
+        worker.onmessage = function () { writeState(false); };
+    } catch (e) {
+        console.warn("[MCOBridge] Worker 起不来，退回页面定时器", e && e.message);
+    }
+    setInterval(function () { writeState(false); }, HEARTBEAT_MS);
 }
 
 plugin.onLoad(function () {
     console.log("[MCOBridge] loaded");
-    writeState();
-    startHeartbeat();
+    writeState(true);
+    startPolling();
 });
 """;
 
@@ -565,6 +634,31 @@ plugin.onLoad(function () {
                     _settings.WindowLeft = _window!.Left;
                     _settings.WindowTop = _window!.Top;
                     SaveSettings();
+                };
+
+                // 用户把它关掉时（任务栏右键关闭 / Alt+F4）：不真的销毁，当成"他点了隐藏窗口"。
+                // 不这么处理的话，WPF 的 Window 一旦 Close() 就不能再 Show() 了
+                // （InvalidOperationException），表现就是"关掉之后点【显示歌词窗】没反应，只能重启软件"。
+                _window.Closing += (_, args) =>
+                {
+                    if (_shuttingDown)
+                    {
+                        return;
+                    }
+
+                    args.Cancel = true;
+                    _window!.Hide();
+                    _autoShowSuppressed = true;
+                    Log("[歌词] 歌词窗被关掉了，按【隐藏窗口】处理（点【显示歌词窗】能再出来）");
+                };
+
+                // 保险：万一本体真被销毁了（比如系统强制），丢掉引用，下次 Tick 重建一个
+                _window.Closed += (sender, _) =>
+                {
+                    if (ReferenceEquals(_window, sender))
+                    {
+                        _window = null;
+                    }
                 };
             }
 
