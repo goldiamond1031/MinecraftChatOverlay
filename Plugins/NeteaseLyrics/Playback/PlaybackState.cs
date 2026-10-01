@@ -22,6 +22,9 @@ public sealed record PlaybackState
     /// <summary>页面标题（中继顺带写的，只当兜底）。</summary>
     public string Title { get; init; } = "";
 
+    /// <summary>进度是从哪儿来的：ncm（原生接口）/ media（播放器元素）/ slider（进度条）/ none。</summary>
+    public string Source { get; init; } = "";
+
     /// <summary>按经过时间外推后的当前位置（秒）。</summary>
     public double PositionNow
     {

@@ -85,6 +85,7 @@ public sealed class RelayPlaybackSource
                     Playing = dto.Playing,
                     UpdatedAt = stamp,
                     Title = dto.Title ?? "",
+                    Source = dto.Source ?? "",
                 };
 
                 // 数据旧了不再直接丢弃：只要不是特别旧，就继续沿用（并按播放中处理，让位置继续外推）。
@@ -153,5 +154,6 @@ public sealed class RelayPlaybackSource
         public bool Playing { get; set; }
         public long UpdatedAt { get; set; }
         public string? Title { get; set; }
+        public string? Source { get; set; }
     }
 }

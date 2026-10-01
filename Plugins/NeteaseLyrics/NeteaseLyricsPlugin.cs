@@ -35,6 +35,14 @@ public sealed class NeteaseLyricsPlugin : IPlugin
     /// <summary>上一次"当前行有没有逐字数据"，只在状态翻转时写一行日志（方便用户自查）。</summary>
     private bool? _lastKaraokeOn;
 
+    // 窗口标题（EnumWindows）不用每 200ms 读一次：一秒一次足够
+    private DateTime _lastTitleRead = DateTime.MinValue;
+    private string? _cachedTitle;
+    private string? _cachedArtist;
+
+    // 进度是从哪儿来的（ncm 原生 / media 元素 / 进度条滑块），变了才写日志
+    private string? _lastSource;
+
     /// <summary>用户刚点过【隐藏窗口】：在被显式叫出来之前，每秒的自动显示不许再把窗口放出来。</summary>
     private bool _autoShowSuppressed;
 
@@ -147,9 +155,14 @@ public sealed class NeteaseLyricsPlugin : IPlugin
             }
         }
 
-        _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        // 200ms 一拍：位置靠"时间戳 + 外推"，但"该换行了"只在 Tick 里判 ——
+        // 1 秒一拍的话每行最多晚 1 秒才切，200ms 是人眼看不出来的量级。
+        _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
         _timer.Tick += (_, _) => Tick();
         _timer.Start();
+
+        // 中继的代码变了就顺手更新一份（只有装过才更新，没装过不动）
+        EnsureRelayUpToDate();
 
         host.Log($"[网易云歌词] 已加载，配置目录：{host.PluginDirectory}");
     }
@@ -222,12 +235,21 @@ public sealed class NeteaseLyricsPlugin : IPlugin
         }
     }
 
+    /// <summary>中继插件的安装目录（BetterNCM / chromatic 认的开发插件目录）。</summary>
+    private static IEnumerable<string> RelayInstallDirectories()
+    {
+        yield return @"C:\betterncm\plugins_dev\MCOBridge";
+        yield return Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            "betterncm", "plugins_dev", "MCOBridge");
+    }
+
     /// <summary>中继插件的文件内容（打包在本插件里，装机时写出去）。</summary>
     private const string RelayManifestJson = """
 {
     "manifest_version": 1,
     "name": "MCOBridge",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "author": "goldiamond",
     "description": "把网易云当前的播放进度写成一个 JSON 文件，供 MinecraftChatOverlay 的歌词插件读取。只读 DOM、只写文件，不改客户端任何东西。",
     "betterncm_version": ">=1.0.0",
@@ -240,50 +262,171 @@ public sealed class NeteaseLyricsPlugin : IPlugin
 
     private const string RelayIndexJs = """
 // MCOBridge —— 把网易云的播放进度写成 JSON，给 MinecraftChatOverlay 的歌词插件读。
+//
+// 取进度按这个顺序，第一个能用的就用：
+//   1) BetterNCM 原生接口（有就最准）
+//   2) 页面里的 <audio>/<video>.currentTime
+//   3) 进度条 input[type=range].value（最早只有这一条路）
+//
+// 什么时候写文件：**事件回调为主，定时器只留 5 秒兜底**。
+//   为什么这么改：以前只有一个 setInterval(1000)，而网易云被游戏盖住 / 最小化时，
+//   Chromium 会把"隐藏页面"的定时器节流到**一分钟一次**（实测 state.json 只在
+//   每分钟的第 15 秒写一次）—— 于是暂停、拖动进度条、切歌这些最多要 60 秒才
+//   被外面发现。媒体事件和 DOM 事件不受这个节流影响，所以主路径换成事件。
 const DIR = "./MCOBridge";
 const FILE = DIR + "/state.json";
-const POLL_MS = 1000;
-let dirReady = false, lastPos = null, lastChangeAt = 0, busy = false;
+const HEARTBEAT_MS = 5000;
+const SETTLE_MS = 3500;
+const EVENTS = ["input", "change", "click", "timeupdate", "seeking", "seeked",
+                "play", "playing", "pause", "ended", "ratechange", "durationchange", "loadedmetadata"];
+
+let dirReady = false, busy = false, pending = false;
+let lastPos = null, lastChangeAt = 0;
+let mediaEl = null, settleTimer = null;
+
+function readMedia() {
+    try {
+        if (!mediaEl || !mediaEl.isConnected) { mediaEl = document.querySelector("audio, video"); }
+        if (mediaEl && isFinite(mediaEl.duration) && mediaEl.duration > 0) {
+            return { position: mediaEl.currentTime, duration: mediaEl.duration, source: "media" };
+        }
+    } catch (e) { }
+    return null;
+}
+
+function readSlider() {
+    try {
+        var inputs = document.querySelectorAll("input[type=range]");
+        for (var i = 0; i < inputs.length; i++) {
+            var max = parseFloat(inputs[i].max), val = parseFloat(inputs[i].value);
+            if (isFinite(max) && max > 0) {
+                return { position: isFinite(val) ? val : 0, duration: max, source: "slider" };
+            }
+        }
+    } catch (e) { }
+    return null;
+}
+
+function readNative() {
+    try {
+        var ncm = betterncm && betterncm.ncm;
+        if (ncm && typeof ncm.getPosition === "function") {
+            var pos = Number(ncm.getPosition());
+            var dur = (typeof ncm.getDuration === "function") ? Number(ncm.getDuration()) : 0;
+            if (isFinite(pos) && pos >= 0) {
+                if (!isFinite(dur) || dur <= 0) {
+                    var m = readMedia() || readSlider();
+                    dur = m ? m.duration : 0;
+                }
+                if (dur > 0) { return { position: pos, duration: dur, source: "ncm" }; }
+            }
+        }
+    } catch (e) { }
+    return null;
+}
 
 function readProgress() {
-    var inputs = document.querySelectorAll('input[type=range]');
-    for (var i = 0; i < inputs.length; i++) {
-        var el = inputs[i];
-        var max = parseFloat(el.max), val = parseFloat(el.value);
-        if (isFinite(max) && max > 0) {
-            return { position: isFinite(val) ? val : 0, duration: max };
-        }
-    }
-    return null;
+    return readNative() || readMedia() || readSlider();
+}
+
+function positionIsMoving() { return (Date.now() - lastChangeAt) < 3000; }
+
+function playingNow() {
+    try { if (mediaEl && mediaEl.isConnected) { return !mediaEl.paused; } } catch (e) { }
+    return positionIsMoving();
 }
 
 async function ensureDir() { if (dirReady) return; try { await betterncm.fs.mkdir(DIR + "/"); } catch (e) { } dirReady = true; }
 
-async function tick() {
-    if (busy) return;              // 防止两次写入交错，写出半个 JSON
+async function writeState() {
+    if (busy) { pending = true; return; }   // 上一次还没写完：记一笔，写完立刻补一次（不靠定时器）
     busy = true;
     try {
         var p = readProgress();
         var now = Date.now();
         if (p && p.position !== lastPos) { lastPos = p.position; lastChangeAt = now; }
         var state = p
-            ? { position: p.position, duration: p.duration, playing: (now - lastChangeAt) < 3000, title: document.title || "", updatedAt: now }
-            : { position: null, duration: null, playing: false, title: document.title || "", updatedAt: now };
+            ? { position: p.position, duration: p.duration, playing: playingNow(), title: document.title || "", source: p.source, updatedAt: now }
+            : { position: null, duration: null, playing: false, title: document.title || "", source: "none", updatedAt: now };
         await ensureDir();
         await betterncm.fs.writeFileText(FILE, JSON.stringify(state));
     } catch (e) {
-        console.warn("[MCOBridge] tick 出错", e && e.message);
+        console.warn("[MCOBridge] 写状态出错", e && e.message);
     } finally {
         busy = false;
+        if (pending) { pending = false; writeState(); }
     }
+}
+
+// 交互之后再补写一次：位置"停下来了"要等 3 秒才看得出来，光靠事件那一刻判不出来。
+// 用户点暂停 / 拖进度条时窗口一定是可见的，这点 setTimeout 不会被节流。
+function scheduleSettle() {
+    try {
+        if (settleTimer) { clearTimeout(settleTimer); }
+        settleTimer = setTimeout(function () { settleTimer = null; writeState(); }, SETTLE_MS);
+    } catch (e) { }
+}
+
+function onEvent() { writeState(); scheduleSettle(); }
+
+// 事件一律挂在 document 的捕获阶段：网易云切页会把滑块 / 播放器整个换掉，
+// 挂在元素身上的监听会跟着一起消失。
+for (var i = 0; i < EVENTS.length; i++) {
+    try { document.addEventListener(EVENTS[i], onEvent, true); } catch (e) { }
+}
+
+// 兜底心跳：Worker 和页面计时器**两条都开** —— Worker 里的定时器在部分环境里更不容易
+// 被节流，但万一它建得起来却不出消息，页面计时器还能兜一层（重复触发会被 busy/pending 合并掉）
+function startHeartbeat() {
+    try {
+        var src = "setInterval(function () { postMessage(1); }, " + HEARTBEAT_MS + ");";
+        var url = URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+        var worker = new Worker(url);
+        worker.onmessage = function () { writeState(); };
+    } catch (e) { }
+    setInterval(writeState, HEARTBEAT_MS);
 }
 
 plugin.onLoad(function () {
     console.log("[MCOBridge] loaded");
-    tick();
-    setInterval(tick, POLL_MS);
+    writeState();
+    startHeartbeat();
 });
 """;
+
+    /// <summary>
+    /// 启动时把"已经装过的"中继插件跟内置版本对齐 —— 中继改了行为之后（比如这次从定时器
+    /// 改成事件驱动），用户只要重启一次网易云就生效，不用再点一遍【把中继插件装到网易云】。
+    /// 目录不存在就不管（说明压根没装过，别替用户创建）。
+    /// </summary>
+    private void EnsureRelayUpToDate()
+    {
+        foreach (var dir in RelayInstallDirectories())
+        {
+            try
+            {
+                var js = Path.Combine(dir, "index.js");
+                if (!Directory.Exists(dir) || !File.Exists(js))
+                {
+                    continue;
+                }
+
+                if (string.Equals(File.ReadAllText(js), RelayIndexJs, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                File.WriteAllText(js, RelayIndexJs);
+                File.WriteAllText(Path.Combine(dir, "manifest.json"), RelayManifestJson);
+                Log("[歌词] 中继插件已自动更新到内置版本（重启网易云后生效）：" + dir);
+            }
+            catch (Exception ex)
+            {
+                Log("[歌词] 自动更新中继插件失败（" + dir + "）：" + ex.Message);
+            }
+        }
+    }
+
 
     /// <summary>
     /// 把中继插件装到网易云那边（BetterNCM 的开发插件目录）。
@@ -293,12 +436,7 @@ plugin.onLoad(function () {
     {
         try
         {
-            // BetterNCM / chromatic 认的开发插件目录
-            var candidates = new[]
-            {
-                @"C:\betterncm\plugins_dev\MCOBridge",
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "betterncm", "plugins_dev", "MCOBridge"),
-            };
+            var candidates = RelayInstallDirectories().ToList();
 
             var written = new List<string>();
             foreach (var dir in candidates)
@@ -509,7 +647,14 @@ plugin.onLoad(function () {
                 return;
             }
 
-            var (title, artist) = WindowTitleMetadata.TryRead();
+            if (DateTime.Now - _lastTitleRead >= TimeSpan.FromSeconds(1))
+            {
+                _lastTitleRead = DateTime.Now;
+                (_cachedTitle, _cachedArtist) = WindowTitleMetadata.TryRead();
+            }
+
+            var title = _cachedTitle;
+            var artist = _cachedArtist;
             var key = (title ?? "") + "|" + (artist ?? "");
             if (!string.Equals(key, _songKey, StringComparison.OrdinalIgnoreCase))
             {
@@ -544,15 +689,14 @@ plugin.onLoad(function () {
                     : $"[歌词] 这一行没有逐字数据（这首歌没 yrc，或这行的逐字和歌词文字对不上）");
             }
 
-            // 逐字可用时刷新更快（200ms），否则 1 秒就够
-            if (_timer is not null)
+            if (!string.Equals(state.Source, _lastSource, StringComparison.Ordinal))
             {
-                var want = karaokeOn ? TimeSpan.FromMilliseconds(200) : TimeSpan.FromSeconds(1);
-                if (_timer.Interval != want)
-                {
-                    _timer.Interval = want;
-                }
+                _lastSource = state.Source;
+                Log("[歌词] 进度来源：" + (string.IsNullOrWhiteSpace(state.Source) ? "未知（旧版中继）" : state.Source));
             }
+
+            // 刷新频率固定 200ms（见 Initialize）：位置靠外推，换行判定跟着这个节拍走
+
             var current = index >= 0 && index < _document.Lines.Count ? _document.Lines[index].Text : "♪";
             var translation = index >= 0 && index < _document.Lines.Count ? _document.Lines[index].Translation : null;
             var next = index + 1 >= 0 && index + 1 < _document.Lines.Count ? _document.Lines[index + 1].Text : null;
