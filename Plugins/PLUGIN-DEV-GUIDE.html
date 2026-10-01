@@ -127,7 +127,7 @@
 <div class="card">
   <p><strong>插件</strong>是一个独立编译的 C# 类库：<code>你的插件.dll</code> + <code>plugin.json</code>，压成一个 zip 发给别人，
   用户在软件里「插件」页拖进去就装好了。装好后它<strong>不会另占一个导航卡片</strong>，而是出现在「插件」板块里的一张卡片上，
-  点「进入」才进它自己的页面。</p>
+  点卡片本身才进它自己的页面（卡片右上角的开关只管启用 / 禁用，下面还有一个【卸载】）。</p>
   <p>插件<strong>只引用契约程序集</strong> <code>MinecraftChatOverlay.Plugin.Abstractions.dll</code>，
   永远不要引用主程序 exe —— 这样主程序内部怎么改都不会把你的插件弄碎。</p>
   <p>宿主给插件的界面是<strong>两种</strong>：交数据（表单式，宿主画）或交控件（自绘，你画）。其余能力（收聊天、发悬浮窗、列窗口、写日志、弹提示、存配置）
@@ -597,6 +597,170 @@ host.RegisterPage(new PluginPage
 自绘页面用它们能立刻和内置页一致，但要接受"以后可能要跟着改"；表单式没有这个问题。<br>完整名单见 <code>ModernControls.xaml</code> 里的 x:Key（还有 PluginCardStyle、InlineToggleStyle、NavRadioButtonStyle、PrimaryButtonStyle、IconButtonStyle、DangerButtonStyle、SmallDangerButtonStyle、BareTextBoxStyle、TextPrimaryBrush、Surface3Brush、BorderStrongBrush 等）。</div>
 
 
+<h3>6.4 弹窗（独立窗口）—— 照内置的公告窗抄</h3>
+<p>插件可以自己 <code>new Window()</code>。但新窗口<strong>不在主窗口的可视树上</strong>，
+而宿主的主题字典挂在主窗口的 <code>Window.Resources</code> 里 —— 所以插件自己的窗口里，
+<code>{DynamicResource ...}</code> 和 <code>{StaticResource ...}</code> <strong>都找不到</strong>宿主的资源，
+窗口会变成一片系统默认灰。</p>
+<p>正确做法：<strong>窗口自己合并一份主题字典</strong>，而且要在 <code>InitializeComponent()</code> <strong>之前</strong>挂上。</p>
+<pre><code>// HelpWindow.xaml.cs
+public partial class HelpWindow : Window
+{
+    public HelpWindow()
+    {
+        AttachHostTheme();        // 必须在 InitializeComponent 之前
+        InitializeComponent();
+    }
+
+    private void AttachHostTheme()
+    {
+        try
+        {
+            // 跨程序集 pack URI：宿主 AssemblyName = MinecraftChatOverlay
+            Resources.MergedDictionaries.Add(new ResourceDictionary
+            {
+                Source = new Uri("/MinecraftChatOverlay;component/ModernControls.xaml",
+                                 UriKind.RelativeOrAbsolute)
+            });
+        }
+        catch
+        {
+            // 兜底：直接借用主窗口已经挂好的字典
+            try
+            {
+                if (Application.Current?.MainWindow is Window main)
+                {
+                    foreach (var d in main.Resources.MergedDictionaries) Resources.MergedDictionaries.Add(d);
+                }
+            }
+            catch { /* 实在没有就用系统默认外观，别让窗口打不开 */ }
+        }
+    }
+}</code></pre>
+<div class="warn">合并之后，<strong>窗口自己的 XAML 里可以用 <code>StaticResource</code></strong>（字典先于内容解析）。
+但<strong>插件的 UserControl / 自绘页面</strong>依旧只能用 <code>DynamicResource</code>（铁律 1）。
+两处规矩不一样 —— 想省事就统一写 <code>DynamicResource</code>，两种场景都能跑。</div>
+<p>窗口属性照内置窗写，出来就是一套：</p>
+<pre><code>&lt;Window x:Class="My.First.Plugin.HelpWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="说明"
+        Width="480"
+        SizeToContent="Height"      &lt;!-- 高度跟着内容走 --&gt;
+        MaxHeight="620"             &lt;!-- ★ 一定要有上限，见下面的坑 --&gt;
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource WindowBgBrush}"
+        FontFamily="Segoe UI Variable, Segoe UI, Microsoft YaHei UI, PingFang SC, sans-serif"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"&gt;
+
+  &lt;Window.Resources&gt;
+    &lt;ResourceDictionary&gt;
+      &lt;ResourceDictionary.MergedDictionaries&gt;
+        &lt;ResourceDictionary Source="/MinecraftChatOverlay;component/ModernControls.xaml"/&gt;
+      &lt;/ResourceDictionary.MergedDictionaries&gt;
+    &lt;/ResourceDictionary&gt;
+  &lt;/Window.Resources&gt;
+
+  &lt;StackPanel Margin="22,20,22,22"&gt;
+    &lt;TextBlock Text="标题" Style="{StaticResource PanelTitleStyle}"/&gt;
+    &lt;Border Style="{StaticResource CardStyle}" Margin="0,14,0,0" Padding="16"&gt;
+      &lt;ScrollViewer MaxHeight="380" VerticalScrollBarVisibility="Auto"
+                    HorizontalScrollBarVisibility="Disabled"&gt;
+        &lt;TextBlock Text="正文" Style="{StaticResource BodyTextStyle}"/&gt;
+      &lt;/ScrollViewer&gt;
+    &lt;/Border&gt;
+    &lt;StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0"&gt;
+      &lt;Button Content="知道了" Click="Close_Click"
+              Style="{StaticResource PrimaryButtonStyle}" MinWidth="100"/&gt;
+    &lt;/StackPanel&gt;
+  &lt;/StackPanel&gt;
+&lt;/Window&gt;</code></pre>
+<div class="danger"><strong>弹窗必须有 <code>MaxHeight</code>。</strong>用户机器上很常见 150% 显示缩放，
+此时屏幕的工作区只有<strong>约 680 DIP 高</strong> —— <code>SizeToContent="Height"</code> 配一段长正文，
+窗口能长到 900+ DIP，标题栏跑出屏幕外面去、还关不掉。正文一律放进
+<code>ScrollViewer MaxHeight="380"</code>，窗口整体 <code>MaxHeight</code> 压在 620 上下。</div>
+<div class="note"><strong>记得设 <code>Owner</code>：</strong>设了才会居中于主窗口、跟着主窗口一起最小化。
+<pre><code>var dlg = new HelpWindow { Owner = Window.GetWindow(this) };   // 从页面控件拿主窗口
+dlg.ShowDialog();                 // 模态
+// dlg.Show();                    // 非模态：自己留着引用，并在 Shutdown() 里 Close()</code></pre>
+主窗口<strong>还没显示过</strong>（<code>IsVisible == false</code>）时设 <code>Owner</code> 会抛
+<code>InvalidOperationException</code>，判一下再设；不设 Owner 时把
+<code>WindowStartupLocation</code> 改成 <code>CenterScreen</code>。</div>
+
+<h3>6.5 选颜色 —— 系统取色器 + 内置的色块按钮</h3>
+<p>宿主里所有"选颜色"的地方（染色规则、礼物颜色、击杀边缘色……）都是同一套。
+插件照抄这一套，用户的操作手感就和内置页一样。三个部件：</p>
+<ol>
+  <li><strong>40×40 的圆角色块</strong>（<code>Border</code>，圆角 12、2px 描边）当预览；</li>
+  <li>旁边一行 Consolas 的 <strong>hex 文本</strong>；</li>
+  <li>一个<strong>【选择】小按钮</strong> → 弹 <code>System.Windows.Forms.ColorDialog</code>。</li>
+</ol>
+<pre><code>// 工程要 &lt;UseWindowsForms&gt;true&lt;/UseWindowsForms&gt;（和 WPF 同开时防类型二义，见铁律 3）
+private static string? PickColorHex(string currentHex)
+{
+    try
+    {
+        var cur = ParseColor(currentHex, Colors.White);          // 自己写，见下面的坑
+        using var dlg = new System.Windows.Forms.ColorDialog
+        {
+            FullOpen = true,
+            Color = System.Drawing.Color.FromArgb(cur.A, cur.R, cur.G, cur.B)
+        };
+        if (dlg.ShowDialog() != System.Windows.Forms.DialogResult.OK) return null;   // 取消
+        var c = dlg.Color;
+        var alpha = cur.A;                                       // ★ 原来的 alpha 要保住
+        var media = Color.FromArgb(alpha, c.R, c.G, c.B);
+        return media.A == 0xFF
+            ? $"#{media.R:X2}{media.G:X2}{media.B:X2}"            // 不透明 → #RRGGBB
+            : $"#{media.A:X2}{media.R:X2}{media.G:X2}{media.B:X2}";   // 带 alpha → #AARRGGBB
+    }
+    catch { return null; }
+}</code></pre>
+<div class="warn"><strong>系统 ColorDialog 没有 alpha 通道。</strong>透明色的 alpha 只能沿用旧值。
+另外<strong>别用 <code>ColorTranslator.FromHtml</code> 解 <code>#AARRGGBB</code></strong> —— 8 位 hex 它会直接抛异常，
+被 <code>catch</code> 一吞就表现成"点了没反应"。自己写解析：先按 8 位解，解不出再按 6 位解。</div>
+<p>色块按钮的 XAML（照 <code>MainWindow.Modern.xaml</code> 里那几个颜色按钮抄）：</p>
+<pre><code>&lt;StackPanel Orientation="Horizontal"&gt;
+  &lt;Border x:Name="TextColorPreview" Width="40" Height="40" CornerRadius="12"
+          BorderBrush="{DynamicResource BorderStrongBrush}" BorderThickness="2"
+          Background="#FF7FD8FF"/&gt;
+  &lt;TextBlock x:Name="TextColorHexText" Text="#FF7FD8FF"
+             Margin="10,0,0,0" VerticalAlignment="Center"
+             FontFamily="Consolas, Cascadia Mono, Microsoft YaHei UI"
+             FontSize="11.5" FontWeight="Bold"
+             Foreground="{DynamicResource TextSecondaryBrush}"/&gt;
+  &lt;Button Content="选择" Click="PickTextColor_Click" Margin="12,0,0,0"
+          Style="{DynamicResource SmallGhostButtonStyle}" VerticalAlignment="Center"/&gt;
+&lt;/StackPanel&gt;</code></pre>
+<p>点【选择】之后固定的动作顺序：
+<strong>取色 → 写进设置 → 刷新色块和 hex → 存盘 → （这个颜色当场生效的话）通知页面重画</strong>。
+返回 <code>null</code>（用户点了取消）就什么都不做。
+刷新时两边都要更新，只改设置不刷色块，用户看到的就是"点了没反应"。</p>
+
+<h3>6.6 控件对照表：内置页面长这样 → 插件里这么写</h3>
+<table>
+  <tr><th>想要什么</th><th>怎么写</th></tr>
+  <tr><td>卡片</td><td><code>&lt;Border Style="{DynamicResource CardStyle}"&gt;</code>，里面竖排 StackPanel</td></tr>
+  <tr><td>卡片标题 / 说明</td><td><code>CardTitleStyle</code> + <code>CardDescStyle</code></td></tr>
+  <tr><td>页面标题 / 页面说明</td><td><code>PanelTitleStyle</code> + <code>PanelDescStyle</code>（页头是宿主画的，一般用不到）</td></tr>
+  <tr><td>字段名</td><td><code>FieldLabelStyle</code></td></tr>
+  <tr><td>灰色小字 / 提示</td><td><code>HintStyle</code>（正文用 <code>BodyTextStyle</code>）</td></tr>
+  <tr><td>大开关（带说明那种）</td><td><code>CheckBox Style="{DynamicResource ToggleSwitchStyle}"</code>，内容放竖排 StackPanel</td></tr>
+  <tr><td>行内小开关 / 勾选</td><td><code>InlineToggleStyle</code></td></tr>
+  <tr><td>主按钮 / 次按钮 / 幽灵按钮</td><td><code>PrimaryButtonStyle</code>、<code>SmallButtonStyle</code>、<code>SmallGhostButtonStyle</code>（小尺寸是 <code>SmallPrimaryButtonStyle</code> / <code>SmallGhostButtonStyle</code>）</td></tr>
+  <tr><td>危险按钮（删除 / 卸载）</td><td><code>SmallDangerButtonStyle</code></td></tr>
+  <tr><td>药丸标签</td><td><code>&lt;Border Style="{DynamicResource ChipPrimaryBorderStyle}"&gt;</code>（普通版 <code>ChipBorderStyle</code>，薄荷版 <code>ChipMintBorderStyle</code>）</td></tr>
+  <tr><td>色块 + hex + 选择</td><td>见 6.5</td></tr>
+  <tr><td>独立弹窗</td><td>见 6.4</td></tr>
+  <tr><td>分割线</td><td><code>&lt;Border Height="1" Background="{DynamicResource BorderBrush}"/&gt;</code></td></tr>
+</table>
+<div class="note">颜色按语义选：正常 / 成功用 <code>MintBrush</code>，警告用 <code>AmberBrush</code> 或
+<code>ConsoleWarnBrush</code>，出错和危险操作用 <code>DangerBrush</code>，
+正文用 <code>TextPrimaryBrush</code> / <code>TextSecondaryBrush</code> / <code>TextTertiaryBrush</code>。
+别在插件里写死颜色 —— 用户换主题时你那块会格格不入。</div>
+
 <h2 id="manifest">7. plugin.json 参考</h2>
 <p>放在 zip 根目录（和你的 dll 同级）。宿主解析时<strong>宽容</strong>：字段名大小写不敏感、允许 <code>//</code> 注释和尾逗号。</p>
 <table>
@@ -678,7 +842,7 @@ host.RegisterPage(new PluginPage
   <tr><th>场景</th><th>结果</th></tr>
   <tr><td>用户在插件<strong>没运行</strong>时导入同 id 新版本</td><td>直接覆盖安装目录，立刻生效</td></tr>
   <tr><td>插件<strong>正在运行</strong>时导入新版本</td><td>dll 被锁删不掉 → 新版本排进 <code>&lt;id&gt;.new\</code> 队列，<strong>下次启动自动换上</strong>；数据目录不受影响</td></tr>
-  <tr><td>卸载</td><td>安装目录 + 数据目录一起删；若文件被占用则排队到下次启动删</td></tr>
+  <tr><td>卸载</td><td>安装目录 + 数据目录一起删；若文件被占用则排队到下次启动删。卡片右侧有【卸载】按钮，插件页页头也有一个（都会先弹确认框）</td></tr>
   <tr><td>禁用</td><td>立刻卸载（<code>Shutdown()</code> 会被调用），下次启动不再装载</td></tr>
 </table>
 
@@ -725,6 +889,18 @@ host.RegisterPage(new PluginPage
   <tr><td>改了代码但行为没变</td>
       <td>没重新编译，或编译了没重新导入 zip；宿主只在启动时扫描插件</td>
       <td>重新 <code>build-plugins.bat</code>（或重新导入），必要时用「重新扫描」</td></tr>
+  <tr><td>插件弹的窗口一片系统灰 / 主题资源全丢</td>
+      <td>窗口不在主窗口的可视树上，而宿主的主题字典挂在主窗口的 <code>Window.Resources</code> 上</td>
+      <td>窗口自己合并 <code>/MinecraftChatOverlay;component/ModernControls.xaml</code>（见 6.4）</td></tr>
+  <tr><td>插件窗口里 <code>StaticResource</code> 崩，但自绘页面上不崩</td>
+      <td>两处规矩不同：窗口合并了字典就能用 <code>StaticResource</code>；UserControl 是先创建后挂树，只能用 <code>DynamicResource</code></td>
+      <td>统一写 <code>DynamicResource</code>，两种场景都能跑</td></tr>
+  <tr><td>颜色按钮点了没反应 / 色块不刷新</td>
+      <td>用 <code>ColorTranslator.FromHtml</code> 解 <code>#AARRGGBB</code> 抛异常被吞；或者只改了设置、没刷色块</td>
+      <td>自己写 hex 解析（8 位和 6 位都要吃）；取色后按"写设置 → 刷色块和 hex → 存盘"的顺序做（见 6.5）</td></tr>
+  <tr><td>插件窗口比屏幕还高，下面一半看不见 / 关不掉</td>
+      <td><code>SizeToContent="Height"</code> 没配 <code>MaxHeight</code>；150% 缩放下工作区只有约 680 DIP 高</td>
+      <td>正文放进 <code>ScrollViewer MaxHeight="380"</code>，窗口加 <code>MaxHeight</code>（≤620）</td></tr>
 </table>
 
 <h2 id="samples">10. 现有插件索引（照着抄最快）</h2>
@@ -740,6 +916,8 @@ host.RegisterPage(new PluginPage
       <td>枚举游戏窗口、改别人窗口的样式/位置（可还原）、改完叫 <code>ReassertOverlayTopmost()</code></td></tr>
   <tr><td><code>Plugins\PlayerQuery\</code></td><td><code>goldiamond.playerquery</code></td><td>自绘</td>
       <td>联网查询（<code>HttpClient</code>）+ 复杂界面（字段列表、拖拽排序）</td></tr>
+  <tr><td><code>Plugins\NeteaseLyrics\</code></td><td><code>goldiamond.neteaselyrics</code></td><td>自绘 + 独立弹窗</td>
+      <td>自绘页面的完整例子：自己挂主题字典的弹窗、系统取色器 + 色块按钮、置顶歌词窗、磁盘缓存</td></tr>
 </table>
 
 <h2 id="ai">11. 附录：给 AI 的速查规范</h2>
@@ -775,6 +953,10 @@ host.RegisterPage(new PluginPage
  8) 不写 StatusText 就不显示状态行；ReadOnly 字段也能展示状态
  9) 一个插件只注册一个页面（重复调用以最后一次为准）
 10) 插件包 zip 只放 dll + plugin.json（+依赖 dll/资源）；不要放 bin/obj/pdb/契约 dll
+ 11) 弹窗：自己 new Window 时主题资源查不到 —— 必须在 InitializeComponent 之前把 /MinecraftChatOverlay;component/ModernControls.xaml 合并进 Window.Resources；窗口里可以用 StaticResource，但统一写 DynamicResource 最省心
+ 12) 弹窗属性：SizeToContent=Height + MaxHeight&lt;=620（150% 缩放下工作区只有约 680 DIP 高）+ WindowStartupLocation=CenterOwner + 能设就设 Owner（主窗口没显示过时不能设，会抛）
+ 13) 取色：用 System.Windows.Forms.ColorDialog（工程要 UseWindowsForms），alpha 沿用旧值；hex 不透明存 #RRGGBB、带 alpha 存 #AARRGGBB，解析两种都要吃；禁用 ColorTranslator.FromHtml 解 #AARRGGBB
+ 14) WPF + WinForms 同开会有一批同名类型二义：Color / FontFamily / Brushes / ColorConverter / Application / UserControl / Clipboard 等，在文件头加 using 别名写全名
 【安装位置】%AppData%\MinecraftChatOverlay\plugins\&lt;id&gt;\ ；数据 %AppData%\MinecraftChatOverlay\plugin-data\&lt;id&gt;\
 【文档配套】仓库自带 build-plugins.bat（编译+装机+打 zip 到 plugin-packages\）</code></pre>
 

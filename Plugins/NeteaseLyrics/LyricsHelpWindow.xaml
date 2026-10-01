@@ -1,0 +1,103 @@
+<Window x:Class="MinecraftChatOverlay.Plugins.NeteaseLyrics.LyricsHelpWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="网易云歌词 · 使用说明"
+        Width="480"
+        SizeToContent="Height"
+        MaxHeight="660"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource WindowBgBrush}"
+        FontFamily="Segoe UI Variable, Segoe UI, Microsoft YaHei UI, PingFang SC, sans-serif"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True">
+
+    <StackPanel Margin="22,20,22,22">
+        <StackPanel Orientation="Horizontal">
+            <Border Background="{DynamicResource PrimarySoftBrush}"
+                    CornerRadius="9"
+                    Padding="9,3"
+                    VerticalAlignment="Center">
+                <TextBlock Text="使用说明"
+                           FontSize="11.5"
+                           FontWeight="Bold"
+                           Foreground="{DynamicResource TextPrimaryBrush}"/>
+            </Border>
+            <TextBlock x:Name="SourceText"
+                       Style="{DynamicResource HintStyle}"
+                       VerticalAlignment="Center"
+                       Margin="10,0,0,0"/>
+        </StackPanel>
+
+        <TextBlock Text="让歌词滚动起来"
+                   Style="{DynamicResource PanelTitleStyle}"
+                   TextWrapping="Wrap"
+                   Margin="0,12,0,0"/>
+
+        <Border Style="{DynamicResource CardStyle}" Margin="0,14,0,0" Padding="16">
+            <ScrollViewer MaxHeight="360"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+                <StackPanel>
+                    <TextBlock Style="{DynamicResource BodyTextStyle}"
+                               TextWrapping="Wrap"
+                               Text="「网易云歌词」不注入网易云，数据全部是只读来的："/>
+
+                    <TextBlock Style="{DynamicResource BodyTextStyle}"
+                               TextWrapping="Wrap"
+                               Margin="0,10,0,0"
+                               Text="① 歌名 / 歌手 —— 读网易云客户端的窗口标题，不需要任何插件。"/>
+                    <TextBlock Style="{DynamicResource BodyTextStyle}"
+                               TextWrapping="Wrap"
+                               Margin="0,6,0,0"
+                               Text="② 歌词 —— 从网易云公开接口按「歌名 + 歌手」精确匹配，带翻译和罗马音，也不需要插件。"/>
+                    <TextBlock Style="{DynamicResource BodyTextStyle}"
+                               TextWrapping="Wrap"
+                               Margin="0,6,0,0"
+                               Text="③ 播放进度（决定歌词会不会逐行滚动）—— 需要网易云那边装一个小中继插件 MCOBridge。它只读客户端的进度条、只写一个 JSON 文件，不改客户端任何东西。"/>
+
+                    <TextBlock Style="{DynamicResource BodyTextStyle}"
+                               TextWrapping="Wrap"
+                               FontWeight="Bold"
+                               Margin="0,14,0,0"
+                               Text="要让它滚动起来，两步："/>
+                    <TextBlock Style="{DynamicResource BodyTextStyle}"
+                               TextWrapping="Wrap"
+                               Margin="0,6,0,0"
+                               Text="1. 先装 BetterNCM —— 网易云的插件框架。需要你自己下载安装，版本和客户端绑定。"/>
+                    <TextBlock Style="{DynamicResource BodyTextStyle}"
+                               TextWrapping="Wrap"
+                               Margin="0,6,0,0"
+                               Text="2. 点下面的【把中继插件装到网易云】，然后完全退出网易云（托盘右键退出）再打开。"/>
+
+                    <TextBlock Style="{DynamicResource BodyTextStyle}"
+                               TextWrapping="Wrap"
+                               Margin="0,14,0,0"
+                               Text="没装中继插件时：歌名、歌手和整首歌词仍然可以看，只是不会跟着进度逐行滚动。"/>
+                    <TextBlock Style="{DynamicResource BodyTextStyle}"
+                               TextWrapping="Wrap"
+                               Margin="0,6,0,0"
+                               Text="逐字歌词（卡拉 OK）：只有一部分歌有逐字数据（网易云的 yrc）。有的话当前行会按字染色 —— 已唱的亮、未唱的暗，可以在「2. 字体与颜色」里调已唱的颜色。"/>
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+
+        <TextBlock x:Name="StatusText"
+                   Style="{DynamicResource HintStyle}"
+                   TextWrapping="Wrap"
+                   Margin="0,12,0,0"
+                   Visibility="Collapsed"/>
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
+            <Button x:Name="InstallButton"
+                    Content="把中继插件装到网易云"
+                    Click="InstallButton_Click"
+                    Style="{DynamicResource SmallPrimaryButtonStyle}"
+                    Margin="0,0,10,0"/>
+            <Button Content="知道了"
+                    Click="CloseButton_Click"
+                    Style="{DynamicResource PrimaryButtonStyle}"
+                    MinWidth="100"/>
+        </StackPanel>
+    </StackPanel>
+</Window>

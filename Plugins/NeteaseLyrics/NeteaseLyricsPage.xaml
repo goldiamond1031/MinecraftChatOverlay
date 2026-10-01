@@ -1,0 +1,283 @@
+<UserControl x:Class="MinecraftChatOverlay.Plugins.NeteaseLyrics.NeteaseLyricsPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StackPanel>
+
+        <!-- 使用引导：首次装载自动展开（用宿主自己的卡片样式渲染，不弹系统对话框） -->
+        <Border x:Name="GuidePanel" Style="{DynamicResource CardStyle}" Visibility="Collapsed" Margin="0,0,0,14">
+            <StackPanel>
+                <TextBlock Text="先看这里：让歌词滚动起来需要两步" Style="{DynamicResource CardTitleStyle}"/>
+                <TextBlock Style="{DynamicResource HintStyle}" TextWrapping="Wrap" Margin="0,8,0,0"
+                           Text="A) 歌名 / 歌手：读网易云客户端窗口标题，不需要任何插件。"/>
+                <TextBlock Style="{DynamicResource HintStyle}" TextWrapping="Wrap" Margin="0,4,0,0"
+                           Text="B) 歌词：从网易云公开接口按「歌名 + 歌手」匹配，带翻译和罗马音，也不需要插件。"/>
+                <TextBlock Style="{DynamicResource HintStyle}" TextWrapping="Wrap" Margin="0,4,0,0"
+                           Text="C) 播放进度（决定歌词会不会逐行滚动）：需要网易云那边装一个小中继插件 MCOBridge。"/>
+                <TextBlock Style="{DynamicResource HintStyle}" TextWrapping="Wrap" Margin="0,10,0,0"
+                           Text="装中继的前提：网易云已经装了 BetterNCM（网易云的插件框架，需要你自己下载安装，和客户端版本绑定）。装好 BetterNCM 后，点下面按钮即可。"/>
+                <TextBlock x:Name="RelayResultText" Style="{DynamicResource HintStyle}" TextWrapping="Wrap" Margin="0,8,0,0"/>
+                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                    <Button Content="把中继插件装到网易云" Click="InstallRelayButton_Click" Style="{DynamicResource SmallPrimaryButtonStyle}"/>
+                    <Button Content="我知道了" Click="HideGuideButton_Click" Style="{DynamicResource SmallGhostButtonStyle}" Margin="8,0,0,0"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- 插件自己的日志（不再往软件本体的调试后台写） -->
+        <Border Style="{DynamicResource CardStyle}" Margin="0,0,0,14">
+            <StackPanel>
+                <TextBlock Text="插件日志" Style="{DynamicResource CardTitleStyle}"/>
+                <TextBlock Style="{DynamicResource HintStyle}" TextWrapping="Wrap" Margin="0,6,0,0"
+                           Text="这里只看本插件自己的日志（不再写进软件的调试后台）。日志文件在插件目录下的 plugin.log。"/>
+                <TextBox x:Name="LogBox" Height="130" Margin="0,10,0,0" IsReadOnly="True" TextWrapping="NoWrap"
+                         VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="11"/>
+                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                    <Button Content="刷新" Click="RefreshLogButton_Click" Style="{DynamicResource SmallButtonStyle}"/>
+                    <Button Content="清空" Click="ClearLogButton_Click" Style="{DynamicResource SmallButtonStyle}" Margin="8,0,0,0"/>
+                    <Button Content="打开日志文件" Click="OpenLogButton_Click" Style="{DynamicResource SmallButtonStyle}" Margin="8,0,0,0"/>
+                    <Button Content="使用说明" Click="OnboardingButton_Click" Style="{DynamicResource SmallGhostButtonStyle}" Margin="8,0,0,0"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <Border Style="{DynamicResource CardStyle}">
+            <StackPanel>
+                <TextBlock Text="1. 显示哪些内容" Style="{DynamicResource CardTitleStyle}"/>
+                <TextBlock Text="歌词按歌名+歌手从网易云公开接口精确匹配；进度来自中继插件读客户端进度条。改完立刻生效并存盘。"
+                           Style="{DynamicResource CardDescStyle}" Margin="0,3,0,14" TextWrapping="Wrap"/>
+                <CheckBox x:Name="EnabledCheckBox" Style="{DynamicResource ToggleSwitchStyle}" Checked="Option_Changed" Unchecked="Option_Changed">
+                    <StackPanel>
+                        <TextBlock Text="显示歌词窗" FontSize="13" FontWeight="Bold"/>
+                        <TextBlock Text="关掉之后不显示歌词，也不再读播放状态" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0"/>
+                    </StackPanel>
+                </CheckBox>
+                <CheckBox x:Name="ShowTranslationCheckBox" Style="{DynamicResource ToggleSwitchStyle}" Margin="0,14,0,0" Checked="Option_Changed" Unchecked="Option_Changed">
+                    <StackPanel>
+                        <TextBlock Text="显示翻译" FontSize="13" FontWeight="Bold"/>
+                        <TextBlock Text="网易云有翻译的歌曲才会显示" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0"/>
+                    </StackPanel>
+                </CheckBox>
+                <CheckBox x:Name="ShowNextLineCheckBox" Style="{DynamicResource ToggleSwitchStyle}" Margin="0,14,0,0" Checked="Option_Changed" Unchecked="Option_Changed">
+                    <StackPanel>
+                        <TextBlock Text="显示下一句" FontSize="13" FontWeight="Bold"/>
+                        <TextBlock Text="字号 = 当前行 × 下一句缩放（下面可调）" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0"/>
+                    </StackPanel>
+                </CheckBox>
+                <CheckBox x:Name="ShowRomajiCheckBox" Style="{DynamicResource ToggleSwitchStyle}" Margin="0,14,0,0" Checked="Option_Changed" Unchecked="Option_Changed">
+                    <StackPanel>
+                        <TextBlock Text="显示罗马音" FontSize="13" FontWeight="Bold"/>
+                        <TextBlock Text="日文歌才有（网易云的罗马音歌词），显示在翻译下面" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0"/>
+                    </StackPanel>
+                </CheckBox>
+                <CheckBox x:Name="KaraokeCheckBox" Style="{DynamicResource ToggleSwitchStyle}" Margin="0,14,0,0" Checked="Option_Changed" Unchecked="Option_Changed">
+                    <StackPanel>
+                        <TextBlock Text="逐字歌词（卡拉 OK）" FontSize="13" FontWeight="Bold"/>
+                        <TextBlock Text="当前行按字染色：已唱的亮、未唱的暗（网易云有逐字数据的歌才有）" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0"/>
+                    </StackPanel>
+                </CheckBox>
+                <CheckBox x:Name="ShowTrackInfoCheckBox" Style="{DynamicResource ToggleSwitchStyle}" Margin="0,14,0,0" Checked="Option_Changed" Unchecked="Option_Changed">
+                    <StackPanel>
+                        <TextBlock Text="显示进度" FontSize="13" FontWeight="Bold"/>
+                        <TextBlock Text="在底部显示 02:33 / 02:59" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0"/>
+                    </StackPanel>
+                </CheckBox>
+                <CheckBox x:Name="ClickThroughCheckBox" Style="{DynamicResource ToggleSwitchStyle}" Margin="0,14,0,0" Checked="Option_Changed" Unchecked="Option_Changed">
+                    <StackPanel>
+                        <TextBlock Text="鼠标穿透" FontSize="13" FontWeight="Bold"/>
+                        <TextBlock Text="开着时点不到歌词窗（适合盖在游戏上）；想拖动歌词窗就先关掉" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0"/>
+                    </StackPanel>
+                </CheckBox>
+            </StackPanel>
+        </Border>
+
+        <Border Style="{DynamicResource CardStyle}" Margin="0,14,0,0">
+            <StackPanel>
+                <TextBlock Text="2. 字体与颜色" Style="{DynamicResource CardTitleStyle}"/>
+                <TextBlock Text="字体下拉是常用字体；想用别的字体可以在设置文件里改 FontFamily。" Style="{DynamicResource CardDescStyle}" Margin="0,3,0,14" TextWrapping="Wrap"/>
+
+                <Grid Margin="0,4,0,0">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="字体" Style="{DynamicResource FieldLabelStyle}" VerticalAlignment="Center"/>
+                    <ComboBox x:Name="FontComboBox" Grid.Column="1" Height="32" Margin="12,0" SelectionChanged="Option_Changed"/>
+                    <TextBlock x:Name="FontTipText" Grid.Column="2" Style="{DynamicResource HintStyle}" VerticalAlignment="Center"/>
+                </Grid>
+
+                <Grid Margin="0,12,0,0">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="字号" Style="{DynamicResource FieldLabelStyle}" VerticalAlignment="Center"/>
+                    <Slider x:Name="FontSizeSlider" Grid.Column="1" Minimum="12" Maximum="72" TickFrequency="1" IsSnapToTickEnabled="True" Margin="12,0" ValueChanged="Option_Changed"/>
+                    <TextBlock x:Name="FontSizeText" Grid.Column="2" Style="{DynamicResource HintStyle}" VerticalAlignment="Center" MinWidth="52"/>
+                </Grid>
+
+                <Grid Margin="0,12,0,0">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="下一句缩放" Style="{DynamicResource FieldLabelStyle}" VerticalAlignment="Center"/>
+                    <Slider x:Name="NextScaleSlider" Grid.Column="1" Minimum="0.3" Maximum="1.2" TickFrequency="0.02" IsSnapToTickEnabled="True" Margin="12,0" ValueChanged="Option_Changed"/>
+                    <TextBlock x:Name="NextScaleText" Grid.Column="2" Style="{DynamicResource HintStyle}" VerticalAlignment="Center" MinWidth="52"/>
+                </Grid>
+
+                <Grid Margin="0,12,0,0">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="翻译/罗马音缩放" Style="{DynamicResource FieldLabelStyle}" VerticalAlignment="Center"/>
+                    <Slider x:Name="TranslationScaleSlider" Grid.Column="1" Minimum="0.3" Maximum="1.2" TickFrequency="0.02" IsSnapToTickEnabled="True" Margin="12,0" ValueChanged="Option_Changed"/>
+                    <TextBlock x:Name="TranslationScaleText" Grid.Column="2" Style="{DynamicResource HintStyle}" VerticalAlignment="Center" MinWidth="52"/>
+                </Grid>
+
+                    <Grid Margin="0,12,0,0">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <TextBlock Text="罗马音缩放" Style="{DynamicResource FieldLabelStyle}" VerticalAlignment="Center"/>
+                        <Slider x:Name="RomajiScaleSlider" Grid.Column="1" Minimum="0.3" Maximum="1.2" TickFrequency="0.02" IsSnapToTickEnabled="True" Margin="12,0" ValueChanged="Option_Changed"/>
+                        <TextBlock x:Name="RomajiScaleText" Grid.Column="2" Style="{DynamicResource HintStyle}" VerticalAlignment="Center" MinWidth="52"/>
+                    </Grid>
+                <Grid Margin="0,12,0,0">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="文字颜色" Style="{DynamicResource FieldLabelStyle}" VerticalAlignment="Center"/>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="12,0">
+                        <Border x:Name="TextColorPreview" Width="40" Height="40" CornerRadius="12"
+                                BorderBrush="{DynamicResource BorderStrongBrush}" BorderThickness="2"
+                                Background="#FFFFFFFF"/>
+                        <TextBlock x:Name="TextColorHexText" Text="#FFFFFF" Margin="10,0,10,0"
+                                   FontFamily="Consolas" FontSize="11.5" FontWeight="Bold"
+                                   Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                        <Button Content="选择" Click="TextColorButton_Click" Style="{DynamicResource SmallGhostButtonStyle}"/>
+                        <Button x:Name="BoldButton" Content="粗体" Width="60" Margin="10,0,0,0" Click="BoldButton_Click" Style="{DynamicResource SmallButtonStyle}"/>
+                    </StackPanel>
+                    <TextBlock x:Name="BoldText" Grid.Column="2" Style="{DynamicResource HintStyle}" VerticalAlignment="Center"/>
+                </Grid>
+
+                <Grid Margin="0,12,0,0">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="罗马音颜色" Style="{DynamicResource FieldLabelStyle}" VerticalAlignment="Center"/>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="12,0">
+                        <Border x:Name="RomajiColorPreview" Width="40" Height="40" CornerRadius="12"
+                                BorderBrush="{DynamicResource BorderStrongBrush}" BorderThickness="2"
+                                Background="#CCBFE3FF"/>
+                        <TextBlock x:Name="RomajiColorHexText" Text="#CCBFE3FF" Margin="10,0,10,0"
+                                   FontFamily="Consolas" FontSize="11.5" FontWeight="Bold"
+                                   Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                        <Button Content="选择" Click="RomajiColorButton_Click" Style="{DynamicResource SmallGhostButtonStyle}"/>
+                        <Button x:Name="RomajiItalicButton" Content="斜体：开" Width="80" Margin="10,0,0,0" Click="RomajiItalicButton_Click" Style="{DynamicResource SmallButtonStyle}"/>
+                    </StackPanel>
+                    <TextBlock Grid.Column="2" Style="{DynamicResource HintStyle}" VerticalAlignment="Center"/>
+                </Grid>
+
+                <Grid Margin="0,12,0,0">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="已唱颜色" Style="{DynamicResource FieldLabelStyle}" VerticalAlignment="Center"/>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="12,0">
+                        <Border x:Name="KaraokeColorPreview" Width="40" Height="40" CornerRadius="12"
+                                BorderBrush="{DynamicResource BorderStrongBrush}" BorderThickness="2"
+                                Background="#FF7FD8FF"/>
+                        <TextBlock x:Name="KaraokeColorHexText" Text="#7FD8FF" Margin="10,0,10,0"
+                                   FontFamily="Consolas" FontSize="11.5" FontWeight="Bold"
+                                   Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                        <Button Content="选择" Click="KaraokeColorButton_Click" Style="{DynamicResource SmallGhostButtonStyle}"/>
+                    </StackPanel>
+                    <TextBlock Grid.Column="2" Style="{DynamicResource HintStyle}" VerticalAlignment="Center" Text="逐字歌词里已唱的部分"/>
+                </Grid>
+
+                <Grid Margin="0,12,0,0">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="背景不透明度" Style="{DynamicResource FieldLabelStyle}" VerticalAlignment="Center"/>
+                    <Slider x:Name="OpacitySlider" Grid.Column="1" Minimum="0" Maximum="1" TickFrequency="0.05" IsSnapToTickEnabled="True" Margin="12,0" ValueChanged="Option_Changed"/>
+                    <TextBlock x:Name="OpacityText" Grid.Column="2" Style="{DynamicResource HintStyle}" VerticalAlignment="Center" MinWidth="52"/>
+                </Grid>
+            </StackPanel>
+        </Border>
+
+        <Border Style="{DynamicResource CardStyle}" Margin="0,14,0,0">
+            <StackPanel>
+                <TextBlock Text="3. 阴影" Style="{DynamicResource CardTitleStyle}"/>
+                <TextBlock Text="歌词盖在游戏画面上时，阴影是保证看得清的关键。方向：0°=右 45°=右下 90°=下 180°=左 270°=上。"
+                           Style="{DynamicResource CardDescStyle}" Margin="0,3,0,14" TextWrapping="Wrap"/>
+
+                <Grid Margin="0,4,0,0">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="阴影颜色" Style="{DynamicResource FieldLabelStyle}" VerticalAlignment="Center"/>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="12,0">
+                        <Border x:Name="ShadowColorPreview" Width="40" Height="40" CornerRadius="12"
+                                BorderBrush="{DynamicResource BorderStrongBrush}" BorderThickness="2"
+                                Background="#FF000000"/>
+                        <TextBlock x:Name="ShadowColorHexText" Text="#000000" Margin="10,0,10,0"
+                                   FontFamily="Consolas" FontSize="11.5" FontWeight="Bold"
+                                   Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                        <Button Content="选择" Click="ShadowColorButton_Click" Style="{DynamicResource SmallGhostButtonStyle}"/>
+                    </StackPanel>
+                    <TextBlock Grid.Column="2" Style="{DynamicResource HintStyle}" VerticalAlignment="Center"/>
+                </Grid>
+
+                <Grid Margin="0,12,0,0">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="模糊程度" Style="{DynamicResource FieldLabelStyle}" VerticalAlignment="Center"/>
+                    <Slider x:Name="ShadowBlurSlider" Grid.Column="1" Minimum="0" Maximum="40" TickFrequency="1" IsSnapToTickEnabled="True" Margin="12,0" ValueChanged="Option_Changed"/>
+                    <TextBlock x:Name="ShadowBlurText" Grid.Column="2" Style="{DynamicResource HintStyle}" VerticalAlignment="Center" MinWidth="52"/>
+                </Grid>
+
+                <Grid Margin="0,12,0,0">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="偏移距离" Style="{DynamicResource FieldLabelStyle}" VerticalAlignment="Center"/>
+                    <Slider x:Name="ShadowOffsetSlider" Grid.Column="1" Minimum="0" Maximum="12" TickFrequency="0.5" IsSnapToTickEnabled="True" Margin="12,0" ValueChanged="Option_Changed"/>
+                    <TextBlock x:Name="ShadowOffsetText" Grid.Column="2" Style="{DynamicResource HintStyle}" VerticalAlignment="Center" MinWidth="52"/>
+                </Grid>
+
+                <Grid Margin="0,12,0,0">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="方向" Style="{DynamicResource FieldLabelStyle}" VerticalAlignment="Center"/>
+                    <Slider x:Name="ShadowDirectionSlider" Grid.Column="1" Minimum="0" Maximum="360" TickFrequency="5" IsSnapToTickEnabled="True" Margin="12,0" ValueChanged="Option_Changed"/>
+                    <TextBlock x:Name="ShadowDirectionText" Grid.Column="2" Style="{DynamicResource HintStyle}" VerticalAlignment="Center" MinWidth="52"/>
+                </Grid>
+
+                <Grid Margin="0,12,0,0">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="阴影不透明度" Style="{DynamicResource FieldLabelStyle}" VerticalAlignment="Center"/>
+                    <Slider x:Name="ShadowOpacitySlider" Grid.Column="1" Minimum="0" Maximum="1" TickFrequency="0.05" IsSnapToTickEnabled="True" Margin="12,0" ValueChanged="Option_Changed"/>
+                    <TextBlock x:Name="ShadowOpacityText" Grid.Column="2" Style="{DynamicResource HintStyle}" VerticalAlignment="Center" MinWidth="52"/>
+                </Grid>
+            </StackPanel>
+        </Border>
+
+        <Border Style="{DynamicResource CardStyle}" Margin="0,14,0,0">
+            <StackPanel>
+                <TextBlock Text="4. 同步与位置" Style="{DynamicResource CardTitleStyle}"/>
+                <TextBlock Text="歌词比人声早/晚就调偏移：正数让歌词提前出现，负数延后。每首歌的偏移设一次就行。"
+                           Style="{DynamicResource CardDescStyle}" Margin="0,3,0,14" TextWrapping="Wrap"/>
+
+                <Grid Margin="0,4,0,0">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="歌词偏移" Style="{DynamicResource FieldLabelStyle}" VerticalAlignment="Center"/>
+                    <Slider x:Name="LyricOffsetSlider" Grid.Column="1" Minimum="-3000" Maximum="3000" TickFrequency="50" IsSnapToTickEnabled="True" Margin="12,0" ValueChanged="Option_Changed"/>
+                    <TextBlock x:Name="LyricOffsetText" Grid.Column="2" Style="{DynamicResource HintStyle}" VerticalAlignment="Center" MinWidth="70"/>
+                </Grid>
+
+                <Grid Margin="0,12,0,0">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="窗口宽度" Style="{DynamicResource FieldLabelStyle}" VerticalAlignment="Center"/>
+                    <Slider x:Name="WidthSlider" Grid.Column="1" Minimum="300" Maximum="1920" TickFrequency="20" IsSnapToTickEnabled="True" Margin="12,0" ValueChanged="Option_Changed"/>
+                    <TextBlock x:Name="WidthText" Grid.Column="2" Style="{DynamicResource HintStyle}" VerticalAlignment="Center" MinWidth="52"/>
+                </Grid>
+
+                <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
+                    <Button Content="显示歌词窗" Click="ShowButton_Click" Style="{DynamicResource SmallPrimaryButtonStyle}"/>
+                    <Button Content="隐藏窗口" Click="HideButton_Click" Style="{DynamicResource SmallButtonStyle}" Margin="8,0,0,0"/>
+                    <Button Content="挪到右上角" Click="TopRightButton_Click" Style="{DynamicResource SmallGhostButtonStyle}" Margin="8,0,0,0"/>
+                    <Button Content="恢复默认外观" Click="ResetStyleButton_Click" Style="{DynamicResource SmallGhostButtonStyle}" Margin="8,0,0,0"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <Border Style="{DynamicResource CardStyle}" Margin="0,14,0,0">
+            <StackPanel>
+                <TextBlock Text="5. 当前状态" Style="{DynamicResource CardTitleStyle}"/>
+                <TextBlock x:Name="StatusText" Style="{DynamicResource HintStyle}" TextWrapping="Wrap" Margin="0,8,0,0" Text="正在读取…"/>
+                <TextBlock x:Name="LyricsText" Style="{DynamicResource HintStyle}" TextWrapping="Wrap" Margin="0,6,0,0"/>
+                <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+                    <Button Content="立即刷新歌词" Click="RefreshButton_Click" Style="{DynamicResource SmallButtonStyle}"/>
+                    <Button Content="使用说明" Click="OnboardingButton_Click" Style="{DynamicResource SmallButtonStyle}" Margin="8,0,0,0"/>
+                    <Button Content="把中继插件装到网易云" Click="InstallRelayButton_Click" Style="{DynamicResource SmallPrimaryButtonStyle}" Margin="8,0,0,0"/>
+                </StackPanel>
+                <TextBlock Style="{DynamicResource HintStyle}" TextWrapping="Wrap" Margin="0,14,0,0"
+                           Text="数据来源：歌名/歌手取网易云客户端窗口标题；进度取中继插件 MCOBridge 写出的 state.json。歌词按歌名+歌手精确匹配，改版翻唱对不上时会显示找不到。"/>
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</UserControl>

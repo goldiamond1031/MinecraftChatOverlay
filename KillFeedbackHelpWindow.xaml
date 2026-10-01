@@ -1,0 +1,172 @@
+<Window x:Class="MinecraftChatOverlay.KillFeedbackHelpWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="击杀反馈 · 匹配规则填写教程"
+        Width="580"
+        SizeToContent="Height"
+        MaxHeight="640"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource WindowBgBrush}"
+        FontFamily="Segoe UI Variable, Segoe UI, Microsoft YaHei UI, PingFang SC, sans-serif"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True">
+
+    <!--
+        「匹配规则怎么填」的独立弹窗。
+        外观和公告窗 / 扫码登录窗一个套路：自己合并同一套主题资源、居中于主窗口。
+        弹窗不在主窗口的视觉树上，所以主题字典必须自己挂一份 —— 挂在 Window.Resources 里，
+        字典先于内容解析，窗口里就能照常用 StaticResource（见 AnnouncementWindow.xaml）。
+    -->
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/MinecraftChatOverlay;component/ModernControls.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+
+            <!-- 教程小节的标题 -->
+            <Style x:Key="HelpStepTitleStyle" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="13"/>
+                <Setter Property="FontWeight" Value="ExtraBold"/>
+                <Setter Property="TextWrapping" Value="Wrap"/>
+                <Setter Property="Margin" Value="0,0,0,5"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+            </Style>
+
+            <!-- 教程小节的正文 -->
+            <Style x:Key="HelpStepBodyStyle" TargetType="TextBlock" BasedOn="{StaticResource BodyTextStyle}">
+                <Setter Property="Margin" Value="0,0,0,4"/>
+            </Style>
+
+            <!-- 一条规则的示例块 -->
+            <Style x:Key="HelpCodeStyle" TargetType="TextBlock">
+                <Setter Property="FontFamily" Value="Consolas, Cascadia Mono, Microsoft YaHei UI"/>
+                <Setter Property="FontSize" Value="12.5"/>
+                <Setter Property="TextWrapping" Value="Wrap"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+            </Style>
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <StackPanel Margin="22,20,22,22">
+        <StackPanel Orientation="Horizontal">
+            <Border Background="{DynamicResource PrimarySoftBrush}"
+                    CornerRadius="9"
+                    Padding="9,3"
+                    VerticalAlignment="Center">
+                <TextBlock Text="教程"
+                           FontSize="11.5"
+                           FontWeight="Bold"
+                           Foreground="{DynamicResource TextPrimaryBrush}"/>
+            </Border>
+            <TextBlock Text="击杀反馈"
+                       Style="{StaticResource HintStyle}"
+                       VerticalAlignment="Center"
+                       Margin="10,0,0,0"/>
+        </StackPanel>
+
+        <TextBlock Text="匹配规则怎么填"
+                   Style="{StaticResource PanelTitleStyle}"
+                   TextWrapping="Wrap"
+                   Margin="0,12,0,0"/>
+
+        <TextBlock Style="{StaticResource PanelDescStyle}"
+                   TextWrapping="Wrap"
+                   Margin="0,4,0,0"
+                   Text="规则是空的，软件一条击杀都认不出来 —— 画面效果和提示音也就永远不会响。"/>
+
+        <Border Style="{StaticResource CardStyle}" Margin="0,14,0,0" Padding="16,15,16,16">
+            <ScrollViewer MaxHeight="320"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+                <StackPanel>
+
+                    <!-- 1 -->
+                    <TextBlock Style="{StaticResource HelpStepTitleStyle}" Text="1. 为什么非填不可"/>
+                    <TextBlock Style="{StaticResource HelpStepBodyStyle}"
+                               Text="软件并不知道「哪个玩家是你」。它只会拿你写下的规则，去一条条比对聊天内容 —— 对上了才算你的击杀。规则空着 = 永远匹配不到，后面所有效果都是空转。"/>
+                    <TextBlock Style="{StaticResource HelpStepBodyStyle}"
+                               Margin="0,0,0,14"
+                               Text="所以「必须至少有一条匹配规则」是这整页生效的前提，不是可选项。"/>
+
+                    <!-- 2 -->
+                    <TextBlock Style="{StaticResource HelpStepTitleStyle}" Text="2. 一条规则长什么样"/>
+                    <TextBlock Style="{StaticResource HelpStepBodyStyle}"
+                               Text="就两截：「你的 ID」+「紧挨着的一小段固定文字」。"/>
+                    <Border Background="{DynamicResource Surface2Brush}"
+                            BorderBrush="{DynamicResource BorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="10,8"
+                            Margin="0,2,0,8">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource HelpCodeStyle}" Text="你的ID 击败了"/>
+                            <TextBlock Style="{StaticResource HelpCodeStyle}" Text="你的ID >> 拿下"/>
+                        </StackPanel>
+                    </Border>
+                    <TextBlock Style="{StaticResource HelpStepBodyStyle}"
+                               Text="两个刻意的设计：不要求出现在行首（你的 ID 在前在后都能命中）；不含敌方名字、不含收尾标点（结尾是 ! 还是 ，达成连杀！ 都不影响）。"/>
+                    <TextBlock Style="{StaticResource HelpStepBodyStyle}"
+                               Margin="0,0,0,14"
+                               Text="例：日志里是「某玩家 被 你的ID 击败了」，那规则写「你的ID 击败了」就够了。"/>
+
+                    <!-- 3 -->
+                    <TextBlock Style="{StaticResource HelpStepTitleStyle}" Text="3. 推荐做法：让软件自己切"/>
+                    <TextBlock Style="{StaticResource HelpStepBodyStyle}"
+                               Text="不用会写正则，照着上面三个框填，点一下按钮就行："/>
+                    <TextBlock Style="{StaticResource HelpStepBodyStyle}" Text="① 从日志或悬浮窗里复制一条「你自己打死别人」的消息，粘进「你的击杀消息示例」。"/>
+                    <TextBlock Style="{StaticResource HelpStepBodyStyle}" Text="② 把这条消息里的那个敌方名字，填进「示例里的敌方名字」（它只当切点用，不会写进规则）。"/>
+                    <TextBlock Style="{StaticResource HelpStepBodyStyle}"
+                               Margin="0,0,0,14"
+                               Text="③ 点【生成并加一行】。生成的规则会出现在下面的「匹配规则」框里，可以再手改。"/>
+
+                    <!-- 4 -->
+                    <TextBlock Style="{StaticResource HelpStepTitleStyle}" Text="4. 一局里有几种写法，就写几条"/>
+                    <TextBlock Style="{StaticResource HelpStepBodyStyle}"
+                               Text="规则一行一条，命中任意一条就算。近战 / 远程 / 爆炸的击杀消息往往不是同一个模板，每种粘一条："/>
+                    <Border Background="{DynamicResource Surface2Brush}"
+                            BorderBrush="{DynamicResource BorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="10,8"
+                            Margin="0,2,0,14">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource HelpCodeStyle}" Text="你的ID 击败了"/>
+                            <TextBlock Style="{StaticResource HelpCodeStyle}" Text="你的ID 射杀了"/>
+                            <TextBlock Style="{StaticResource HelpCodeStyle}" Text="你的ID >> 拿下"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- 5 -->
+                    <TextBlock Style="{StaticResource HelpStepTitleStyle}" Text="5. 填完先自检，别急着进游戏"/>
+                    <TextBlock Style="{StaticResource HelpStepBodyStyle}"
+                               Text="· 用【试一条】粘一条真实消息进去，看它认不认；"/>
+                    <TextBlock Style="{StaticResource HelpStepBodyStyle}"
+                               Text="· 看卡片底部那行数字：规则 N 条 / 已看 / 匹配；"/>
+                    <TextBlock Style="{StaticResource HelpStepBodyStyle}"
+                               Text="· 「已看」一直 0 → 聊天没进到程序里（日志路径 / 编码 / 没点开始监听）；"/>
+                    <TextBlock Style="{StaticResource HelpStepBodyStyle}"
+                               Margin="0,0,0,14"
+                               Text="· 「已看」涨、「匹配」不涨 → 规则不对，回去改规则。"/>
+
+                    <!-- 6 -->
+                    <TextBlock Style="{StaticResource HelpStepTitleStyle}" Text="6. 两个容易踩的坑"/>
+                    <TextBlock Style="{StaticResource HelpStepBodyStyle}"
+                               Text="· 你的 ID 要填裸名字（Steve），别带称号 / VIP 前缀 —— 默认已经开着「剥离方括号前缀」，[vip1][25阶1003⚝]Steve 会先被剥成 Steve 再比对。"/>
+                    <TextBlock Style="{StaticResource HelpStepBodyStyle}"
+                               Text="· 只有把「剥离方括号前缀」的勾取消掉，才需要照日志原样、连前缀一起填。"/>
+                    <TextBlock Style="{StaticResource HelpStepBodyStyle}"
+                               Margin="0,0,0,0"
+                               Text="· 规则默认按纯文本处理，. [ ( 都只是普通符号，不用转义；想写模式再勾「按正则解释」。"/>
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
+            <Button Content="知道了"
+                    Click="CloseButton_Click"
+                    Style="{StaticResource PrimaryButtonStyle}"
+                    MinWidth="100"/>
+        </StackPanel>
+    </StackPanel>
+</Window>

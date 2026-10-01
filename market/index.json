@@ -1,6 +1,6 @@
 {
     "schemaVersion":  1,
-    "updatedAt":  "2026-09-30T21:48:52+08:00",
+    "updatedAt":  "2026-10-01T19:58:31+08:00",
     "plugins":  [
                     {
                         "id":  "goldiamond.autogg",
@@ -22,21 +22,22 @@
                                  ]
                     },
                     {
-                        "id":  "goldiamond.neteaselyric",
+                        "id":  "goldiamond.neteaselyrics",
                         "name":  "网易云歌词",
-                        "version":  "1.0.0",
-                        "author":  "MinecraftChatOverlay",
-                        "description":  "把正在播放的网易云歌词显示成自己的置顶悬浮窗：带影子描边、可调字号配色，锁定后鼠标穿透，玩游戏不挡操作。",
+                        "version":  "1.1.0",
+                        "author":  "goldiamond",
+                        "description":  "在屏幕任意位置显示网易云正在播放的歌词（当前行 + 下一行 + 翻译），跟着播放进度逐行滚动，支持逐字染色。不注入、不改网易云，只读一个由中继小插件写出的进度文件。",
                         "apiVersion":  1,
                         "capabilities":  [
-                                             "读取系统媒体会话（需要在网易云设置里打开“系统媒体控制”）",
-                                             "联网访问网易云公开接口（搜歌 + 取歌词）",
-                                             "自己开一个置顶小窗",
-                                             "在自己目录里读写配置"
+                                             "读取网易云客户端的窗口标题（识别当前歌曲）",
+                                             "读取中继插件写出的播放进度文件",
+                                             "访问网易云公开的歌词接口",
+                                             "在自己目录里读写配置与歌词缓存",
+                                             "显示一个置顶歌词窗"
                                          ],
-                        "downloadUrl":  "packages/goldiamond.neteaselyric-1.0.0.zip",
-                        "sha256":  "5192219714160EA9EEB4F80BBEF372A928BEB49D46600E45EBA3825412EBD322",
-                        "size":  6364202,
+                        "downloadUrl":  "packages/goldiamond.neteaselyrics-1.1.0.zip",
+                        "sha256":  "3A0134DC5695A32BCC7B3C21B62C05AF99DBC6845A6F49E66B236B0F70F81A7C",
+                        "size":  47195,
                         "tags":  [
 
                                  ]

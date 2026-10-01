@@ -1608,6 +1608,42 @@
                                     </StackPanel>
                                 </Grid>
 
+                                <!--
+                                    封禁风险提示：动态模糊是往游戏进程里注入 DLL、直接改画面帧实现的，
+                                    这在服务端 / 反作弊眼里属于灰色地带。这一条必须明说，别让用户自己踩了才知道。
+                                -->
+                                <Border Background="{DynamicResource DangerSoftBrush}"
+                                        BorderBrush="{DynamicResource DangerBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="12"
+                                        Padding="14,11"
+                                        Margin="0,0,0,16">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="!"
+                                                   FontSize="15"
+                                                   FontWeight="Bold"
+                                                   VerticalAlignment="Top"
+                                                   Margin="0,0,9,0"
+                                                   Foreground="{DynamicResource DangerBrush}"/>
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock Text="有封禁风险，用之前请自行斟酌"
+                                                       FontSize="12.5"
+                                                       FontWeight="ExtraBold"
+                                                       TextWrapping="Wrap"
+                                                       Foreground="{DynamicResource DangerBrush}"/>
+                                            <TextBlock FontSize="11.5"
+                                                       TextWrapping="Wrap"
+                                                       Margin="0,3,0,0"
+                                                       Foreground="{DynamicResource TextSecondaryBrush}"
+                                                       Text="动态模糊是靠往游戏进程里注入 DLL、直接改画面帧实现的 —— 这类操作在服务端和反作弊眼里属于灰色地带，有可能被判定成作弊并封号。本身具有封禁记录的机器、以及被人举报，都会进一步加大封禁风险，要不要用请自行斟酌。"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+
                                 <Border Style="{StaticResource CardStyle}">
                                     <StackPanel>
                                         <TextBlock Text="1. 选择游戏进程" Style="{StaticResource CardTitleStyle}"/>
@@ -1727,6 +1763,41 @@
                                 </Grid>
 
                                 <!--
+                                    封禁风险提示：击杀反馈的画面效果是走动态模糊那条注入通路送进游戏的，
+                                    所以它和动态模糊是同一类风险。这条常驻，不跟着状态变色。
+                                -->
+                                <Border Background="{DynamicResource DangerSoftBrush}"
+                                        BorderBrush="{DynamicResource DangerBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="12"
+                                        Padding="14,11"
+                                        Margin="0,0,0,16">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="!"
+                                                   FontSize="15"
+                                                   FontWeight="Bold"
+                                                   VerticalAlignment="Top"
+                                                   Margin="0,0,9,0"
+                                                   Foreground="{DynamicResource DangerBrush}"/>
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock Text="有封禁风险，用之前请自行斟酌"
+                                                       FontSize="12.5"
+                                                       FontWeight="ExtraBold"
+                                                       TextWrapping="Wrap"
+                                                       Foreground="{DynamicResource DangerBrush}"/>
+                                            <TextBlock FontSize="11.5"
+                                                       TextWrapping="Wrap"
+                                                       Margin="0,3,0,0"
+                                                       Foreground="{DynamicResource TextSecondaryBrush}"
+                                                       Text="击杀反馈的画面效果同样是靠注入 DLL 改游戏画面实现的，在服务端和反作弊眼里属于灰色地带，有可能被判定成作弊并封号。本身具有封禁记录的机器、以及被人举报，都会进一步加大封禁风险，要不要用请自行斟酌。"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                                <!--
                                     前置条件提示条：击杀反馈的视觉部分是走动态模糊那条注入通路送到游戏里的，
                                     没注入 → 效果根本到不了游戏画面。这行常驻显示，并按实际情况变色，
                                     免得用户开了击杀反馈却发现"没反应"，还得自己猜原因。
@@ -1827,6 +1898,52 @@
                                                            TextTrimming="CharacterEllipsis"/>
                                             </Grid>
 
+                                            <!--
+                                                「必须填规则才生效」：这是整页的前提条件 ——
+                                                规则空着的时候，画面效果和提示音全是空转，但界面上完全看不出来。
+                                                和上面的"要先注入"横幅一个套路：常驻显示、按实际情况变色。
+                                            -->
+                                            <Border x:Name="KillFeedbackRuleHintBanner"
+                                                    Style="{StaticResource CardStyle}"
+                                                    Padding="13,10"
+                                                    Margin="0,16,0,0">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock x:Name="KillFeedbackRuleHintIcon"
+                                                               Text="!"
+                                                               FontSize="14"
+                                                               FontWeight="Bold"
+                                                               VerticalAlignment="Center"
+                                                               Margin="0,0,9,0"
+                                                               Foreground="{DynamicResource ConsoleWarnBrush}"/>
+                                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                        <TextBlock x:Name="KillFeedbackRuleHintTitle"
+                                                                   FontSize="12.5"
+                                                                   FontWeight="ExtraBold"
+                                                                   TextWrapping="Wrap"
+                                                                   Foreground="{DynamicResource ConsoleWarnBrush}"
+                                                                   Text="必须填了匹配规则才会生效"/>
+                                                        <TextBlock x:Name="KillFeedbackRuleHintDetail"
+                                                                   FontSize="11.5"
+                                                                   TextWrapping="Wrap"
+                                                                   Margin="0,3,0,0"
+                                                                   Foreground="{DynamicResource TextSecondaryBrush}"
+                                                                   Text="规则框空着，软件一条击杀都认不出来 —— 画面效果和提示音都不会响。不会写就点右边那个按钮。"/>
+                                                    </StackPanel>
+                                                    <Button x:Name="KillFeedbackRuleHelpButton"
+                                                            Grid.Column="2"
+                                                            Content="查看填写教程"
+                                                            ToolTip="弹一个窗，手把手讲一条规则长什么样、怎么一键生成"
+                                                            Style="{StaticResource SmallGhostButtonStyle}"
+                                                            VerticalAlignment="Center"
+                                                            Margin="12,0,0,0"
+                                                            Click="KillFeedbackRuleHelpButton_Click"/>
+                                                </Grid>
+                                            </Border>
                                             <TextBlock Text="匹配规则（一行一条，命中任意一条就算）"
                                                        Style="{StaticResource FieldLabelStyle}"
                                                        Margin="0,16,0,7"/>
@@ -2611,6 +2728,12 @@
                                 </Grid>
 
                                 <TextBlock x:Name="PluginsRootText" Style="{StaticResource HintStyle}" Margin="0,0,0,14" TextWrapping="Wrap"/>
+                                <!--
+                                    卸载入口就摆在卡片上：上一版把它收进右键菜单，结果就是
+                                    "功能明明有、但没人找得到"。同一个操作在详情页头部还有一个入口。
+                                -->
+                                <TextBlock Style="{StaticResource HintStyle}" Margin="0,0,0,14" TextWrapping="Wrap"
+                                           Text="想删插件？点卡片右侧的【卸载】—— 插件目录和它自己的配置目录会一起删掉。右键卡片还能进入插件页面 / 打开目录。"/>
 
                                 <TextBlock x:Name="PluginsEmptyText" Text="还没有装任何插件。点右上角【添加插件】选一个 zip，或者直接把 zip 拖到这一页。" Style="{StaticResource CardDescStyle}" Margin="0,0,0,12" TextWrapping="Wrap"/>
                                 <UniformGrid x:Name="PluginsListPanel" Columns="2"/>
@@ -2633,8 +2756,23 @@
                                 </StackPanel>
                                 <!-- 单个插件的主页面（点插件卡片进来，返回按钮回列表） -->
                                 <StackPanel x:Name="PluginDetailView" Visibility="Collapsed">
-                                    <Button x:Name="PluginBackButton" Content="← 返回插件列表" HorizontalAlignment="Left"
-                                            Margin="0,0,0,14" Style="{StaticResource SmallGhostButtonStyle}" Click="PluginBackButton_Click"/>
+                                    <Grid Margin="0,0,0,14">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Button x:Name="PluginBackButton" Content="← 返回插件列表" HorizontalAlignment="Left"
+                                                Style="{StaticResource SmallGhostButtonStyle}" Click="PluginBackButton_Click"/>
+                                        <!--
+                                            卸载的第二个入口：进来看过之后觉得不合适，不用退出去找卡片。
+                                            和卡片上那个按钮走同一个确认框（UninstallPlugin），行为完全一致。
+                                        -->
+                                        <Button x:Name="PluginDetailUninstallButton" Grid.Column="1"
+                                                Content="卸载这个插件"
+                                                ToolTip="把这个插件从本机删掉：插件目录和它自己的配置目录会一起删"
+                                                Style="{StaticResource SmallDangerButtonStyle}"
+                                                Click="PluginDetailUninstallButton_Click"/>
+                                    </Grid>
                                     <StackPanel x:Name="PluginDetailContent"/>
                                 </StackPanel>
 

@@ -713,9 +713,9 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// 插件卡片：名字 / 版本 · 作者 / 简介 + 右侧启用开关。
-    /// 点卡片进它的页面；点开关只切启用状态，不会顺手把页面也打开。
-    /// 卡片上放不下的管理操作（打开目录、卸载）收在右键菜单里。
+    /// 插件卡片：名字 / 版本 · 作者 / 简介 + 右侧启用开关与【卸载】。
+    /// 点卡片进它的页面；点开关 / 【卸载】各做各的事，不会顺手把插件页面也打开。
+    /// 「打开目录」这类低频操作还在右键菜单里。
     /// </summary>
     private Border BuildPluginRow(PluginEntry entry)
     {
@@ -784,26 +784,51 @@ public partial class MainWindow
         Grid.SetRow(body, 1);
         grid.Children.Add(body);
 
-        // ---- 右上角开关：开 = 启用，关 = 禁用 ----
+        // ---- 右侧竖排：上面是启用开关，下面是【卸载】----
+        //
+        // 卸载原来收在右键菜单里 —— 功能是有的，但没人知道它在那儿，等于没有。
+        // 现在直接摆在卡片上；两个控件共用一个 StackPanel，右列只占一列宽，
+        // 卡片高度也不会因为多出来一个按钮而变形。
+        var side = new StackPanel
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(12, 0, 0, 0),
+        };
+
+        // ---- 开关：开 = 启用，关 = 禁用 ----
         var toggle = new CheckBox
         {
             IsChecked = entry.State == PluginState.Loaded,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(12, 0, 0, 0),
+            HorizontalAlignment = HorizontalAlignment.Right,
             ToolTip = entry.State == PluginState.Loaded ? "点一下禁用这个插件" : "点一下启用这个插件",
         };
         toggle.SetResourceReference(FrameworkElement.StyleProperty, "InlineToggleStyle");
         toggle.Checked += (_, _) => TogglePluginEnabled(entry, true);
         toggle.Unchecked += (_, _) => TogglePluginEnabled(entry, false);
-        Grid.SetColumn(toggle, 1);
-        grid.Children.Add(toggle);
+        side.Children.Add(toggle);
+
+        // ---- 卸载：和详情页头部那个按钮走同一条路（同一个确认框）----
+        var uninstall = new Button
+        {
+            Content = "卸载",
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Margin = new Thickness(0, 8, 0, 0),
+            ToolTip = "把这个插件从本机删掉：插件目录和它自己的配置目录会一起删",
+        };
+        uninstall.SetResourceReference(FrameworkElement.StyleProperty, "SmallDangerButtonStyle");
+        uninstall.Click += (_, _) => UninstallPlugin(entry);
+        side.Children.Add(uninstall);
+
+        Grid.SetColumn(side, 1);
+        Grid.SetRowSpan(side, 2);
+        grid.Children.Add(side);
 
         border.Child = grid;
         border.ContextMenu = BuildPluginCardMenu(entry);
         border.MouseLeftButtonUp += (_, e) =>
         {
             // 点开关不该把插件页面也一起打开
-            if (IsInsideToggle(e.OriginalSource))
+            if (IsInsideInteractiveChild(e.OriginalSource))
             {
                 return;
             }
@@ -855,7 +880,7 @@ public partial class MainWindow
         return menu;
     }
 
-    /// <summary>卸载插件（带确认框）。原来挂在卡片按钮上，现在收进右键菜单。</summary>
+    /// <summary>卸载插件（带确认框）。卡片右侧的【卸载】和详情页头部那个按钮都走这里。</summary>
     private void UninstallPlugin(PluginEntry entry)
     {
         if (_pluginManager is null)
@@ -880,13 +905,43 @@ public partial class MainWindow
         RefreshPluginsManagerList();
     }
 
-    /// <summary>事件源是不是卡片里那个开关（沿视觉树上找 ToggleButton）。</summary>
-    private static bool IsInsideToggle(object? source)
+    /// <summary>
+    /// 插件详情页头部的【卸载这个插件】。
+    /// 和卡片上那个【卸载】走完全同一条路（同一个确认框、同一个 UninstallPlugin），
+    /// 只是给"点进去看过、觉得不合适"的人少一步回头找卡片。
+    /// 卸载完 RefreshPluginsManagerList → OnPluginsChanged 发现 _openPluginId 已经不在列表里，
+    /// 自己会把详情页退回列表。
+    /// </summary>
+    private void PluginDetailUninstallButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_pluginManager is null || _openPluginId is null)
+        {
+            return;
+        }
+
+        var entry = _pluginManager.Entries.FirstOrDefault(x => x.Manifest.Id == _openPluginId);
+        if (entry is null)
+        {
+            ShowPluginList();
+            return;
+        }
+
+        UninstallPlugin(entry);
+    }
+
+    /// <summary>
+    /// 事件源是不是卡片里的开关 / 按钮（沿视觉树上找 <see cref="System.Windows.Controls.Primitives.ButtonBase"/>）。
+    ///
+    /// 卡片本身点一下要进插件页面，但开关和【卸载】得各管各的 —— 它们自己的 Click 已经在干活了，
+    /// 鼠标事件不该再往上冒成"顺手把插件页面也打开"。
+    /// ToggleButton 也是 ButtonBase，所以判一个类型就够，不用分两种。
+    /// </summary>
+    private static bool IsInsideInteractiveChild(object? source)
     {
         var node = source as DependencyObject;
         while (node is not null)
         {
-            if (node is System.Windows.Controls.Primitives.ToggleButton)
+            if (node is System.Windows.Controls.Primitives.ButtonBase)
             {
                 return true;
             }

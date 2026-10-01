@@ -658,9 +658,51 @@ public partial class MainWindow
         KillFeedbackPrereqTitle.Foreground = accent;
     }
 
+    /// <summary>
+    /// 刷新「必须填了匹配规则才会生效」那条横幅。
+    ///
+    /// 和上面的"要先注入"横幅一个道理：**规则空着的时候整页都在空转，但界面上
+    /// 一点异常都看不出来** —— 用户会以为是软件坏了。所以常驻显示、按实际情况变色：
+    /// 没规则 = 琥珀色提醒；有规则 = 薄荷色的"已经填了 N 条"。
+    /// 右边那个【查看填写教程】按钮是给"不知道怎么写"的人准备的（见 KillFeedbackHelpWindow）。
+    /// </summary>
+    private void RefreshKillFeedbackRuleHint()
+    {
+        if (KillFeedbackRuleHintBanner == null)
+        {
+            return;
+        }
+
+        // IsReady = 规则框里至少有一条能用的规则（空行 / # 注释不算）
+        var ready = _killFeedbackMatcher.IsReady;
+        var accent = ready
+            ? (Brush)FindResource("MintBrush")
+            : (Brush)FindResource("ConsoleWarnBrush");
+
+        KillFeedbackRuleHintIcon.Text = ready ? "✓" : "!";
+        KillFeedbackRuleHintIcon.Foreground = accent;
+
+        KillFeedbackRuleHintTitle.Text = ready
+            ? $"已经填了 {_killFeedbackMatcher.RuleCount} 条匹配规则"
+            : "必须填了匹配规则才会生效";
+        KillFeedbackRuleHintTitle.Foreground = accent;
+
+        KillFeedbackRuleHintDetail.Text = ready
+            ? "规则这一半边是通的。剩下的看上面那条（有没有注入）和卡片底部那行数字（有没有匹配上）。"
+            : "规则框空着，软件一条击杀都认不出来 —— 画面效果和提示音都不会响。不会写就点右边那个按钮。";
+    }
+
+    /// <summary>【查看填写教程】：弹一个独立窗讲规则怎么填（外观同公告窗）。</summary>
+    private void KillFeedbackRuleHelpButton_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new KillFeedbackHelpWindow { Owner = this };
+        dialog.ShowDialog();
+    }
+
     private void RefreshKillFeedbackStats()
     {
         RefreshKillFeedbackPrereq();
+        RefreshKillFeedbackRuleHint();
 
         if (KillFeedbackStatsText == null)
         {
