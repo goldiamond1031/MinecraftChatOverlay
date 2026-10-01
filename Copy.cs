@@ -124,21 +124,26 @@ public static class Copy
     public const string KillFeedbackOff = "关着，不会匹配";
     public const string KillFeedbackNoPattern = "还没有匹配规则 —— 上面粘一条示例消息，点【生成并加一行】";
 
-    /// <summary>击杀反馈的"前置条件"横幅：注入没就绪时显示的标题。</summary>
+    /// <summary>
+    /// 击杀反馈的"前置条件"横幅：还没注入时显示的标题。
+    /// 注意这里不能再说"必须先注入才能用" —— 图标反馈 / 音效反馈本来就不需要注入，
+    /// 只有「画面效果」和「效果预览」才依赖那条注入通路。写错了会把只想用图标和声音的人劝退。
+    /// </summary>
     public const string KillFeedbackPrereqMissing =
-        "要先开启动态模糊并注入游戏，击杀反馈才会生效";
+        "如果要无风险使用反馈，需要打开击杀反馈开关并关闭动态模糊的注入，填写正确下面的匹配规则后，才可以正常使用图标反馈和音效反馈";
 
-    /// <summary>同上，注入没就绪时的说明。</summary>
+    /// <summary>同上，还没注入时的说明（点明哪半边不需要注入）。</summary>
     public const string KillFeedbackPrereqMissingDetail =
-        "击杀反馈的画面效果是通过动态模糊的注入通路送进游戏的 —— 没注入，效果到不了游戏画面。"
-        + "到「游戏动态模糊」页选好进程点【注入并接管】就能用。";
+        "图标反馈和音效反馈不碰游戏进程，不需要注入；「画面效果」和「效果预览」要靠注入才能跑，"
+        + "用它们也就带上了上面那条封禁风险。";
 
     /// <summary>注入已就绪时的标题。</summary>
-    public const string KillFeedbackPrereqReady = "动态模糊已注入，击杀反馈可以生效";
+    public const string KillFeedbackPrereqReady = "动态模糊已注入 —— 图标 / 音效 / 画面效果都会生效";
 
-    /// <summary>同上，说明（告诉用户还能去哪儿改）。</summary>
+    /// <summary>同上，说明（说清代价 + 怎么退回去）。</summary>
     public const string KillFeedbackPrereqReadyDetail =
-        "画面效果会通过已注入的通路送到游戏。想调节模糊本身到「游戏动态模糊」页。";
+        "画面效果会通过已注入的通路送到游戏，这也就是上面说的封禁风险。"
+        + "想只留图标和音效，到「游戏动态模糊」页点【卸载钩子】就行。";
 
     /// <summary>选了原生侧还没实现的效果时给的提示。</summary>
     public const string KillFeedbackEffectNotInGame =

@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -236,12 +236,24 @@ public partial class MainWindow
         }
     }
 
-    /// <summary>打赏鸣谢一行：名字 + 金额，下面跟留言和时间。</summary>
+    /// <summary>
+    /// 打赏鸣谢一行：左边是名字 + 金额，留言跟在右边（不再另起一行），时间靠最右。
+    /// 留言太长会自己折行；名字那一列不会跟着变高。
+    /// </summary>
     private Border BuildRewardCard(AboutRewardEntry reward)
     {
         var card = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
 
-        var header = new TextBlock { TextTrimming = TextTrimming.CharacterEllipsis };
+        var row = new Grid();
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var header = new TextBlock
+        {
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Top
+        };
         header.Inlines.Add(new Run(reward.Name) { FontSize = 13.5, FontWeight = FontWeights.Bold });
 
         var amount = (reward.Amount ?? "").Trim();
@@ -256,31 +268,40 @@ public partial class MainWindow
             });
         }
 
-        card.Children.Add(header);
+        row.Children.Add(header);
 
-        var extras = new List<string>();
-        if (!string.IsNullOrWhiteSpace(reward.Message))
+        var message = (reward.Message ?? "").Trim();
+        if (message.Length > 0)
         {
-            extras.Add(reward.Message.Trim());
-        }
-
-        if (!string.IsNullOrWhiteSpace(reward.Time))
-        {
-            extras.Add(reward.Time.Trim());
-        }
-
-        if (extras.Count > 0)
-        {
-            var meta = new TextBlock
+            var msgBlock = new TextBlock
             {
-                Text = string.Join("　—　", extras),
+                Text = message,
                 FontSize = 12,
                 TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 2, 0, 0)
+                Margin = new Thickness(14, 1, 0, 0),
+                VerticalAlignment = VerticalAlignment.Top
             };
-            meta.SetResourceReference(TextElement.ForegroundProperty, "TextSecondaryBrush");
-            card.Children.Add(meta);
+            msgBlock.SetResourceReference(TextElement.ForegroundProperty, "TextSecondaryBrush");
+            Grid.SetColumn(msgBlock, 1);
+            row.Children.Add(msgBlock);
         }
+
+        var time = (reward.Time ?? "").Trim();
+        if (time.Length > 0)
+        {
+            var timeBlock = new TextBlock
+            {
+                Text = time,
+                FontSize = 11.5,
+                Margin = new Thickness(14, 1, 0, 0),
+                VerticalAlignment = VerticalAlignment.Top
+            };
+            timeBlock.SetResourceReference(TextElement.ForegroundProperty, "TextTertiaryBrush");
+            Grid.SetColumn(timeBlock, 2);
+            row.Children.Add(timeBlock);
+        }
+
+        card.Children.Add(row);
 
         return new Border
         {
