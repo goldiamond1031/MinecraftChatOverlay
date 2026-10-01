@@ -1,7 +1,7 @@
 {
   "id": "goldiamond.neteaselyrics",
   "name": "网易云歌词",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "author": "goldiamond",
   "assembly": "NeteaseLyricsPlugin.dll",
   "description": "在屏幕任意位置显示网易云正在播放的歌词（当前行 + 下一行 + 翻译），跟着播放进度逐行滚动，支持逐字染色，进度靠中继插件实时上报。不注入、不改网易云，只读一个由中继小插件写出的进度文件。",

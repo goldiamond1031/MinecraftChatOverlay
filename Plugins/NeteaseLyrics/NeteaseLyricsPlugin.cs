@@ -252,7 +252,7 @@ public sealed class NeteaseLyricsPlugin : IPlugin
 {
     "manifest_version": 1,
     "name": "MCOBridge",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "author": "goldiamond",
     "description": "把网易云当前的播放进度写成一个 JSON 文件，供 MinecraftChatOverlay 的歌词插件读取。只读 DOM、只写文件，不改客户端任何东西。",
     "betterncm_version": ">=1.0.0",
@@ -287,8 +287,9 @@ const EVENTS = ["input", "change", "click", "timeupdate", "seeking", "seeked",
                 "play", "playing", "pause", "ended", "ratechange", "durationchange", "loadedmetadata"];
 
 let dirReady = false, busy = false, pending = false;
-let lastPos = null, lastChangeAt = 0, lastWriteAt = 0, lastPlaying = null;
+let lastPos = null, posSeenAt = 0, lastChangeAt = 0, lastWriteAt = 0, lastPlaying = null;
 let mediaEl = null, lastDeepSearchAt = 0, settleTimer = null, lastProbe = "";
+let nativeProbe = "", nativeProbeAt = 0;
 let lastWritten = null;
 
 // --- 找播放器元素：本页 + iframe + shadow DOM 都翻一遍 ---
@@ -403,17 +404,20 @@ async function writeState(force) {
     try {
         var p = readProgress();
         var now = Date.now();
-        if (p && p.position !== lastPos) { lastPos = p.position; lastChangeAt = now; }
+        // 关键：时间戳要记成"这个值是什么时候变成现在这样的"，不是"我们写文件的时刻"。
+        // 网易云的进度条滑块**每 5 秒才跳一次**（实测 39.964 → 45.008 → 50.052，每次 +5.044），
+        // 用写入时刻当基准的话，外面会把"读到旧值"当成"此刻的位置"，歌词就稳定晚 0~5 秒。
+        if (p && p.position !== lastPos) { lastPos = p.position; lastChangeAt = now; posSeenAt = now; }
         var playing = p ? playingNow() : false;
         var moved = !!p && (lastWritten === null || Math.abs(p.position - lastWritten.position) >= 0.02);
         var changed = lastWritten === null || playing !== lastWritten.playing ||
-                      !p !== !lastWritten.none || (p && p.source !== lastWritten.source);
+                      (!p) !== lastWritten.none || (p && p.source !== lastWritten.source);
         if (!force && !moved && !changed && (now - lastWriteAt) < HEARTBEAT_MS) { return; }
 
         var probe = buildProbe();
         var state = p
             ? { position: p.position, duration: p.duration, playing: playing, title: document.title || "",
-                source: p.source, probe: probe, updatedAt: now }
+                 source: p.source, probe: probe, updatedAt: (p && posSeenAt > 0) ? posSeenAt : now }
             : { position: null, duration: null, playing: false, title: document.title || "",
                 source: "none", probe: probe, updatedAt: now };
 
