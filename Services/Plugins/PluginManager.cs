@@ -531,7 +531,8 @@ public sealed class PluginManager
         }
     }
 
-    /// <summary>卸载（删目录）。文件被占用就返回 false 并让用户重启后再来。</summary>
+    /// 卸载：删目录 + 把条目从列表摘掉。删之前**先改名搬走**（TryWipeDirectory）——
+    /// 有文件被锁就一个字都不删，条目照样立刻消失，残留目录排进 pending-delete 下次启动清。
     public bool Uninstall(PluginEntry entry, out string message)
     {
         message = "";

@@ -20,8 +20,9 @@ public sealed class GameProcessInfo
 /// <summary>
 /// 把钩子 DLL 注入到目标进程。
 ///
-/// 用的就是 OBS 那套最经典、最没技术含量的办法：
-///   OpenProcess → VirtualAllocEx → WriteProcessMemory(路径) → CreateRemoteThread(LoadLibraryW)
+/// 现在走的是**手动映射**：自己解析 PE、铺镜像、修重定位、填导入表、在目标里分配 TLS，
+/// 再劫持一个线程跑一段 Stub 调 DllMain（详见 ManualMapper.cs / ManualMapper.Remote.cs）。
+/// 老的 CreateRemoteThread + LoadLibraryW 那条路已经删掉了。
 /// 注入之后 DLL 自己去找 OpenGL 的 SwapBuffers 调用方，游戏不用重启。
 /// </summary>
 public static class GameProcessInjector
