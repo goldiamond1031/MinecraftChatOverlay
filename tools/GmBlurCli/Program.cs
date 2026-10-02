@@ -87,7 +87,7 @@ internal static class Program
     {
         Console.WriteLine(@"用法：
   gmblur list                     列出有窗口的进程（找游戏 PID）
-  gmblur inject <pid> [dll路径]    把钩子 DLL 注入进程
+  gmblur inject <pid> [dll路径]    把钩子 DLL 注入进程（日志：程序目录\logs\gmb_hook_<pid>.log）
   gmblur on [强度0~0.95]           开启帧混合（默认 0.55）
   gmblur off                      关闭帧混合
   gmblur dump <目录> [帧数]        把接下来几帧导出成 BMP
@@ -319,6 +319,21 @@ internal static class Program
         {
             // 先把控制块建好，DLL 一进去就能看到参数
             control.Apply(false, 0.55f, 0, 0, "");
+
+            // 日志往哪写也得在注入之前告诉 DLL，和界面里注入的落点保持一致
+            try
+            {
+                // 落点规则和主程序一致（GameMotionBlurService.HookLogDirectory）：程序目录\logs
+                // 这里不直接引用那个类 —— 本工程是按文件链进来的，没链 GameMotionBlurService.cs
+                var logDir = Path.Combine(AppContext.BaseDirectory, "logs");
+                Directory.CreateDirectory(logDir);
+                control.SetOutputDirectory(logDir);
+            }
+            catch
+            {
+                // 建不出来就交给 DLL 自己退回游戏 exe 旁边
+            }
+
             Console.WriteLine("控制块已就绪：" + MotionBlurControl.MapName);
         }
 

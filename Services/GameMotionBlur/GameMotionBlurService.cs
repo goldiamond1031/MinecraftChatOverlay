@@ -69,6 +69,12 @@ public sealed class GameMotionBlurService : IDisposable
         return Path.Combine(AppContext.BaseDirectory, fileName);
     }
 
+    /// <summary>钩子日志目录：程序 exe 目录下的 logs\（没有就新建）。</summary>
+    public static string HookLogDirectory => Path.Combine(AppContext.BaseDirectory, "logs");
+
+    /// <summary>钩子日志文件名（按被注入进程的 PID 区分）。</summary>
+    public static string HookLogFileName(int pid) => "gmb_hook_" + pid + ".log";
+
     /// <summary>
     /// 注入到目标进程，然后等钩子真正装好（DLL 是异步装钩子的，要等一小会儿）。
     /// 失败会抛 InvalidOperationException，消息可以直接弹给用户看。
@@ -93,6 +99,18 @@ public sealed class GameMotionBlurService : IDisposable
         // 控制块要先建好，DLL 一进去就能看到参数
         _control ??= new MotionBlurControl();
         _control.Apply(false, 0.55f, 0, 0, null);
+
+        // 日志往哪写也得在注入之前告诉 DLL（它一起来就要按这个目录建日志文件）
+        try
+        {
+            Directory.CreateDirectory(HookLogDirectory);
+        }
+        catch
+        {
+            // 建不出来就算了：DLL 那边会退回到游戏 exe 旁边
+        }
+
+        _control.SetOutputDirectory(HookLogDirectory);
 
         GameProcessInjector.Inject(pid, dll);
         _targetPid = pid;
@@ -236,23 +254,81 @@ public sealed class GameMotionBlurService : IDisposable
         }
     }
 
-    /// <summary>读钩子日志的末尾若干行（DLL 把日志写在它自己旁边）。</summary>
+    /// <summary>
+    /// 钩子日志放哪儿：DLL 按注入前我们写进控制块的"输出目录"建文件，
+    /// 正常情况下就是 程序目录\logs\gmb_hook_&lt;pid&gt;.log。
+    /// 老 DLL（还在写游戏 exe 旁边）、或者目录写不进去时，退到下面这些位置找。
+    /// 返回第一个存在的；一个都没有返回 null。
+    /// </summary>
+    public string? FindHookLogPath()
+    {
+        foreach (var candidate in HookLogCandidates())
+        {
+            try
+            {
+                if (!string.IsNullOrEmpty(candidate) && File.Exists(candidate))
+                {
+                    return candidate;
+                }
+            }
+            catch
+            {
+                // 单个候选查不了就跳过
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>按顺序列出可能的日志位置（存在性由调用方判断）。</summary>
+    private IEnumerable<string> HookLogCandidates()
+    {
+        if (_targetPid > 0)
+        {
+            // 1) 新位置：程序目录\logs\
+            yield return Path.Combine(HookLogDirectory, HookLogFileName(_targetPid));
+
+            // 2) 老位置：目标进程 exe 旁边
+            //    （手动映射的模块反查不到自己的路径，老 DLL 只能退到这儿）
+            string? gameDir = null;
+            try
+            {
+                using var process = Process.GetProcessById(_targetPid);
+                gameDir = Path.GetDirectoryName(process.MainModule?.FileName ?? "");
+            }
+            catch
+            {
+                // 拿不到进程路径就跳过这一项
+            }
+
+            if (!string.IsNullOrEmpty(gameDir))
+            {
+                yield return Path.Combine(gameDir!, HookLogFileName(_targetPid));
+            }
+        }
+
+        // 3) 更老的位置：钩子 DLL 旁边（早期就是这么找的，留一手免得漏）
+        if (!string.IsNullOrEmpty(HookDllPath))
+        {
+            var dllDir = Path.GetDirectoryName(HookDllPath);
+            if (!string.IsNullOrEmpty(dllDir))
+            {
+                yield return Path.Combine(dllDir!, HookLogFileName(_targetPid));
+            }
+        }
+    }
+
+    /// <summary>读钩子日志的末尾若干行。找不到日志返回空串。</summary>
     public string ReadHookLog(int lines)
     {
-        if (_targetPid <= 0 || string.IsNullOrEmpty(HookDllPath))
+        var logPath = FindHookLogPath();
+        if (string.IsNullOrEmpty(logPath))
         {
             return "";
         }
 
         try
         {
-            var directory = Path.GetDirectoryName(HookDllPath) ?? AppContext.BaseDirectory;
-            var logPath = Path.Combine(directory, "gmb_hook_" + _targetPid + ".log");
-            if (!File.Exists(logPath))
-            {
-                return "";
-            }
-
             // DLL 一直开着这个文件（我们只读，用 FileShare.ReadWrite 才能读到）
             using var stream = new FileStream(logPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
             using var reader = new StreamReader(stream, Encoding.UTF8);
@@ -265,15 +341,24 @@ public sealed class GameMotionBlurService : IDisposable
         }
     }
 
+    /// <summary>
+    /// 日志文件的实际位置：找得到就给实际路径，找不到就给"本来应该在哪"
+    /// （界面上可以直接把它显示给用户，省得用户自己猜）。
+    /// </summary>
     public string DescribeHookLogPath()
     {
-        if (string.IsNullOrEmpty(HookDllPath))
+        var found = FindHookLogPath();
+        if (!string.IsNullOrEmpty(found))
         {
-            return "";
+            return found;
         }
 
-        var directory = Path.GetDirectoryName(HookDllPath) ?? "";
-        return Path.Combine(directory, "gmb_hook_" + _targetPid + ".log");
+        foreach (var candidate in HookLogCandidates())
+        {
+            return candidate;
+        }
+
+        return "";
     }
 
     public void Dispose()

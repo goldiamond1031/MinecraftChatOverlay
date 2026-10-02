@@ -26,6 +26,11 @@ DWORD WINAPI WorkerThread(LPVOID)
         gmblur::Log(L"控制块创建失败，钩子仍然会装，但收不到参数");
     }
 
+    // 日志往哪写：宿主（界面 / gmblur CLI）在注入之前把目录写进了控制块里那段
+    // 输出目录字符串；没给（老宿主 / 控制块没建起来）就退回游戏 exe 旁边。
+    gmblur::LogSetDirectory(gmblur::ControlOutputDir());
+    gmblur::Log(L"日志文件：%s", gmblur::LogPath());
+
     gmblur::HookInstall();
 
     for (;;)

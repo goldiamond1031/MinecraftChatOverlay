@@ -1728,6 +1728,51 @@
                                     </StackPanel>
                                 </Border>
 
+                                <!--
+                                    钩子日志：DLL 往哪写，由注入之前写进控制块的那段"输出目录"决定
+                                    （现在是 程序目录\logs\）。老 DLL 还在写游戏 exe 旁边，
+                                    所以这里按 程序目录\logs -> 游戏目录 -> DLL 目录 依次找。
+                                -->
+                                <Border Style="{StaticResource CardStyle}" Margin="0,14,0,0">
+                                    <StackPanel>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="3. 钩子日志" Style="{StaticResource CardTitleStyle}"/>
+                                            <Button Grid.Column="1"
+                                                    Content="刷新"
+                                                    Click="MotionBlurLogRefreshButton_Click"
+                                                    Style="{StaticResource SmallGhostButtonStyle}"
+                                                    Margin="8,0,0,0"/>
+                                            <Button Grid.Column="2"
+                                                    Content="打开文件夹"
+                                                    Click="MotionBlurLogOpenFolderButton_Click"
+                                                    Style="{StaticResource SmallGhostButtonStyle}"
+                                                    Margin="8,0,0,0"/>
+                                            <Button Grid.Column="3"
+                                                    Content="复制路径"
+                                                    Click="MotionBlurLogCopyPathButton_Click"
+                                                    Style="{StaticResource SmallGhostButtonStyle}"
+                                                    Margin="8,0,0,0"/>
+                                        </Grid>
+                                        <TextBlock Text="注入之后，DLL 会把它干了什么写进这个日志文件；这一页每秒自动刷新一次。游戏有异常时先看这里。"
+                                                   Style="{StaticResource CardDescStyle}" Margin="0,3,0,10"/>
+                                        <TextBlock x:Name="MotionBlurLogPathText"
+                                                   Style="{StaticResource HintStyle}"
+                                                   Text="尚未注入，还没有日志。"
+                                                   TextWrapping="Wrap"/>
+                                        <TextBox x:Name="MotionBlurLogTextBox"
+                                                 Style="{StaticResource ConsoleTextBoxStyle}"
+                                                 IsReadOnly="True"
+                                                 Height="196"
+                                                 Margin="0,10,0,0"/>
+                                    </StackPanel>
+                                </Border>
+
                             </StackPanel>
                         </ScrollViewer>
 

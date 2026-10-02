@@ -83,6 +83,10 @@ cd C:/MinecraftChatOverlayDSUI3/native
   连同调用点、`build.ps1` 里的 `jni.h` 探测段**已彻底移除**（属于废弃的「真实颜色提取」路线）。
 - ⚠ `native\build.ps1` 是 **UTF-8 无 BOM** → `powershell -File` 会按 GBK 读它，中文注释变乱码、直接语法报错。
   要么用 `pwsh` 跑，要么把它另存成**带 BOM**。
+- ⚠ **原生改完要编"两份"**：`dist\GameMotionBlurHook.dll` 和 **`dist\GameMotionBlurHook_v6.dll`**。
+  后者才是界面 / 发布实际用的那份 —— csproj 会把 `_v6` 复制成输出目录里的 `GameMotionBlurHook.dll`
+  （`_v6` 不存在才退回用前者）。只编一份的话，`bin\` 里那份还是老 DLL，很容易误判成"改动没生效"。
+  `build.ps1` 的写法：`-HookOnly -OutName GameMotionBlurHook_v6.dll`。
 
 ### 验收套路（每次改完都走）
 
@@ -177,7 +181,7 @@ cd C:/MinecraftChatOverlayDSUI3/native
 71. **robocopy 的 `/XD` 裸名会匹配任意层级的同名目录** —— `push.bat` 里原来写着 `/XD ... packages ...`（本意是排除打包产物），结果把 `market\packages` 也一起排除了，市场包根本推不上去、**而且不报错、静默不同步**。修法：写成全路径 `/XD "%DEV%\packages"`。**教训：给 robocopy 加排除项之后一定要干跑验证（`/L`，而且别加 `/NFL` —— 加了它只统计不列文件名，看起来像"没匹配到"）。**
 72. **`tools\GmBlurCli` 在改成手动映射之后一直是编不出来的** —— 它的 csproj 只 `<Compile Include>` 了 `MotionBlurControlBlock.cs` + `GameProcessInjector.cs`，而 `Inject()` 现在要调 `ManualMapper.MapRemote` → `dotnet build tools\GmBlurCli\GmBlurCli.csproj` 直接 `CS0103: 找不到 ManualMapper`。已把 `ManualMapper.cs` / `ManualMapper.Remote.cs` 也加进 csproj（实测 0 warning / 0 error）。**教训**：工具工程用 `Compile Include` 链主工程源码时，主工程加文件必须同步给工具工程。
 73. **`GameProcessInjector.EnsureSameBitness()` 是死代码**（`Inject()` 没调它；接它得先 `OpenProcess`，现在的 Inject 不自己开句柄）→ 位宽不对（32 位目标 / 32 位本程序）时的表现是"手动映射注入失败：…"，**看不到**那条人话提示。已在方法上标了 XML 注释"目前没有被调用"；要么接回去、要么删掉。
-74. **钩子日志落在"游戏 exe 所在目录"，不是"DLL 所在目录"** —— 手动映射进去的模块不在 loader 的模块表里：`GetModuleHandleExW(FROM_ADDRESS)` 反查不到（实测 false / 句柄 0），`self` 还是 NULL，于是 `GetModuleFileNameW` 给出的是**进程 exe 的路径**（实测非 0，不是失败）→ 日志就是 `<游戏目录>\gmb_hook_<pid>.log`。README / 界面里写的"看游戏目录里的钩子日志"是对的；`log.h` 原来那句"写在 DLL 旁边"已改。（本轮只实测了这两个 API 的行为，没跑完整注入实测。）
+74. **钩子日志写哪儿是"注入前宿主告诉 DLL 的"，不是 DLL 自己算出来的** —— 手动映射进去的模块不在 loader 的模块表里：`GetModuleHandleExW(FROM_ADDRESS)` 反查不到（实测 false / 句柄 0），`self` 还是 NULL，于是 `GetModuleFileNameW` 给出的是**进程 exe 的路径**（实测非 0，不是失败）→ 老行为就是写到 `<游戏目录>\gmb_hook_<pid>.log`。现在改成：宿主（`GameMotionBlurService.Inject` / `gmblur inject`）在**注入之前**把目录写进控制块那段「输出目录」字符串区（就是 `gmblur dump` 用的 `dumpDirChars/dumpDirOffset`，260 字符；**协议没动、kVersion 没升**），DLL 起来后 `LogSetDirectory(ControlOutputDir())` 读过来 → 默认 `程序目录\logs\`。宿主没写 / 目录建不出来 → 退回游戏 exe 旁边；连 exe 路径都拿不到 → 才退 `%TEMP%`。界面按 程序目录\logs → 游戏目录 → DLL 目录 依次找，老 DLL 的日志照样能显示。另外：DLL 一进去的头几行（`已载入 pid=...`）在"还不知道写哪儿"的时候本来会被丢掉，现在先攒在静态缓冲里、开文件时补写（实测：多级目录自动建、BOM 正常、不可用盘退回 exe 旁边）。**改完要重新注入才会写新位置。**
 
 ---
 

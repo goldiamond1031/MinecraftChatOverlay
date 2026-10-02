@@ -55,7 +55,12 @@ public partial class MainWindow
         }
 
         _motionBlurTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(700) };
-        _motionBlurTimer.Tick += (_, _) => UpdateMotionBlurStatus();
+        _motionBlurTimer.Tick += (_, _) =>
+        {
+            UpdateMotionBlurStatus();
+            RefreshMotionBlurLog();
+        };
+        RefreshMotionBlurLog();
         _motionBlurTimer.Start();
 
         Closing += (_, _) =>
@@ -379,7 +384,7 @@ public partial class MainWindow
         {
             MotionBlurStatusText.Text = "目标进程在跑，但里面没有钩子 DLL。" + Environment.NewLine +
                                         "· 游戏重启过 → 重新点一次【注入并接管】" + Environment.NewLine +
-                                        "· 点了几次都没用 → 看游戏目录里的 gmb_hook_*.log";
+                                            "· 点了几次都没用 → 看本页【3. 钩子日志】里 DLL 说了什么";
             return;
         }
 
@@ -468,7 +473,7 @@ public partial class MainWindow
             if (status.BlendCount == 0 && status.PresentCount > 0)
             {
                 text += status.Enabled
-                    ? "  —— 在出帧但一次都没混合，检查游戏目录里的 gmb_hook_*.log"
+                    ? "  —— 在出帧但一次都没混合，看本页【3. 钩子日志】"
                     : "  —— 帧混合开关是关的，所以不会混合（打开上面【开启帧混合】即可）";
             }
 
@@ -490,9 +495,119 @@ public partial class MainWindow
         var log = _motionBlur.ReadHookLog(12);
         if (string.IsNullOrWhiteSpace(log))
         {
-            return "钩子 DLL 没留下日志 —— 它可能刚进去（还没开始写日志）就崩了。";
+            var expected = _motionBlur.DescribeHookLogPath();
+            var where = string.IsNullOrEmpty(expected) ? "" : "（本该在：" + expected + "）";
+            return "钩子 DLL 没留下日志 —— 它可能刚进去（还没开始写日志）就崩了。" + where;
         }
 
         return "钩子日志末尾：" + Environment.NewLine + log;
+    }
+    /// <summary>
+    /// 刷新【3. 钩子日志】：显示日志文件的实际位置 + 末尾若干行。
+    /// 内容没变就不动控件（不然每秒重置一次滚动条位置，看日志的时候很烦）。
+    /// </summary>
+    private void RefreshMotionBlurLog()
+    {
+        try
+        {
+            if (!_motionBlurUiReady)
+            {
+                return;
+            }
+
+            // 面板没开着就不用刷（省得每秒读文件）
+            if (MotionBlurPanel.Visibility != Visibility.Visible)
+            {
+                return;
+            }
+
+            var pid = _motionBlur.TargetProcessId;
+            if (pid <= 0)
+            {
+                if (MotionBlurLogPathText.Text != "尚未注入，还没有日志。")
+                {
+                    MotionBlurLogPathText.Text = "尚未注入，还没有日志。";
+                    MotionBlurLogTextBox.Text = "";
+                }
+
+                return;
+            }
+
+            var path = _motionBlur.DescribeHookLogPath();
+            var exists = !string.IsNullOrEmpty(path) && File.Exists(path);
+            var where = exists
+                ? path
+                : "还没找到日志文件；找不到时按 程序目录\\logs → 游戏目录 → DLL 目录 依次找。" +
+                  Environment.NewLine + "本来应该在：" + path;
+
+            if (MotionBlurLogPathText.Text != where)
+            {
+                MotionBlurLogPathText.Text = where;
+            }
+
+            var tail = exists ? _motionBlur.ReadHookLog(200) : "";
+            if (MotionBlurLogTextBox.Text != tail)
+            {
+                MotionBlurLogTextBox.Text = tail;
+            }
+        }
+        catch
+        {
+            // 刷新失败不打扰用户，下一拍会再试
+        }
+    }
+
+    private void MotionBlurLogRefreshButton_Click(object sender, RoutedEventArgs e)
+    {
+        RefreshMotionBlurLog();
+    }
+
+    /// <summary>打开日志所在目录（文件还没出来就打开"本该在"的那个目录）。</summary>
+    private void MotionBlurLogOpenFolderButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var path = _motionBlur.DescribeHookLogPath();
+            var folder = string.IsNullOrEmpty(path) ? null : Path.GetDirectoryName(path);
+
+            if (string.IsNullOrEmpty(folder))
+            {
+                MessageBox.Show(this, "还没有日志文件，等注入之后再试。", "钩子日志",
+                                MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            if (!Directory.Exists(folder))
+            {
+                MessageBox.Show(this, "这个目录还不存在：" + Environment.NewLine + folder, "钩子日志",
+                                MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            Process.Start(new ProcessStartInfo("explorer.exe", "\"" + folder + "\"") { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, "打开目录失败：" + ex.Message, "钩子日志",
+                            MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    private void MotionBlurLogCopyPathButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var path = _motionBlur.DescribeHookLogPath();
+            if (string.IsNullOrEmpty(path))
+            {
+                return;
+            }
+
+            Clipboard.SetText(path);
+        }
+        catch
+        {
+            // 复制失败就算了
+        }
     }
 }

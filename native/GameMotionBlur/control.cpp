@@ -139,7 +139,9 @@ void ControlPublishStats(uint32_t deviceKind, uint32_t width, uint32_t height, u
     }
 }
 
-const wchar_t* ControlDumpDir()
+/// 宿主指定的输出目录：界面 / CLI 在注入之前把它写进这段字符串区（和导出帧共用），
+/// DLL 起来之后用它决定日志往哪写（见 log.cpp 的 LogSetDirectory）。
+const wchar_t* ControlOutputDir()
 {
     if (!g_head)
     {

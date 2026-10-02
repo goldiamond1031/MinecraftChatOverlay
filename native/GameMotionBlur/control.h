@@ -16,8 +16,9 @@ void ControlPublishStats(uint32_t deviceKind, uint32_t width, uint32_t height, u
 /// 把 probe 数组填好，让 C# 端能自检结构体布局。
 void ControlWriteProbes();
 
-/// 状态字符串（可直接 wcsncpy 到自己的缓冲区）。
-const wchar_t* ControlDumpDir();
+/// 宿主指定的输出目录（界面 / CLI 在注入之前写进控制块；钩子日志就落在这里，
+/// 导出帧也用它）。宿主没写就是空串。可直接 wcsncpy 到自己的缓冲区。
+const wchar_t* ControlOutputDir();
 
 // ============================================================================
 //  击杀反馈

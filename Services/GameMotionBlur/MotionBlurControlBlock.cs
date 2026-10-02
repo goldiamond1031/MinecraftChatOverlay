@@ -362,6 +362,17 @@ public sealed class MotionBlurControl : IDisposable
 
     // ---------- 控制端 API ----------
 
+    /// <summary>
+    /// 告诉 DLL"输出目录"在哪儿（钩子日志就写这里；导出帧共用这一段字符串）。
+    /// 必须在注入之前调用 —— DLL 一起来就按这个目录建日志文件。
+    /// 目录不存在时由 DLL 那边建（它建不出来会退回游戏 exe 旁边）。
+    /// </summary>
+    public void SetOutputDirectory(string? directory)
+    {
+        MotionBlurControlHeader header = ReadHeader();
+        WriteString(header.DumpDirOffset, header.DumpDirChars, directory);
+    }
+
     /// <summary>改参数（保留钩子写回来的状态字段）。</summary>
     public void Apply(bool enable, float strength, uint flags, uint dumpFrames, string? dumpDir)
     {

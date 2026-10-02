@@ -46,8 +46,10 @@ OBS 的「游戏源」本质上是三步：
 
 由此带来两件要注意的事：
 
-* 手动映射进去的模块**不在 loader 的模块表里**，反查不到"DLL 自己的路径" —— 所以日志的落点是
-  **游戏 exe 所在目录**（见下面 `log.cpp`），`IsModuleLoaded` 也只能靠注入方自己记的 pid → 基址表来判断。
+* 手动映射进去的模块**不在 loader 的模块表里**，反查不到"DLL 自己的路径" —— 所以日志写哪儿，是**注入之前**
+  由宿主写进控制块里那段「输出目录」字符串决定的（默认 **程序目录\logs\**，见下面 `log.cpp`）；
+  宿主没写（老宿主 / 控制块没建起来）就退回 **游戏 exe 所在目录**，最后才退 `%TEMP%`。
+  `IsModuleLoaded` 也只能靠注入方自己记的 pid → 基址表来判断。
 * **"卸载钩子之后再注入一次"没有用**：映射表里已经有这个 pid 了，`Inject()` 直接返回。
   所以界面上要有个【重装钩子】—— 让 DLL 自己把钩子装回去。
 ### 为什么 OpenGL 用 IAT
@@ -109,7 +111,7 @@ native/
     gl_blur.cpp                 OpenGL 帧混合（core 与固定管线两条路线）
     bmp.cpp                     导出帧用的 BMP 写出
     control.cpp                 跨进程共享内存控制块
-    log.cpp                     日志（写在游戏 exe 旁边 gmb_hook_<pid>.log）
+    log.cpp                     日志（写宿主给的输出目录，默认 程序目录\logs\gmb_hook_<pid>.log）
   TestApp/
     TestGL.cpp                  OpenGL 验收画面（3.2 core profile，和 Java 版同款）
   dist/                         产物
@@ -194,6 +196,14 @@ gmblur.exe dump C:\temp\sharp 3
         │
   GetStatus()  ←  ControlTickKillEffects() 每帧推进计时并算出每个效果的实时强度
 ```
+
+### 输出目录（导出帧 + 钩子日志共用）
+
+`common.h` 里那段**字符串区**（`dumpDirChars` / `dumpDirOffset`，260 个字符）原本只给 `gmblur dump <目录>`
+导出帧用，现在**钩子日志也用它**：宿主在注入**之前**把目录写进去（界面走 `MotionBlurControl.SetOutputDirectory()`，
+CLI 走 `gmblur inject`），DLL 起来后 `LogSetDirectory(ControlOutputDir())` 读过来，日志就写在那儿。
+字段名是历史遗留（还叫 `dumpDir*`），语义是"宿主输出目录"，**改它要两边一起改**
+（`common.h` ↔ `MotionBlurControlBlock.cs` 的 `DumpDirChars/DumpDirOffset`）。
 
 ### 设计要点
 

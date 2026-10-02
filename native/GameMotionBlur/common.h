@@ -75,7 +75,7 @@ struct ControlHeader
 
     // ---------- 字符串区的位置（让 C# 端知道去哪读写） ----------
     uint32_t statusChars;   // 状态字符串的字符数
-    uint32_t dumpDirChars;  // 导出目录的字符数
+    uint32_t dumpDirChars;  // 宿主输出目录的字符数（钩子日志和导出帧共用这一段）
     uint32_t statusOffset;  // 相对映射起点的字节偏移
     uint32_t dumpDirOffset;
 
@@ -111,7 +111,7 @@ struct ControlHeader
 #pragma pack(pop)
 
 constexpr uint32_t kStatusChars   = 160;
-constexpr uint32_t kDumpDirChars  = 260;
+constexpr uint32_t kDumpDirChars  = 260;   // 宿主输出目录（钩子日志 / 导出帧）
 constexpr uint32_t kEffectConfigOffset = (uint32_t)sizeof(ControlHeader);
 constexpr uint32_t kEffectConfigBytes  = kMaxKillEffects * (uint32_t)sizeof(KillEffectConfig);
 constexpr uint32_t kStatusOffset  = kEffectConfigOffset + kEffectConfigBytes;
@@ -137,7 +137,7 @@ inline KillEffectConfig* HeaderEffectConfigs(ControlHeader* h)
 
 enum Flags : uint32_t
 {
-    kFlagDumpFrames   = 1u << 0,  // 导出若干帧到 dumpDir（调试/验证用）
+    kFlagDumpFrames   = 1u << 0,  // 导出若干帧到宿主输出目录（调试/验证用）
     kFlagUnhook       = 1u << 1,  // 要求卸载钩子（把 IAT 槽位还原）
     kFlagResetHistory = 1u << 2,  // 清空历史帧（例如刚开启、或切场景后）
     kFlagReinstall    = 1u << 3, // 要求重新装钩子（DLL 已在本进程里、但钩子被卸载过时用）
