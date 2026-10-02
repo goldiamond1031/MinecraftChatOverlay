@@ -342,10 +342,10 @@ public sealed class MyPlugin : IPlugin
 <h3>3.4 启用 / 禁用 / 卸载 / 更新</h3>
 <table>
   <tr><th>动作</th><th>宿主行为</th></tr>
-  <tr><td>禁用</td><td>当前进程里立即 <code>Shutdown()</code> + 卸载；id 记进禁用列表，下次启动不再装载（插件看不见任何"被禁用"的迹象，因为根本没加载）</td></tr>
+  <tr><td>禁用</td><td><strong>只卸载、不动文件</strong>：调用一次 <code>Shutdown()</code> 并卸载，然后卡片<strong>留在列表里</strong>、开关变关；id 记进宿主的禁用列表（<code>DisabledPlugins</code>），下次启动不再装载 —— 用户随时能把开关再打开</td></tr>
   <tr><td>启用</td><td>立刻重新装载并 <code>Initialize</code></td></tr>
-  <tr><td>卸载</td><td>删插件安装目录 + <code>plugin-data\&lt;id&gt;\</code>。如果 dll 还被占用（插件正在运行），会禁用它并把目录排进"下次启动删"</td></tr>
-  <tr><td>更新（导入同 id 的新 zip）</td><td>旧版没在跑 → 直接覆盖；旧版在跑（dll 被操作系统锁住）→ 新版本整包放到 <code>&lt;id&gt;.new\</code>，<strong>下次启动自动换上去</strong>，数据目录不动</td></tr>
+  <tr><td>卸载</td><td>先卸载插件，再删安装目录 + 数据目录 <code>plugin-data\&lt;id&gt;\</code>。卡片<strong>立刻从列表里消失</strong>：删得掉就当场删掉；删不掉（dll 还被运行时锁着）就先<strong>改名搬走</strong>、排进 <code>pending-delete.txt</code>，<strong>下次启动软件时自动清</strong>（不用等重启才看不见它）</td></tr>
+  <tr><td>更新（导入同 id 的新 zip）</td><td>先卸载旧版再整包覆盖，<strong>立刻生效</strong>；只有覆盖时旧目录删不掉（dll 还被锁着）才把新版本整包放到 <code>&lt;id&gt;.new\</code>，<strong>下次启动自动换上去</strong>，数据目录不动</td></tr>
 </table>
 
 <div class="note">
@@ -863,10 +863,10 @@ private static string? PickColorHex(string currentHex)
 <h3>8.5 更新与卸载（给作者的正确预期）</h3>
 <table>
   <tr><th>场景</th><th>结果</th></tr>
-  <tr><td>用户在插件<strong>没运行</strong>时导入同 id 新版本</td><td>直接覆盖安装目录，立刻生效</td></tr>
-  <tr><td>插件<strong>正在运行</strong>时导入新版本</td><td>dll 被锁删不掉 → 新版本排进 <code>&lt;id&gt;.new\</code> 队列，<strong>下次启动自动换上</strong>；数据目录不受影响</td></tr>
-  <tr><td>卸载</td><td>安装目录 + 数据目录一起删；若文件被占用则排队到下次启动删。卡片右侧有【卸载】按钮，插件页页头也有一个（都会先弹确认框）</td></tr>
-  <tr><td>禁用</td><td>立刻卸载（<code>Shutdown()</code> 会被调用），下次启动不再装载</td></tr>
+  <tr><td>用户在插件<strong>没运行</strong>时导入同 id 新版本</td><td>卸掉旧的 → 整包覆盖安装目录 → 重新装载，<strong>立刻生效</strong></td></tr>
+  <tr><td>覆盖时旧目录<strong>删不掉</strong>（dll 还被运行时锁着）</td><td>新版本整包排进 <code>&lt;id&gt;.new\</code> 队列，<strong>重启软件后自动换上去</strong>；数据目录不受影响</td></tr>
+  <tr><td>卸载</td><td>先卸载插件，再删安装目录 + 数据目录。卡片<strong>立刻从列表里消失</strong>；目录删不掉就先改名搬走、排进 <code>pending-delete.txt</code>，下次启动软件自动清干净。卡片右侧有【卸载】按钮，插件页页头也有一个（都会先弹确认框）</td></tr>
+  <tr><td>禁用</td><td>立刻卸载（<code>Shutdown()</code> 会被调用），<strong>卡片留着、开关变关</strong>，id 记进宿主配置的 <code>DisabledPlugins</code>，下次启动不再装载；想彻底去掉就【卸载】</td></tr>
 </table>
 
 
@@ -993,6 +993,8 @@ private static string? PickColorHex(string currentHex)
      按钮会被一路挤出窗口，用户点一下按钮连结果都看不见
  16) 自绘页面上的开关 / 按钮，处理函数里改完设置一定要把状态刷回控件（按钮文案、旁边那行"已开 / 已关"、
      色块），统一收进一个 UpdateLabels() 里；只改设置不刷界面，用户看到的就是"点了没反应"
+ 17) 禁用 = 卡片留在列表里 + 开关变关 + id 记进宿主配置 DisabledPlugins（下次启动不再装载）；卸载 = 卡片
+     **立刻**从列表里消失（目录删不掉就先改名搬走、排进 pending-delete，下次启动自动清）
 【安装位置】%AppData%\MinecraftChatOverlay\plugins\&lt;id&gt;\ ；数据 %AppData%\MinecraftChatOverlay\plugin-data\&lt;id&gt;\
 【文档配套】仓库自带 build-plugins.bat（编译+装机+打 zip 到 plugin-packages\）</code></pre>
 
@@ -1000,7 +1002,8 @@ private static string? PickColorHex(string currentHex)
 <footer>
   Minecraft Chat Overlay 插件开发文档 · 对应契约 <strong>apiVersion 1</strong> ·
   权威来源：<code>Plugins\Abstractions\PluginApi.cs</code> 与 <code>Services\Plugins\PluginManager.cs</code><br>
-  遇到文档和代码不一致，<strong>以代码为准</strong>；发现文档漏了坑，回来补一条。
+  遇到文档和代码不一致，<strong>以代码为准</strong>；发现文档漏了坑，回来补一条。<br>
+  另一份 <code>Plugins\MCO插件开发指南_SDK文档版.html</code> 是早先单独整理的 SDK 版参考稿：内容重叠、但<strong>不保证跟到最新</strong> —— 两份冲突时<strong>以本文件为准</strong>。（软件里【打开插件开发文档】按钮打开的是本文件的在线发布版，可能比仓库里这份旧一点。）
 </footer>
 
   </main>

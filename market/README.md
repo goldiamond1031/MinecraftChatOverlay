@@ -31,6 +31,18 @@ market/
 
 软件里【插件】→【插件市场】→【刷新】就能看到新版（客户端请求时带了时间戳，不受 CDN 缓存影响）。
 
+## 更省事的一条命令：tools\publish-plugin.bat
+
+`tools\publish-plugin.bat <插件目录名>`（直接双击的话它会列出 `Plugins\` 下的工程让你输入名字）把上面三步一次做完：
+
+1. 编译 `Plugins\<名字>\<名字>.csproj -c Release`
+2. 打包 —— 底层是 `tools\pack-market-package.ps1`：按 `plugin.json` 的 `id` / `version` 打成
+   `market\packages\<id>-<版本>.zip`（条目名是 `<id>/<dll>` + `<id>/plugin.json`），
+   并**删掉同一个 id 的旧版本包**（一个插件只留最新那个）
+3. 重建清单 —— 底层是 `tools\rebuild-market-index.ps1`
+
+它**故意不把插件装到你本机**（这样才看得到市场里的「可更新」）。跑完记得 `push.bat`。
+
 ## index.json 字段
 
 | 字段 | 说明 |

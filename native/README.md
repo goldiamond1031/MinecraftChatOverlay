@@ -32,6 +32,24 @@ OBS 的「游戏源」本质上是三步：
 * 游戏里看到的就是模糊后的画面本身，不是"模糊的直播画面"；
 * 每一帧只多一次全屏三角形绘制 + 一两次全屏拷贝。
 
+### 注入是怎么进去的：手动映射（不是 LoadLibrary）
+
+界面那一半在 `Services/GameMotionBlur/`：
+
+* `GameMotionBlurService.cs` —— 门面：找 DLL、注入、等钩子装好、下发参数、读日志。
+* `GameProcessInjector.cs` —— 注入入口。`Inject()` **只走手动映射**：这个 pid 已经映射过就直接返回。
+* `ManualMapper.cs` / `ManualMapper.Remote.cs` —— 手动映射本体：解析 PE、在目标里分配、修重定位、
+  填导入表、在目标进程里分配 TLS，再劫持一个线程跑一段 Stub 去调 `DllMain`。
+
+**老的 `CreateRemoteThread` + `LoadLibraryW` 那条路已经删掉了** —— 它会往目标进程的模块表里留记录、
+磁盘上留加载痕迹。代价是手动映射失败就是注入失败：界面会把原因直接显示出来，**没有兜底可退**。
+
+由此带来两件要注意的事：
+
+* 手动映射进去的模块**不在 loader 的模块表里**，反查不到"DLL 自己的路径" —— 所以日志的落点是
+  **游戏 exe 所在目录**（见下面 `log.cpp`），`IsModuleLoaded` 也只能靠注入方自己记的 pid → 基址表来判断。
+* **"卸载钩子之后再注入一次"没有用**：映射表里已经有这个 pid 了，`Inject()` 直接返回。
+  所以界面上要有个【重装钩子】—— 让 DLL 自己把钩子装回去。
 ### 为什么 OpenGL 用 IAT
 
 GL 没有统一的虚表，出帧就是一个普通导出函数，每个调用方在 IAT 里各存一份地址。
@@ -91,7 +109,7 @@ native/
     gl_blur.cpp                 OpenGL 帧混合（core 与固定管线两条路线）
     bmp.cpp                     导出帧用的 BMP 写出
     control.cpp                 跨进程共享内存控制块
-    log.cpp                     日志（写在 DLL 旁边 gmb_hook_<pid>.log）
+    log.cpp                     日志（写在游戏 exe 旁边 gmb_hook_<pid>.log）
   TestApp/
     TestGL.cpp                  OpenGL 验收画面（3.2 core profile，和 Java 版同款）
   dist/                         产物
@@ -103,12 +121,19 @@ native/
 
 ```powershell
 # 需要 MinGW-w64（默认找 C:\mingw64\bin\g++.exe，可以用 -Gxx 指定别的）
-powershell -File native\build.ps1
+pwsh -File native\build.ps1
 ```
+
+> ⚠ **`build.ps1` 是 UTF-8 无 BOM，只能用 `pwsh`（PowerShell 7）跑。**
+> Windows PowerShell 5.1 读无 BOM 的 UTF-8 会按系统 ANSI 码页解（中文系统 = GBK）—— 里面的中文
+> 会变乱码，脚本还可能直接报语法错。要么用 `pwsh`，要么把 `build.ps1` 另存成「UTF-8 带 BOM」。
+> （`tools\` 下那些新写的 `.ps1` 都带 BOM，所以双击配套的 `.bat` 没问题；`.bat` 本身要 GBK + `chcp 936`。）
 
 产物：
 
 * `native\dist\GameMotionBlurHook.dll` —— 钩子本体（只依赖 kernel32/user32/UCRT/opengl32）
+* `native\dist\GameMotionBlurHook_v6.dll` —— 当前发布用的那份：`build.ps1 -OutName GameMotionBlurHook_v6.dll`
+  （`MinecraftChatOverlay.csproj` 会优先用它，没有才退回上面那个名字）
 * `native\dist\TestGL.exe` —— 测试画面
 
 DLL 会被 `MinecraftChatOverlay.csproj` 自动复制到主程序输出目录。
@@ -232,6 +257,8 @@ v5 在保留结构体布局的同时，给 `KillEffectConfig.reserved` 赋予了
   再存进自己的结构体里调用，就抓不到。
 * **反作弊**：任何注入 + Hook 都可能被反作弊拦。带反作弊的联机游戏请自行判断风险，
   这类工具一般只适合单机 / 无 AC 的场景。
+* **手动映射不是隐形衣**：它能做到"模块不出现在 loader 的模块表里、磁盘上没有对应的加载痕迹"，
+  但注入这件事本身（往目标进程里分配内存 + 劫持一个线程）在反作弊眼里还是看得见的，别当护身符用。
 * **需要权限对等**：游戏以管理员身份运行的话，本程序也要用管理员身份启动，
   否则 `OpenProcess` 会被拒绝（界面会给出这条提示）。
 * 每帧会多一次全屏绘制和一到两次全屏拷贝，开销很小但不是零。

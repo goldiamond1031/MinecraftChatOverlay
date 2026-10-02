@@ -3,7 +3,7 @@ namespace MinecraftChatOverlay.Models;
 /// <summary>
 /// 插件市场的连接设置。
 ///
-/// 市场没有服务器：清单就是仓库里的一个 markdown 级小文件 market/index.json，
+/// 市场没有服务器：清单就是仓库里的一个小 JSON 文件 market/index.json，
 /// 插件包就是仓库里的 zip。所以这里只有"去哪儿看清单"这一个变量。
 /// </summary>
 public sealed class PluginMarketSettings

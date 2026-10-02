@@ -115,7 +115,12 @@ pre {
 <header>
 MCO Plugin SDK Documentation
 <span class="badge" style="margin-left:15px">Developer Guide</span>
-</header>
+<div class="banner" style="margin:18px 25px;padding:14px 18px;background:#fff7ed;border:1px solid #fdba74;border-radius:10px;font-size:14px;line-height:1.75">
+<strong>这份是早期的「SDK 版」参考稿，不是权威文档。</strong><br>
+权威的插件开发文档是同目录的 <code>PLUGIN-DEV-GUIDE.html</code>（标题「Minecraft Chat Overlay · 插件开发文档」，apiVersion 1）—— 软件里【插件开发文档】按钮打开的在线版也是它。
+两份内容重叠，但<strong>只有 PLUGIN-DEV-GUIDE.html 跟着代码更新</strong>；两边不一致时以它为准，进一步以 <code>Plugins\Abstractions\PluginApi.cs</code> / <code>Services\Plugins\PluginManager.cs</code> 为准。<br>
+这份留着当补充材料看：章节更偏「SDK 参考」（能力与红线 / 调试 / 自己开窗口）。
+</div>
 
 <div class="layout">
 <aside>
@@ -126,7 +131,7 @@ MCO Plugin SDK Documentation
 <main>
 <h1>MCO 插件开发指南</h1>
 <p>写给要给 MinecraftChatOverlay（下称 **MCO**）写插件的人。</p>
-<p>想快速浏览装/卸流程看 [README](README.md)；本文是完整参考。</p>
+<p>装 / 卸流程看权威文档 <a href='PLUGIN-DEV-GUIDE.html'>PLUGIN-DEV-GUIDE.html</a>（「Minecraft Chat Overlay · 插件开发文档」）；本文是另一份 SDK 版参考。</p>
 <p>---</p>
 <h2 id='0-先建立三个认知'>0. 先建立三个认知</h2>
 <p>**1. 插件是独立编译的 .NET 程序，跑在 MCO 主程序的进程里。**</p>
@@ -268,8 +273,8 @@ public sealed class MyFirstPlugin : IPlugin
 <div class='table-line'>| 事件 | 宿主做的事 | 你的插件要做的 |</div>
 <div class='table-line'>|---|---|---|</div>
 <div class='table-line'>| 软件启动 / 用户启用 / 安装完成 | 扫目录 → 校验 apiVersion → 加载 dll → `new` 入口类 → 调 **`Initialize`** | 初始化状态、注册页面、订阅事件 |</div>
-<div class='table-line'>| 用户禁用 | 调 **`Shutdown`** → 卸载 AssemblyLoadContext | 收干净自己的一切 |</div>
-<div class='table-line'>| 用户卸载 | 调 `Shutdown` → 删安装目录 → 删数据目录 | 同上 |</div>
+<div class='table-line'>| 用户禁用 | 调 **Shutdown** → 卸载 AssemblyLoadContext（卡片留着、开关变关；id 记进 DisabledPlugins，下次启动不再装载） | 收干净自己的一切 |</div>
+<div class='table-line'>| 用户卸载 | 调 Shutdown → 删安装目录 → 删数据目录（目录删不掉就先改名搬走 + 排进 pending-delete.txt，下次启动自动清） | 同上 |</div>
 <div class='table-line'>| 导入同 id 新版本 | 调 `Shutdown` → 换文件 → 重新 `Initialize` | 同上；**数据目录不会被换版删掉** |</div>
 <div class='table-line'>| 软件退出 | 对每个运行中的插件调 `Shutdown` | 同上 |</div>
 <p>**`Shutdown` 可能被调用多次**（禁用→启用→退出就是两次），所以它必须**幂等**：第二次进来什么都已经收干净了也不能崩。</p>
@@ -280,8 +285,8 @@ public sealed class MyFirstPlugin : IPlugin
 <h3>3.3 更新与卸载的排队机制</h3>
 <p>Windows 锁着运行中的 dll 删不掉，所以宿主有一套「排队到下次启动」的机制：</p>
 <li>更新一个正在运行的插件失败时，新版本被放进 `&lt;插件目录&gt;\&lt;id&gt;.new`，**下次启动软件时自动换上**；</li>
-<li>卸载同理：删不掉就先禁用 + 记进 `pending-delete.txt`，下次启动自动删。</li>
-<p>对你的含义：**别在 `Shutdown` 里和文件系统较劲**，也别指望卸载立刻生效。</p>
+<li>卸载同理：先把插件卸下来，然后<strong>先改名搬走、再删</strong>（改名失败就一个字都没删）—— 搬走后卡片<strong>立刻</strong>从列表里消失，残留目录记进 <code>pending-delete.txt</code>，下次启动自动删干净。</li>
+<p>对你的含义：**别在 Shutdown 里和文件系统较劲**；卸载后卡片会立刻消失，但磁盘上的文件可能排到下次启动才删掉（有文件被锁着时），所以清理自己的东西还是放在 Shutdown 里做。</p>
 <p>---</p>
 <h2 id='4-契约参考-IPluginHost-'>4. 契约参考（IPluginHost）</h2>
 <div class='table-line'>| 成员 | 说明 |</div>

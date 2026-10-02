@@ -9,12 +9,20 @@
 
 ## 开屏公告（announcement.json）
 
-软件每次启动会静默拉一次这个文件，**拉到了并且 id 和上次弹过的不一样**，就弹一个窗。同一条公告只弹一次（软件把弹过的 id 记在本机配置里），所以你**改内容时必须换个新 id**，**同时把 `updatedAt` 改成当前时间**，否则用户永远看不到。
+软件每次启动会静默拉一次这个文件，**拉到的东西比上次弹过的更新**就弹一个窗。同一条公告只弹一次 ——
+软件把「弹过哪一条」记在本机配置里（字段见下面「软件记在本机的两个字段」）：
+
+- **判新旧比的是 `updatedAt`**：它比上次弹过的那条（`LastSeenAnnouncementAt`）新才弹。
+- 公告**没写 `updatedAt`** 时，才退回比 `id`（`LastSeenAnnouncementId`）。
+- 所以**改内容时 `updatedAt` 一定要改成当前时间**；`id` 换不换只影响排查，不影响判新旧。
+
+为什么不比 id：id 只能说明「内容换过」，不能说明新旧 —— GitHub 源拉不到、退回还没同步的 jsDelivr 镜像时，
+那条的 id 不同但内容更旧，按 id 就会把已经看过的旧公告又弹一遍。
 
 | 字段 | 必填 | 说明 |
 |---|---|---|
 | `schemaVersion` | 是 | 固定写 `1` |
-| `id` | 是 | 公告的唯一标识，改内容就换一个（比如带日期：`2026-10-05-hotfix`） |
+| `id` | 是 | 公告的唯一标识，改内容就换一个（比如带日期：`2026-10-05-hotfix`）。**判新旧不看它**，只用于排查 |
 | `updatedAt` | 是 | 更新时间，ISO 格式。两个源（jsDelivr 镜像 / GitHub 本体）都拉到东西时靠它取更新的那份；**换了内容一定要改成当前时间**（原因见文末「缓存」）。两边时间戳一模一样时，软件会取 GitHub 本体那份（镜像只会更旧），但别指望这个兜底 —— 正常做法就是每改一次改一次时间 |
 | `enabled` | 是 | `false` 就等于没公告（内容留着下次改回来） |
 | `title` | 是 | 标题，窗里的大字 |
@@ -22,7 +30,38 @@
 | `link` | 否 | 有链接的话窗里多一个「查看详情」按钮 |
 | `linkText` | 否 | 按钮文字，不写就显示「查看详情」 |
 
-不弹了？检查这几条：`enabled` 是不是 `true`、`id` 是不是换了新的、`updatedAt` 有没有跟着改成当前时间、文件有没有推到 `main` 分支、正文/标题有没有写。
+不弹了？检查这几条：`enabled` 是不是 `true`、`updatedAt` 有没有改成比上次弹过的时间新、文件有没有推到 `main` 分支、正文 / 标题有没有写。
+
+## 怎么发一条公告（两个工具）
+
+不用手改 JSON：
+
+- `tools\announcement.bat` —— 双击开一个窗口，填标题 / 正文 / 链接，点【提交并推送】。日常发公告用这个。
+- `tools\publish-announcement.bat` / `publish-announcement.ps1` —— 命令行版（`.bat` 只是把参数原样转给 `.ps1`）：
+
+  ```
+  publish-announcement.bat -Show                       看当前这条是什么
+  publish-announcement.bat -Title "更新提示" -Body "更新了 1.2.8" -Link "https://github.com/goldiamond1031/MinecraftChatOverlay/releases" -LinkText "有可用更新"
+  publish-announcement.bat -Disable                    停用（内容留着，改天能改回来）
+  publish-announcement.bat -Title x -Body y -DryRun    只看它要写的 JSON，不写文件、不推送
+  ```
+
+  正文长就写进一个 txt，用 `-BodyFile body.txt`（正文里要换行就直接换行）。
+
+两个工具共用同一套逻辑：`updatedAt` 自动填「现在」、`id` 自动按时间生成、**同时写开发目录和仓库副本两份**
+（否则下次 `push.bat` 的 robocopy 会用旧的那份盖回去）、只 add / commit / push `about/announcement.json` 这一个文件。
+脚本会自己找 git 仓库：脚本上一级有 `.git` 就用它，否则用 `C:\Github\MinecraftChatOverlay`。
+
+### 软件记在本机的两个字段（判新旧就靠它们）
+
+在 `%AppData%\MinecraftChatOverlay\settings.json` 里：
+
+| 字段 | 作用 |
+|---|---|
+| `LastSeenAnnouncementAt` | 上次弹过的公告的 `updatedAt`。**判新旧主要比它** |
+| `LastSeenAnnouncementId` | 上次弹过的公告的 `id`。只在公告没写 `updatedAt` 时用来兜底 |
+
+想让自己再看一遍某条公告：把 `LastSeenAnnouncementAt` 删掉（或改成很早的时间）再启动软件即可。
 
 ## 怎么改名单
 
