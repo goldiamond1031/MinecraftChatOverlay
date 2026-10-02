@@ -168,6 +168,7 @@ public sealed class PluginManager
                     var entry = new PluginEntry { Manifest = manifest, Directory = directory };
                     if (_disabled.Contains(manifest.Id))
                     {
+                        entry.State = PluginState.Disabled;
                         entry.Error = "被用户禁用";
                         Add(entry);
                         continue;
@@ -509,6 +510,7 @@ public sealed class PluginManager
             }
 
             Unload(entry);
+            entry.State = PluginState.Disabled;   // 关键：Unload 只清实例，不改状态 —— 不改的话卡片开关还是"开"
             entry.Error = "被用户禁用";
 
             // 只是"不再装载"，**条目要留在列表里** —— 卡片还在、开关变成关，
