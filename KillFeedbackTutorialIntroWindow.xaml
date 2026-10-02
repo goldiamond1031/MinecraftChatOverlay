@@ -1,0 +1,64 @@
+<Window x:Class="MinecraftChatOverlay.KillFeedbackTutorialIntroWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="击杀反馈 · 新手引导"
+        Width="540"
+        SizeToContent="Height"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        Background="{DynamicResource WindowBgBrush}"
+        FontFamily="Segoe UI Variable, Segoe UI, Microsoft YaHei UI, PingFang SC, sans-serif"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True">
+
+    <!-- 进「新手引导」之前先说清楚代价；主题字典要自己挂一份（同 KillFeedbackHelpWindow）。 -->
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/MinecraftChatOverlay;component/ModernControls.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <StackPanel Margin="22,20,22,18">
+        <TextBlock Text="要进新手引导吗？" Style="{StaticResource CardTitleStyle}"/>
+
+        <Border Background="{DynamicResource DangerSoftBrush}"
+                BorderBrush="{DynamicResource DangerBrush}"
+                BorderThickness="1"
+                CornerRadius="10"
+                Padding="13,10"
+                Margin="0,14,0,0">
+            <TextBlock TextWrapping="Wrap"
+                       FontSize="12.5"
+                       Foreground="{DynamicResource DangerBrush}"
+                       Text="进去以后，已经填好的匹配规则会被清空（引导最后会留一份示例给你改），击杀反馈开关会顺手打开 —— 其它设置一个都不动。"/>
+        </Border>
+
+        <TextBlock TextWrapping="Wrap"
+                   FontSize="12.5"
+                   LineHeight="19"
+                   Margin="0,12,0,0"
+                   Foreground="{DynamicResource TextSecondaryBrush}"
+                   Text="引导一共 16 步，每步只讲一件事，会直接替你改下面的规则框，让你看清规则是怎么试出来的。中途随时可以点【退出教程】，规则框里是什么就留什么。"/>
+
+        <TextBlock TextWrapping="Wrap"
+                   FontSize="11.5"
+                   Margin="0,10,0,0"
+                   Foreground="{DynamicResource TextTertiaryBrush}"
+                   Text="不确定的话可以先点【再等等】，填到一半卡住了再回来。"/>
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
+            <Button Content="再等等"
+                    Click="CancelButton_Click"
+                    Style="{StaticResource SmallGhostButtonStyle}"
+                    IsCancel="True"
+                    Margin="0,0,10,0"/>
+            <Button Content="进入教程"
+                    Click="EnterButton_Click"
+                    Style="{StaticResource SmallPrimaryButtonStyle}"
+                    IsDefault="True"/>
+        </StackPanel>
+    </StackPanel>
+</Window>

@@ -1893,9 +1893,14 @@
                                                     Margin="0,18,0,0">
                                             <StackPanel Margin="0,0,0,14">
                                                 <TextBlock Text="你自己的 ID（填裸名字，不带称号 / VIP 前缀）" Style="{StaticResource FieldLabelStyle}"/>
+                                                <Border x:Name="KillFeedbackPlayerIdHighlight"
+                                                        BorderThickness="0"
+                                                        CornerRadius="9"
+                                                        Padding="2">
                                                 <TextBox x:Name="KillFeedbackPlayerIdTextBox"
                                                          ToolTip="游戏里你显示成 [vip1][25阶1003⚝]Steve 这种样子时，这里只填 Steve。&#10;称号 / VIP 图标 / 方括号前缀不用你自己删 —— 下面的「剥离方括号前缀」会先剥掉再匹配。&#10;只有把那个勾取消掉，才需要照日志原样连前缀一起填。"
                                                          LostFocus="KillFeedbackRuleInput_LostFocus"/>
+                                                </Border>
                                                 <TextBlock Style="{StaticResource HintStyle}" TextWrapping="Wrap" Margin="0,5,0,0" Text="例：日志里写的是 [vip1][25阶1003⚝]Steve 击败了 Alex —— 这里填 Steve 就行，称号和 VIP 前缀不用管。"/>
                                             </StackPanel>
                                             <StackPanel Margin="0,0,0,14">
@@ -1970,21 +1975,33 @@
                                                                    TextWrapping="Wrap"
                                                                    Margin="0,3,0,0"
                                                                    Foreground="{DynamicResource TextSecondaryBrush}"
-                                                                   Text="规则框空着，软件一条击杀都认不出来 —— 画面效果和提示音都不会响。不会写就点右边那个按钮。"/>
+                                                                   Text="规则框空着，软件一条杀都认不出来 —— 画面效果和提示音都不会响。不会写就点右边的【▶ 新手引导】，跟着走一遍就会了。"/>
                                                     </StackPanel>
-                                                    <Button x:Name="KillFeedbackRuleHelpButton"
-                                                            Grid.Column="2"
-                                                            Content="查看填写教程"
-                                                            ToolTip="弹一个窗，手把手讲一条规则长什么样、怎么一键生成"
-                                                            Style="{StaticResource SmallGhostButtonStyle}"
-                                                            VerticalAlignment="Center"
-                                                            Margin="12,0,0,0"
-                                                            Click="KillFeedbackRuleHelpButton_Click"/>
+                                                    <StackPanel Grid.Column="2"
+                                                                Orientation="Horizontal"
+                                                                VerticalAlignment="Center"
+                                                                Margin="12,0,0,0">
+                                                        <Button x:Name="KillFeedbackTutorialStartButton"
+                                                                Content="▶ 新手引导（手把手）"
+                                                                ToolTip="一步一步带着填：进去会先清空已填的规则，全程 16 步，随时能退出"
+                                                                Style="{StaticResource SmallPrimaryButtonStyle}"
+                                                                Click="KillFeedbackTutorialStartButton_Click"/>
+                                                        <Button x:Name="KillFeedbackRuleHelpButton"
+                                                                Content="文字版"
+                                                                ToolTip="弹一个窗，讲一条规则长什么样、怎么一键生成"
+                                                                Style="{StaticResource SmallGhostButtonStyle}"
+                                                                Margin="8,0,0,0"
+                                                                Click="KillFeedbackRuleHelpButton_Click"/>
+                                                    </StackPanel>
                                                 </Grid>
                                             </Border>
                                             <TextBlock Text="匹配规则（一行一条，命中任意一条就算）"
                                                        Style="{StaticResource FieldLabelStyle}"
                                                        Margin="0,16,0,7"/>
+                                            <Border x:Name="KillFeedbackRulesHighlight"
+                                                    BorderThickness="0"
+                                                    CornerRadius="9"
+                                                    Padding="2">
                                             <TextBox x:Name="KillFeedbackRulesTextBox"
                                                      Height="96"
                                                      AcceptsReturn="True"
@@ -1994,6 +2011,7 @@
                                                      FontFamily="Consolas, Cascadia Mono, Microsoft YaHei UI"
                                                      ToolTip="一局里近战 / 远程 / 爆炸的击杀消息往往不是同一个模板，每种粘一条。规则是「一段固定文本」，不要求出现在行首"
                                                      LostFocus="KillFeedbackRulesTextBox_LostFocus"/>
+                                            </Border>
                                             <CheckBox x:Name="KillFeedbackRegexRulesCheckBox"
                                                       Content="按正则解释（不勾就是纯文本，符号不用转义）"
                                                       Style="{StaticResource InlineToggleStyle}"
@@ -2939,6 +2957,75 @@
                                 </Border>
                             </StackPanel>
                         </ScrollViewer>
+
+                        <!--
+                            匹配规则新手引导：贴在页面底部的引导卡片（浮层）。
+                            放在面板外面、不进滚动区，靠代码控制显隐：引导进行中才显示，
+                            离开这一页自动隐藏（见 UpdateTutorialOverlayVisibility）。
+                        -->
+                        <Grid x:Name="KillFeedbackTutorialOverlay"
+                              Visibility="Collapsed"
+                              VerticalAlignment="Bottom"
+                              Margin="22,0,24,20">
+                            <Border Style="{StaticResource CardStyle}"
+                                    MaxWidth="780"
+                                    HorizontalAlignment="Center"
+                                    BorderBrush="{DynamicResource PrimaryBrush}"
+                                    BorderThickness="1.5"
+                                    Padding="18,14">
+                                <StackPanel>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock x:Name="KillFeedbackTutorialStepText"
+                                                       Text="新手引导 · 1/16"
+                                                       FontSize="11.5"
+                                                       FontWeight="Bold"
+                                                       VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource PrimaryBrush}"/>
+                                            <TextBlock x:Name="KillFeedbackTutorialTitleText"
+                                                       Text="先搞清楚：软件能知道什么"
+                                                       FontSize="13.5"
+                                                       FontWeight="ExtraBold"
+                                                       VerticalAlignment="Center"
+                                                       Margin="10,0,0,0"
+                                                       Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                        </StackPanel>
+                                        <Button Grid.Column="1"
+                                                Content="退出教程"
+                                                Click="KillFeedbackTutorialExitButton_Click"
+                                                Style="{StaticResource SmallGhostButtonStyle}"/>
+                                    </Grid>
+                                    <TextBlock x:Name="KillFeedbackTutorialBodyText"
+                                               TextWrapping="Wrap"
+                                               FontSize="12.5"
+                                               LineHeight="19"
+                                               Margin="0,9,0,0"
+                                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                    <TextBlock x:Name="KillFeedbackTutorialHintText"
+                                               TextWrapping="Wrap"
+                                               FontSize="12"
+                                               FontWeight="Bold"
+                                               Margin="0,7,0,0"
+                                               Visibility="Collapsed"
+                                               Foreground="{DynamicResource ConsoleWarnBrush}"/>
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,13,0,0">
+                                        <Button x:Name="KillFeedbackTutorialPrevButton"
+                                                Content="上一步"
+                                                Click="KillFeedbackTutorialPrevButton_Click"
+                                                Style="{StaticResource SmallGhostButtonStyle}"
+                                                Margin="0,0,9,0"/>
+                                        <Button x:Name="KillFeedbackTutorialNextButton"
+                                                Content="下一步"
+                                                Click="KillFeedbackTutorialNextButton_Click"
+                                                Style="{StaticResource SmallPrimaryButtonStyle}"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
                     </Grid>
 
                     <!-- 状态栏 -->

@@ -689,7 +689,7 @@ public partial class MainWindow
 
         KillFeedbackRuleHintDetail.Text = ready
             ? "规则这一半边是通的。剩下的看上面那条（有没有注入）和卡片底部那行数字（有没有匹配上）。"
-            : "规则框空着，软件一条击杀都认不出来 —— 画面效果和提示音都不会响。不会写就点右边那个按钮。";
+            : "规则框空着，软件一条杀都认不出来 —— 画面效果和提示音都不会响。不会写就点右边的【▶ 新手引导】。";
     }
 
     /// <summary>【查看填写教程】：弹一个独立窗讲规则怎么填（外观同公告窗）。</summary>
@@ -697,6 +697,370 @@ public partial class MainWindow
     {
         var dialog = new KillFeedbackHelpWindow { Owner = this };
         dialog.ShowDialog();
+    }
+
+    // ============================================================================
+    //  匹配规则 · 新手引导
+    //
+    //  为什么做在页面里（而不是像【文字版】那样开个弹窗）：用户写不出规则，不是看不懂
+    //  解释，而是不知道"这行字到底该写什么"。所以引导得让他看着规则框被填、被删、
+    //  被写错又改对 —— 浮层在页面底部讲 + 高亮目标控件 + 替他改规则框。
+    //
+    //  状态机只有三个字段：_tutorialActive / _tutorialStepIndex / 每一步的 Enter 动作。
+    //  正文里的 {id} 占位符在显示的那一刻替换成用户填的 ID（他可能中途才填上）。
+    // ============================================================================
+
+    private bool _tutorialActive;
+    private int _tutorialStepIndex = -1;
+    private (string Title, string Body, Action? Enter)[]? _tutorialSteps;
+    private DispatcherTimer? _tutorialFlashTimer;
+
+    /// <summary>引导正文里引用 ID 用这个：没填就写「你的ID」，填了就照他的来。</summary>
+    private string TutorialId()
+    {
+        var id = KillFeedbackPlayerIdTextBox.Text.Trim();
+        return id.Length > 0 ? id : "你的ID";
+    }
+
+    /// <summary>
+    /// 16 步：开场 → 填 ID → 写出一个错规则 → 讲清为什么错 → 找出不变的部分 →
+    /// 第二种击杀消息 → 砍掉 # 后面的内容 → 总结 → 称号 / VIP 不用写。
+    /// </summary>
+    private (string Title, string Body, Action? Enter)[] BuildTutorialSteps() => new (string, string, Action?)[]
+    {
+        ("先搞清楚：软件能知道什么",
+            "软件没法直接知道你打死了谁 —— 游戏不会把这件事告诉外部程序，它只能从聊天栏的消息里间接判断。"
+            + "所以要你告诉它：聊天栏里出现什么样的文字，就说明你击杀了一次。"
+            + "下面用起床战争的消息，一起把这段文字试出来。",
+            null),
+
+        ("第一步：你自己的 ID",
+            "先把你自己的 ID 填上 —— 就是你在游戏里显示的名字，只填名字本身，称号和 VIP 前缀不用管。填好再点下一步。",
+            () =>
+            {
+                ClearTutorialHighlights();
+                HighlightTutorialTarget(KillFeedbackPlayerIdHighlight, false);
+                ScrollTutorialTargetIntoView(KillFeedbackPlayerIdHighlight);
+            }),
+
+        ("拿一条真实的消息看看",
+            "以起床战争为例：你造成一次击杀时，聊天栏会跳出一行「{id}击败了 XXX」这样的消息 —— 是这样吧？",
+            () =>
+            {
+                ClearTutorialHighlights();
+                ScrollTutorialTargetIntoView(KillFeedbackRulesHighlight);
+            }),
+
+        ("那……规则就照抄这一行？",
+            "那么，也就是说：把你的击杀信息连带着敌人的 ID，完整填进规则框里 —— 这样对吗？",
+            () =>
+            {
+                ClearTutorialHighlights();
+                SetTutorialRules("{id}击败了 XXX");
+                HighlightTutorialTarget(KillFeedbackRulesHighlight, false);
+                ScrollTutorialTargetIntoView(KillFeedbackRulesHighlight);
+            }),
+
+        ("不对！",
+            "这样填，就等于告诉软件：聊天栏里每次出现这行文字，就给我一次反馈。"
+            + "仔细看看 —— 这行文字里是不是还带着一个明确的敌人 ID？",
+            FlashTutorialRulesRed),
+
+        ("按这条规则，谁会给你反馈？",
+            "也就是说：只有那个 ID 的玩家被你击杀之后，你才会收到一次反馈 —— 换个人杀就不灵了。",
+            null),
+
+        ("但这明显不是我们要的",
+            "我们要的效果是：无论是谁，只要被你击杀，就给你一次反馈。所以先把刚才那条错的规则清掉。",
+            () =>
+            {
+                ClearTutorialHighlights();
+                SetTutorialRules("");
+                ScrollTutorialTargetIntoView(KillFeedbackRulesHighlight);
+            }),
+
+        ("那我们多看几条",
+            "多看几条击杀消息：{id}击败了 A、{id}击败了 B、{id}击败了 C —— 你找到规律了吗？",
+            () =>
+            {
+                ClearTutorialHighlights();
+                ScrollTutorialTargetIntoView(KillFeedbackRulesHighlight);
+            }),
+
+        ("变的部分 / 不变的部分",
+            "没错：你触发的击杀消息里，总有变的部分和不变的部分 —— 变的是敌人的 ID；"
+            + "而不变的那几个字，就可以写下来告诉软件：出现这几个字，就代表我击杀了敌人。",
+            () =>
+            {
+                ClearTutorialHighlights();
+                SetTutorialRules("{id}击败了");
+                HighlightTutorialTarget(KillFeedbackRulesHighlight, false);
+                ScrollTutorialTargetIntoView(KillFeedbackRulesHighlight);
+            }),
+
+        ("可服务器不止一种击杀消息",
+            "有些服里，击杀消息长这样：XXX 成为了 {id} 的第 #1 个最终击杀。同样的，我们还是先找出变的部分和不变的部分。",
+            null),
+
+        ("这次变的不只是 ID",
+            "你会发现：变的不只是敌人的 ID，后面那个数字也在变。这个时候就要注意了 —— 不能只是把会变的部分删掉就走。",
+            null),
+
+        ("为什么 # 后面不能留数字",
+            "软件判断一条消息是不是你的击杀时，是一个字一个字对着来的：它拿到「XXX 成为了 {id} 的第 #2 个最终击杀」，"
+            + "就从「成为了」开始逐字匹配 —— 前面都很顺，可匹配到 # 后面时：消息里跟着的是数字 2，而你写的是「个」，"
+            + "软件就认为没匹配上，判定这条不是你的击杀消息。",
+            () =>
+            {
+                ClearTutorialHighlights();
+                AppendTutorialRule("成为了{id}的第#个最终击杀");
+                FlashTutorialRulesRed();
+            }),
+
+        ("那该怎么办呢",
+            "可以注意到：我们其实并不需要让软件去匹配 # 后面的内容。",
+            null),
+
+        ("砍掉多余的部分",
+            "只要有「成为了 {id} 的第」这几个字，不就可以确定这条消息是你的击杀消息了吗？",
+            () =>
+            {
+                ClearTutorialHighlights();
+                ReplaceLastTutorialRule("成为了{id}的第");
+                HighlightTutorialTarget(KillFeedbackRulesHighlight, false);
+                ScrollTutorialTargetIntoView(KillFeedbackRulesHighlight);
+            }),
+
+        ("总结一下规则怎么写",
+            "匹配规则就是：填入只有你击杀别人时才会出现的那段文字组合。常见的还有：{id} 一吼、"
+            + "被 {id} 的神之箭所贯穿、{id} 的利剑终结了 —— 一局里有几种格式，就写几条。",
+            ClearTutorialHighlights),
+
+        ("最后一点：称号和 VIP",
+            "如果你有称号，或者 VIP 前缀，这两样都不用写进规则里 —— 默认开着的「剥离方括号前缀」会在匹配前先把它去掉。"
+            + "点【完成】收工：规则框里已经留了一份示例，照着改成你服里的消息就行。",
+            ClearTutorialHighlights),
+    };
+
+    /// <summary>【▶ 新手引导】：先弹窗讲清楚代价（会清空已填规则），用户点了才进去。</summary>
+    private void KillFeedbackTutorialStartButton_Click(object sender, RoutedEventArgs e)
+    {
+        var intro = new KillFeedbackTutorialIntroWindow { Owner = this };
+        if (intro.ShowDialog() != true)
+        {
+            return;
+        }
+
+        // 按弹窗里承诺的两件事：打开开关、清空已填的匹配规则（其它设置一个不动）
+        KillFeedbackEnableCheckBox.IsChecked = true;
+        SetTutorialRules("");
+
+        StartTutorial();
+    }
+
+    private void StartTutorial()
+    {
+        _tutorialSteps = BuildTutorialSteps();
+        _tutorialActive = true;
+
+        // 切到别的页时把浮层收起来（引导不该还挂在别的页面上）
+        KillFeedPanel.IsVisibleChanged -= KillFeedPanel_IsVisibleChanged;
+        KillFeedPanel.IsVisibleChanged += KillFeedPanel_IsVisibleChanged;
+
+        ShowTutorialStep(0);
+    }
+
+    private void KillFeedPanel_IsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
+        => UpdateTutorialOverlayVisibility();
+
+    private void ShowTutorialStep(int index)
+    {
+        if (_tutorialSteps == null || _tutorialSteps.Length == 0)
+        {
+            return;
+        }
+
+        index = Math.Clamp(index, 0, _tutorialSteps.Length - 1);
+        _tutorialStepIndex = index;
+
+        var (title, body, enter) = _tutorialSteps[index];
+        enter?.Invoke();
+
+        KillFeedbackTutorialStepText.Text = $"新手引导 · {index + 1}/{_tutorialSteps.Length}";
+        KillFeedbackTutorialTitleText.Text = title.Replace("{id}", TutorialId());
+        KillFeedbackTutorialBodyText.Text = body.Replace("{id}", TutorialId());
+        KillFeedbackTutorialHintText.Visibility = Visibility.Collapsed;
+        KillFeedbackTutorialPrevButton.IsEnabled = index > 0;
+        KillFeedbackTutorialNextButton.Content = index == _tutorialSteps.Length - 1 ? "完成" : "下一步";
+
+        UpdateTutorialOverlayVisibility();
+    }
+
+    private void KillFeedbackTutorialNextButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_tutorialActive || _tutorialSteps == null)
+        {
+            return;
+        }
+
+        // 第 2 步（填 ID）没填就不让走 —— 后面每一步的正文都要用到这个 ID
+        if (_tutorialStepIndex == 1 && KillFeedbackPlayerIdTextBox.Text.Trim().Length == 0)
+        {
+            KillFeedbackTutorialHintText.Text = "请先在上面的「你自己的 ID」框里填上你的游戏 ID（只填名字，称号和 VIP 前缀不用管），再点下一步。";
+            KillFeedbackTutorialHintText.Visibility = Visibility.Visible;
+            return;
+        }
+
+        if (_tutorialStepIndex >= _tutorialSteps.Length - 1)
+        {
+            EndTutorial();
+            return;
+        }
+
+        ShowTutorialStep(_tutorialStepIndex + 1);
+    }
+
+    private void KillFeedbackTutorialPrevButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_tutorialActive)
+        {
+            return;
+        }
+
+        ShowTutorialStep(_tutorialStepIndex - 1);
+    }
+
+    private void KillFeedbackTutorialExitButton_Click(object sender, RoutedEventArgs e) => EndTutorial();
+
+    private void EndTutorial()
+    {
+        _tutorialActive = false;
+        KillFeedbackTutorialFlashStop();
+        ClearTutorialHighlights();
+        UpdateTutorialOverlayVisibility();
+    }
+
+    private void UpdateTutorialOverlayVisibility()
+    {
+        if (KillFeedbackTutorialOverlay == null)
+        {
+            return;
+        }
+
+        var show = _tutorialActive && KillFeedPanel != null && KillFeedPanel.IsVisible;
+        KillFeedbackTutorialOverlay.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>把某个容器高亮出来（alarm = 红色，用来讲"这样写是错的"）。</summary>
+    private void HighlightTutorialTarget(Border? box, bool alarm)
+    {
+        if (box == null)
+        {
+            return;
+        }
+
+        box.BorderThickness = new Thickness(alarm ? 3 : 2);
+        box.BorderBrush = (Brush)FindResource(alarm ? "DangerBrush" : "PrimaryBrush");
+        box.Background = (Brush)FindResource(alarm ? "DangerSoftBrush" : "PrimarySoftBrush");
+    }
+
+    private void ClearTutorialHighlights()
+    {
+        KillFeedbackTutorialFlashStop();
+        ClearTutorialHighlight(KillFeedbackPlayerIdHighlight);
+        ClearTutorialHighlight(KillFeedbackRulesHighlight);
+    }
+
+    private static void ClearTutorialHighlight(Border? box)
+    {
+        if (box == null)
+        {
+            return;
+        }
+
+        box.BorderThickness = new Thickness(0);
+        box.BorderBrush = null;
+        box.Background = null;
+    }
+
+    /// <summary>红色高亮一下规则框（讲错在哪那两步用），1.6 秒后回到琥珀色高亮。</summary>
+    private void FlashTutorialRulesRed()
+    {
+        HighlightTutorialTarget(KillFeedbackRulesHighlight, true);
+        ScrollTutorialTargetIntoView(KillFeedbackRulesHighlight);
+
+        _tutorialFlashTimer ??= new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1600) };
+        _tutorialFlashTimer.Stop();
+        _tutorialFlashTimer.Tick -= TutorialFlashTimer_Tick;
+        _tutorialFlashTimer.Tick += TutorialFlashTimer_Tick;
+        _tutorialFlashTimer.Start();
+    }
+
+    private void TutorialFlashTimer_Tick(object? sender, EventArgs e)
+    {
+        KillFeedbackTutorialFlashStop();
+        HighlightTutorialTarget(KillFeedbackRulesHighlight, false);
+    }
+
+    private void KillFeedbackTutorialFlashStop()
+    {
+        if (_tutorialFlashTimer == null)
+        {
+            return;
+        }
+
+        _tutorialFlashTimer.Stop();
+        _tutorialFlashTimer.Tick -= TutorialFlashTimer_Tick;
+    }
+
+    /// <summary>把目标滚到视口偏上的位置 —— 引导卡片浮在底部，别让它挡住正在讲的东西。</summary>
+    private void ScrollTutorialTargetIntoView(FrameworkElement? target)
+    {
+        if (target == null || KillFeedPanel == null)
+        {
+            return;
+        }
+
+        try
+        {
+            var y = target.TransformToAncestor(KillFeedPanel).Transform(new Point(0, 0)).Y;
+            KillFeedPanel.ScrollToVerticalOffset(Math.Max(0, KillFeedPanel.VerticalOffset + y - 150));
+        }
+        catch
+        {
+            // 还没布局好就算了，下一步会再滚一次
+        }
+    }
+
+    /// <summary>直接写规则框（引导在替用户改规则），一次写完整套：入设置、存盘、刷新横幅。</summary>
+    private void SetTutorialRules(string text)
+    {
+        KillFeedbackRulesTextBox.Text = text.Replace("{id}", TutorialId());
+        KillFeedbackRulesTextBox.CaretIndex = KillFeedbackRulesTextBox.Text.Length;
+        CaptureKillFeedbackRuleInputs();
+        SaveKillFeedbackSettings();
+        RefreshKillFeedbackStats();
+    }
+
+    /// <summary>规则框新开一行（讲"服务器不止一种击杀消息"那步用）。</summary>
+    private void AppendTutorialRule(string rule)
+    {
+        var existing = KillFeedbackRulesTextBox.Text.Replace("\r\n", "\n").TrimEnd('\n');
+        SetTutorialRules(existing.Length == 0 ? rule : existing + "\n" + rule);
+    }
+
+    /// <summary>把规则框最后一行换掉（讲"砍掉 # 后面的内容"那步用）。</summary>
+    private void ReplaceLastTutorialRule(string rule)
+    {
+        var lines = KillFeedbackRulesTextBox.Text.Replace("\r\n", "\n").Split('\n').ToList();
+        if (lines.Count == 0)
+        {
+            SetTutorialRules(rule);
+            return;
+        }
+
+        lines[lines.Count - 1] = rule;
+        SetTutorialRules(string.Join("\n", lines));
     }
 
     private void RefreshKillFeedbackStats()
