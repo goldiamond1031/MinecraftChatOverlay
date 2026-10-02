@@ -422,7 +422,7 @@ public sealed class PluginManager
                 {
                     if (Directory.Exists(existing.Directory))
                     {
-                        Directory.Delete(existing.Directory, recursive: true);
+                        if (!TryWipeDirectory(existing.Directory)) { throw new IOException("插件目录被占用（dll 还在跑），这次先不动它"); }
                     }
                 }
                 catch (Exception ex)
@@ -449,7 +449,7 @@ public sealed class PluginManager
             var targetDirectory = Path.Combine(UserRoot, SafeFolderName(manifest.Id));
             if (Directory.Exists(targetDirectory))
             {
-                Directory.Delete(targetDirectory, recursive: true);
+                if (!TryWipeDirectory(targetDirectory)) { throw new IOException("目标目录被占用，这次先不动它"); }
             }
 
             CopyDirectory(pluginRoot, targetDirectory);
@@ -550,7 +550,7 @@ public sealed class PluginManager
             {
                 if (Directory.Exists(entry.Directory))
                 {
-                    Directory.Delete(entry.Directory, recursive: true);
+                    if (!TryWipeDirectory(entry.Directory)) { throw new IOException("插件目录被占用（dll 还在跑），这次先不动它"); }
                 }
             }
             catch (Exception)
@@ -666,7 +666,7 @@ public sealed class PluginManager
                     {
                         if (Directory.Exists(target))
                         {
-                            Directory.Delete(target, recursive: true);
+                            if (!TryWipeDirectory(target)) { throw new IOException("目标目录被占用，这次先不动它"); }
                         }
 
                         Directory.Move(staged, target);
@@ -798,6 +798,46 @@ public sealed class PluginManager
         catch
         {
         }
+    }
+
+
+    /// <summary>
+    /// 安全地清掉一个插件目录：**先改名搬走，再删**。
+    ///
+    /// 为什么不能直接 Directory.Delete(recursive:true)：它是**逐个文件删**的，
+    /// 撞上被宿主进程锁着的 dll 就抛异常，而**已经删掉的文件不会回滚** ——
+    /// 结果就是一个半死不活的目录（plugin.json 没了、dll 还在），插件再也装不回来。
+    /// 改名是原子的：有文件被锁着它就直接失败、什么都还没删，调用方可以照常去走"排队下次启动"。
+    /// </summary>
+    private bool TryWipeDirectory(string directory)
+    {
+        if (!Directory.Exists(directory))
+        {
+            return true;
+        }
+
+        var moved = directory + ".del-" + DateTime.Now.ToString("yyyyMMddHHmmssfff");
+        try
+        {
+            Directory.Move(directory, moved);
+        }
+        catch (Exception ex)
+        {
+            // 有文件被锁 → 一个字都没删（这正是我们要的：宁可留着，也别删一半）
+            RaiseLog($"[插件] 目录被占用、改不了名（{Path.GetFileName(directory)}）：{ex.Message}");
+            return false;
+        }
+
+        try
+        {
+            Directory.Delete(moved, recursive: true);
+        }
+        catch
+        {
+            AddPendingDelete(moved);   // 已经搬出 plugins 根目录了，不碍事，下次启动清
+        }
+
+        return true;
     }
 
 
