@@ -70,8 +70,8 @@ void HookPump()
     }
 
     // 重新装钩子。
-    // DLL 一旦 LoadLibrary 进进程，DllMain 就不会再跑；所以"卸载之后再注入一次"是没用的
-    // （LoadLibrary 直接返回已有句柄）。这里给界面一个入口，让 DLL 自己把钩子装回去。
+    // DLL 已经在进程里了：再注入一次不会重跑 DllMain（手动映射看到这个 pid 已经映射过就直接返回），
+    // 所以"卸载之后再注入一次"是没用的。这里给界面一个入口，让 DLL 自己把钩子装回去。
     if ((ctl->flags & kFlagReinstall) && !s_installed)
     {
         HookInstall();

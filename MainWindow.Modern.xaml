@@ -680,10 +680,7 @@
                             </StackPanel>
                         </ScrollViewer>
 
-                        <!-- ========== 面板 2：自动 GG ========== -->
-
-
-                        <!-- ========== 面板 3：文本渲染规则 ========== -->
+                        <!-- ========== 面板 2：文本渲染规则 ========== -->
                         <ScrollViewer x:Name="RulesPanel"
                                       VerticalScrollBarVisibility="Auto"
                                       HorizontalScrollBarVisibility="Disabled"
@@ -1072,10 +1069,7 @@
                         </ScrollViewer>
 
 
-                        <!-- ========== 面板 4：玩家查询 ========== -->
-
-
-                        <!-- ========== 面板 5：B站弹幕 ========== -->
+                        <!-- ========== 面板 3：B站弹幕 ========== -->
                         <ScrollViewer x:Name="BiliPanel"
                                       VerticalScrollBarVisibility="Auto"
                                       HorizontalScrollBarVisibility="Disabled"
@@ -1591,7 +1585,7 @@
                             </StackPanel>
                         </ScrollViewer>
 
-                        <!-- ========== 面板 6：游戏动态模糊（帧混合） ========== -->
+                        <!-- ========== 面板 4：游戏动态模糊（帧混合） ========== -->
                         <ScrollViewer x:Name="MotionBlurPanel"
                                       VerticalScrollBarVisibility="Auto"
                                       HorizontalScrollBarVisibility="Disabled"
@@ -1737,8 +1731,7 @@
                             </StackPanel>
                         </ScrollViewer>
 
-                          <!-- ========== 面板 8：区域放大 ========== -->
-                          <!-- ========== 面板 9：击杀反馈 ========== -->
+                        <!-- ========== 面板 5：击杀反馈 ========== -->
                         <ScrollViewer x:Name="KillFeedPanel"
                                       VerticalScrollBarVisibility="Auto"
                                       HorizontalScrollBarVisibility="Disabled"
@@ -2604,7 +2597,7 @@
 
 
 
-                          <!-- ========== 面板 10：调试后台 ========== -->
+                        <!-- ========== 面板 7：调试后台 ========== -->
                         <ScrollViewer x:Name="DebugPanel"
                                       VerticalScrollBarVisibility="Auto"
                                       HorizontalScrollBarVisibility="Disabled"
@@ -2705,6 +2698,7 @@
                                 </Border>
                             </StackPanel>
                         </ScrollViewer>
+                        <!-- ========== 面板 6：插件 ========== -->
                         <ScrollViewer x:Name="PluginsPanel"
                                       VerticalScrollBarVisibility="Auto"
                                       HorizontalScrollBarVisibility="Disabled"

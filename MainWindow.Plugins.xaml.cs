@@ -124,7 +124,7 @@ public partial class MainWindow
         try
         {
             ShowOverlay();
-            // 插件注入的消息也过一遍「快捷命令」匹配：命中就一样可以点击发送
+            // 插件发过来的消息直接进悬浮窗，和聊天栏来的走同一条显示路径
             _overlay?.AddMessage(text);
         }
         catch (Exception ex)

@@ -5,7 +5,7 @@ using MinecraftChatOverlay.Services.About;
 namespace MinecraftChatOverlay;
 
 /// <summary>
-/// 公告弹窗：启动时从仓库拉到公告就弹一次（同一条只弹一次，详见 AppSettings.LastSeenAnnouncementId）。
+/// 公告弹窗：启动时从仓库拉到公告、而且它比上次看过的那条更新（比 AppSettings.LastSeenAnnouncementAt）才弹。
 /// 外观和扫码登录那个窗一个套路：合并同一套主题资源、居中于主窗口。
 /// </summary>
 public partial class AnnouncementWindow : Window

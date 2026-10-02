@@ -15,9 +15,15 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- 直接复用主工程里的那两个文件，保证命令行和界面用的是同一份实现 -->
+    <!--
+      直接复用主工程里那几个文件，保证命令行和界面用的是同一份实现。
+      注意：GameProcessInjector 改成手动映射之后，还得把 ManualMapper.cs / ManualMapper.Remote.cs
+      一起编进来 —— 只带 GameProcessInjector.cs 会报 CS0103「找不到 ManualMapper」，工具直接编不出来。
+    -->
     <Compile Include="..\..\Services\GameMotionBlur\MotionBlurControlBlock.cs" Link="MotionBlurControlBlock.cs" />
     <Compile Include="..\..\Services\GameMotionBlur\GameProcessInjector.cs" Link="GameProcessInjector.cs" />
+    <Compile Include="..\..\Services\GameMotionBlur\ManualMapper.cs" Link="ManualMapper.cs" />
+    <Compile Include="..\..\Services\GameMotionBlur\ManualMapper.Remote.cs" Link="ManualMapper.Remote.cs" />
   </ItemGroup>
 
 </Project>

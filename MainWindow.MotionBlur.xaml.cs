@@ -360,7 +360,7 @@ public partial class MainWindow
     /// 目标进程活着、但控制块里说钩子不在。
     /// 先分清两种情况：
     ///   * DLL 不在进程里 → 是没注入（或游戏重启过），直接提示重新注入；
-    ///   * DLL 已经在进程里 → 多半是之前【卸载钩子】过。LoadLibrary 不会再跑 DllMain，
+    ///   * DLL 已经在进程里 → 多半是之前【卸载钩子】过。手动映射不会重跑入口点，
     ///     所以再点注入没有用；改成请 DLL 自己把钩子装回去。
     /// </summary>
     private void HandleMissingHook()
@@ -490,7 +490,7 @@ public partial class MainWindow
         var log = _motionBlur.ReadHookLog(12);
         if (string.IsNullOrWhiteSpace(log))
         {
-            return "钩子 DLL 没留下日志，可能 LoadLibrary 之后立刻失败了。";
+            return "钩子 DLL 没留下日志 —— 它可能刚进去（还没开始写日志）就崩了。";
         }
 
         return "钩子日志末尾：" + Environment.NewLine + log;

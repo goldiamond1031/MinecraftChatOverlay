@@ -13,7 +13,8 @@ namespace {
 
 DWORD WINAPI WorkerThread(LPVOID)
 {
-    // 让注入它的那只线程先跑完 LoadLibrary，避免几条线程一起抢 loader lock。
+    // 缓一下再干活：DllMain 这会儿还在被劫持的那只线程里跑着，注入方也要等它返回、
+    // 再把线程现场恢复回去。（原来走 LoadLibrary 时，这里是为了避开 loader lock。）
     Sleep(120);
 
     gmblur::LogInit();

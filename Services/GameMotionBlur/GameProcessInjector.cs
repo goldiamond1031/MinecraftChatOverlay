@@ -28,12 +28,6 @@ public sealed class GameProcessInfo
 public static class GameProcessInjector
 {
 
-    /// <summary>
-    /// 优先用手动映射（自己当加载器，不走 LoadLibrary）：模块不出现在目标进程的模块表里、
-    /// 磁盘上没有对应的加载痕迹。失败会自动回退到老的 LoadLibraryW 注入 —— 功能不能因为新路径挂掉。
-    /// </summary>
-    public static bool PreferManualMapping { get; set; } = true;
-
     /// <summary>手动映射过的 pid → 镜像基址。手动映射的模块不在模块表里，IsModuleLoaded 查不到，只能自己记。</summary>
     private static readonly Dictionary<int, long> ManualMapped = new();
     private static readonly object ManualMappedLock = new();
@@ -60,47 +54,15 @@ public static class GameProcessInjector
         }
     }
 
-    private const uint PROCESS_CREATE_THREAD = 0x0002;
     private const uint PROCESS_QUERY_INFORMATION = 0x0400;
-    private const uint PROCESS_VM_OPERATION = 0x0008;
-    private const uint PROCESS_VM_WRITE = 0x0020;
     private const uint PROCESS_VM_READ = 0x0010;
-    private const uint MEM_COMMIT = 0x1000;
-    private const uint MEM_RELEASE = 0x8000;
-    private const uint MEM_RESERVE = 0x2000;
-    private const uint PAGE_READWRITE = 0x04;
     private const uint LIST_MODULES_ALL = 0x03;
 
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern IntPtr OpenProcess(uint access, bool inheritHandle, int processId);
 
     [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern IntPtr VirtualAllocEx(IntPtr process, IntPtr address, UIntPtr size, uint allocationType, uint protect);
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern bool VirtualFreeEx(IntPtr process, IntPtr address, UIntPtr size, uint freeType);
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern bool WriteProcessMemory(IntPtr process, IntPtr address, byte[] buffer, UIntPtr size, out UIntPtr written);
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern IntPtr CreateRemoteThread(IntPtr process, IntPtr attributes, UIntPtr stackSize,
-                                                    IntPtr startAddress, IntPtr parameter, uint flags, out uint threadId);
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern uint WaitForSingleObject(IntPtr handle, uint milliseconds);
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern bool GetExitCodeThread(IntPtr thread, out UIntPtr exitCode);
-
-    [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool CloseHandle(IntPtr handle);
-
-    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
-    private static extern IntPtr GetModuleHandleW(string moduleName);
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern IntPtr GetProcAddress(IntPtr module, string procName);
 
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool IsWow64Process(IntPtr process, out bool isWow64);
@@ -157,7 +119,6 @@ public static class GameProcessInjector
     public static void Inject(int pid, string dllPath)
     {
         // 已经有一份手动映射的在跑了？别再来一份（两个钩子抢同一个后备缓冲会花屏/崩）
-        // 已经有一份手动映射的在跑了？别再来一份（两个钩子抢同一个后备缓冲会花屏/崩）
         if (IsManuallyMapped(pid))
         {
             return;
@@ -165,7 +126,7 @@ public static class GameProcessInjector
 
         if (!File.Exists(dllPath))
         {
-            throw new InvalidOperationException("找不到钩子 DLL：" + dllPath + "\n先跑一下 native\\build.ps1 把它编出来。");
+            throw new InvalidOperationException("找不到钩子 DLL：" + dllPath + "\n先跑一下 native\\build.ps1（用 pwsh，见 native\\README.md）把它编出来。");
         }
 
         // 只走手动映射。原来的 CreateRemoteThread + LoadLibraryW 那条路已经删掉了：
@@ -189,7 +150,7 @@ public static class GameProcessInjector
     /// <summary>
     /// 目标进程里是不是已经加载了某个模块。
     /// 用来区分"没注入过"和"DLL 已在里面、但钩子被卸载过"——
-    /// 后一种情况下 LoadLibrary 不会再跑 DllMain，光靠"再注入一次"是救不回来的。
+    /// 后一种情况下手动映射会直接跳过（模块已经在里面了），光靠"再注入一次"是救不回来的。
     /// </summary>
     public static bool IsModuleLoaded(int pid, string moduleName)
     {
@@ -224,6 +185,11 @@ public static class GameProcessInjector
         }
     }
 
+    /// <summary>
+    /// 位宽自检：本程序是 64 位、目标进程也得是 64 位，不然手动映射必然失败。
+    /// ⚠ **目前没有被调用** —— `Inject()` 里没接上（接它得先 OpenProcess，现在的 Inject 不自己开句柄），
+    ///    所以位宽不对时的表现是"手动映射注入失败：…"，看不到下面那两条人话提示。要么接回去、要么删掉。
+    /// </summary>
     private static void EnsureSameBitness(IntPtr process, int pid)
     {
         bool targetIsWow64;
@@ -243,29 +209,6 @@ public static class GameProcessInjector
         {
             throw new InvalidOperationException("PID " + pid + " 是 32 位进程，而钩子 DLL 是 64 位的，注入不了。");
         }
-    }
-
-    /// <summary>
-    /// 拿到"目标进程里" LoadLibraryW 的地址。
-    /// kernel32.dll 在每个进程里的基址通常一样，但不能假设，所以按模块枚举算偏移。
-    /// </summary>
-    private static IntPtr GetRemoteLoadLibraryAddress(IntPtr process)
-    {
-        var localKernel = GetModuleHandleW("kernel32.dll");
-        var localLoadLibrary = GetProcAddress(localKernel, "LoadLibraryW");
-        if (localKernel == IntPtr.Zero || localLoadLibrary == IntPtr.Zero)
-        {
-            throw new InvalidOperationException("本进程里找不到 kernel32!LoadLibraryW。");
-        }
-
-        var remoteKernel = FindRemoteModuleBase(process, "kernel32.dll");
-        if (remoteKernel == IntPtr.Zero)
-        {
-            throw new InvalidOperationException("在目标进程里找不到 kernel32.dll。");
-        }
-
-        var offset = (long)localLoadLibrary - (long)localKernel;
-        return (IntPtr)((long)remoteKernel + offset);
     }
 
     private static IntPtr FindRemoteModuleBase(IntPtr process, string moduleName)

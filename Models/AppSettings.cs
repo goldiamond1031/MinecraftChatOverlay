@@ -184,24 +184,17 @@ public sealed class AppSettings
     /// <summary>击杀反馈的设置（效果 + 匹配规则）。</summary>
     public KillFeedbackSettings KillFeedback { get; set; } = new();
 
-    /// <summary>「快捷命令」：把特定格式的聊天消息变成可点击、一键发命令。</summary>
+    // ---------- 插件 ----------
 
-
-
-
-    // ---------- 区域放大 ----------
-
-    /// <summary>「区域放大」页的设置（框选游戏窗口的一小块，放大挂到屏幕别处）。</summary>
-
-    /// <summary>被用户禁用的插件 id 列表（插件是运行时装载的独立 dll，这里只记「不许装」）。</summary>
     /// <summary>插件市场（清单地址等）。</summary>
     public PluginMarketSettings PluginMarket { get; set; } = new();
 
+    /// <summary>被用户禁用的插件 id 列表（插件是运行时装载的独立 dll，这里只记「不许装」）。</summary>
     public List<string> DisabledPlugins { get; set; } = new();
 
     /// <summary>
-    /// 已经弹过窗的公告 id。启动时拉到公告后，只有 id 和这里不一样才弹
-    /// —— 否则同一条公告每次开机都弹，很快就成了骚扰。
+    /// 最后弹过的那条公告的 id —— **只在公告没写 `updatedAt` 时**用它兜底判断"这条弹过没有"。
+    /// 正常情况下判断"要不要再弹"看的是 <see cref="LastSeenAnnouncementAt"/>。
     /// </summary>
     public string LastSeenAnnouncementId { get; set; } = "";
 

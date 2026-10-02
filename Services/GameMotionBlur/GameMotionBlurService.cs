@@ -87,7 +87,7 @@ public sealed class GameMotionBlurService : IDisposable
         {
             throw new InvalidOperationException(
                 "找不到钩子 DLL：" + dll + Environment.NewLine +
-                "先编译一下原生部分：powershell -File native\\build.ps1");
+                "先编译一下原生部分：pwsh -File native\\build.ps1（见 native\\README.md）");
         }
 
         // 控制块要先建好，DLL 一进去就能看到参数

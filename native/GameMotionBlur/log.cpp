@@ -43,8 +43,10 @@ void LogInit()
 
     wchar_t path[MAX_PATH] = {};
 
-    // 手动映射（不走 LoadLibrary）时，这个模块不在 loader 的模块表里，
-    // GetModuleFileNameW 会返回 0 —— 那就退到临时目录，别让日志整个哑掉。
+    // 手动映射（不走 LoadLibrary）时，这个模块不在 loader 的模块表里：
+    // GetModuleHandleExW(FROM_ADDRESS) 反查不到它，self 还是 NULL，
+    // 于是 GetModuleFileNameW 给出的是**进程 exe 的路径**（实测：非 0，不是失败），
+    // 也就是日志落在游戏 exe 旁边。这里保留"真拿不到就退 %TEMP%"的分支兜底。
     if (GetModuleFileNameW(self, path, MAX_PATH) == 0)
     {
         if (GetTempPathW(MAX_PATH, path) == 0)
