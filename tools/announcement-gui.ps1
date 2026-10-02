@@ -106,8 +106,18 @@ function Invoke-Cli([bool]$dryRun) {
         }
         if (-not $enabledBox.Checked) { $a += '-Disable' }
         if ($dryRun) { $a += '-DryRun' }
-        $out = & powershell @a 2>&1
-        return ($out | Out-String)
+        # git 推送成功也会把 "To https://…" 写到 stderr，那不是错误。
+        # 必须临时把 ErrorActionPreference 放回 Continue —— 否则 PS 5.1 会把子进程的一行
+        # stderr 当成 NativeCommandError 抛出来，于是"其实成功了"被报成"发布失败"。
+        $savedEap = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try {
+            $out = & powershell @a 2>&1 | ForEach-Object { $_.ToString() }
+            $script:lastExit = $LASTEXITCODE
+        } finally {
+            $ErrorActionPreference = $savedEap
+        }
+        return ((($out | Out-String).Trim()) + "`r`n`r`n[子进程退出码 " + $script:lastExit + "]")
     } finally {
         Remove-Item $tmp -Force -ErrorAction SilentlyContinue
     }
@@ -133,7 +143,11 @@ $submit.Add_Click({
     try {
         $out = Invoke-Cli $false
         $status.Text = $out
-        [void][System.Windows.Forms.MessageBox]::Show("完事。`r`n`r`n" + $out, '发公告', 'OK', 'Information')
+        if ($script:lastExit -eq 0) {
+            [void][System.Windows.Forms.MessageBox]::Show("发布成功（已经推送到 GitHub）。`r`n`r`n" + $out, "发公告", "OK", "Information")
+        } else {
+            [void][System.Windows.Forms.MessageBox]::Show("推送没成功（子进程退出码 " + $script:lastExit + "）。`r`n`r`n" + $out, "发布失败", "OK", "Error")
+        }
     } catch {
         $status.Text = $_.Exception.Message
         [void][System.Windows.Forms.MessageBox]::Show($_.Exception.Message, '发布失败', 'OK', 'Error')
