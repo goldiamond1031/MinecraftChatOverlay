@@ -294,3 +294,7 @@ cd C:/MinecraftChatOverlayDSUI3/native
 - **改文件用整份重写，或按行号 `InsertRange`；禁止"按内容做批量整行替换"** —— 修"卸载时摘条目"那次按 `_disabled.Add(...)` 匹配，同时命中了 `SetEnabled` 的禁用分支，把"禁用"改成了"从列表消失且不记状态"。下手前先打印**所有**命中行号。
 - **找方法结尾别用 `while (line -ne '}')`** —— 会抓到内层 `if` 的 `}`，把成员插进方法体里。按缩进（`^    }$`）或数大括号来定位。
 - **同步 / 提交**：开发目录（`C:\MinecraftChatOverlayDSUI3`，**不是 git 仓库**）--robocopy /E--> 仓库副本 `C:\Github\MinecraftChatOverlay`（排除 bin obj .vs .git design publish* 等）；**`/E` 不会删仓库里多出来的文件**，发现多余的要手动删。推送要在仓库副本里做，且**直接跑 `git` 会让 pwsh 会话崩** → 用 `Start-Process git -ArgumentList (...) -NoNewWindow -Wait -RedirectStandardOutput <文件>` 再读文件（判断成败看退出码，别被 stderr 骗，见坑 51）。
+- **行尾**：`native\**` 的 `.h` / `.cpp` **一律 LF**；`.cs` / `.xaml` 是**混的**（大约一半 LF、一半 CRLF）。
+  改哪份就跟着那份原有的行尾走（按行号打补丁天然会跟住），**别顺手把整份文件归成 CRLF** —— 那是整文件 diff。
+- ⚠ **命令行里别出现全角引号（U+201C / U+201D）**：会让整条命令失败（`exit 1`、一个字的输出都没有，看起来像"什么都没发生"）。
+  写引号用半角 `"`，中文文案统一用「」；往文件里写中文用 `[IO.File]::WriteAllText(路径, 文本, UTF8Encoding($false))`。
