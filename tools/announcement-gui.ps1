@@ -8,7 +8,17 @@ Add-Type -AssemblyName System.Drawing
 [System.Windows.Forms.Application]::EnableVisualStyles()
 
 $ErrorActionPreference = 'Stop'
-$Repo = Split-Path -Parent $PSScriptRoot
+# 找 git 仓库：脚本上一级有 .git 就用它（从仓库里那份 tools\ 跑），
+# 否则用固定路径 —— 开发目录 C:\MinecraftChatOverlayDSUI3 里没有 .git，
+# 直接拿它当仓库会报 "fatal: not a git repository"。
+function Resolve-Repo {
+    $up = Split-Path -Parent $PSScriptRoot
+    if (Test-Path (Join-Path $up '.git')) { return $up }
+    $fixed = 'C:\Github\MinecraftChatOverlay'
+    if (Test-Path (Join-Path $fixed '.git')) { return $fixed }
+    throw ("找不到 git 仓库：脚本上一级不是仓库（$up），也没有 $fixed")
+}
+$Repo = Resolve-Repo
 $Cli = Join-Path $PSScriptRoot 'publish-announcement.ps1'
 $AnnPath = Join-Path $Repo 'about\announcement.json'
 

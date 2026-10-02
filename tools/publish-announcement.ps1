@@ -37,7 +37,17 @@ param(
 $ErrorActionPreference = 'Stop'
 try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
 
-$Repo = Split-Path -Parent $PSScriptRoot
+# 找 git 仓库：脚本上一级有 .git 就用它（从仓库里那份 tools\ 跑），
+# 否则用固定路径 —— 开发目录 C:\MinecraftChatOverlayDSUI3 里没有 .git，
+# 直接拿它当仓库会报 "fatal: not a git repository"。
+function Resolve-Repo {
+    $up = Split-Path -Parent $PSScriptRoot
+    if (Test-Path (Join-Path $up '.git')) { return $up }
+    $fixed = 'C:\Github\MinecraftChatOverlay'
+    if (Test-Path (Join-Path $fixed '.git')) { return $fixed }
+    throw ("找不到 git 仓库：脚本上一级不是仓库（$up），也没有 $fixed")
+}
+$Repo = Resolve-Repo
 $Dev = 'C:\MinecraftChatOverlayDSUI3'
 $Rel = 'about\announcement.json'
 $RepoPath = Join-Path $Repo $Rel
@@ -82,6 +92,11 @@ if (-not [string]::IsNullOrWhiteSpace($BodyFile)) {
     $Body = Get-Content $BodyFile -Encoding UTF8 -Raw
     $Body = $Body -replace "`r`n", "`n"
     $Body = $Body.TrimEnd("`n")
+}
+
+# 闸门：标题和正文都空着就拒绝 —— 否则会写出一条空公告把线上那条盖掉（踩过一次）
+if (-not $Disable -and $DryRun -eq $false -and [string]::IsNullOrWhiteSpace($Title) -and [string]::IsNullOrWhiteSpace($Body)) {
+    throw "标题和正文都是空的，不发。要关掉公告请用 -Disable。"
 }
 
 if ([string]::IsNullOrWhiteSpace($Id)) { $Id = (Get-Date -Format 'yyyy-M-d-HHmm') }
