@@ -40,15 +40,26 @@ public partial class MainWindow
                 return;
             }
 
-            // 同一条公告只弹一次，否则每次开机都弹，很快就成骚扰
-            if (string.Equals(announcement.Id.Trim(), (_settings.LastSeenAnnouncementId ?? "").Trim(), StringComparison.Ordinal))
+            // 判断标准是**时间戳**，不是 id：id 只能说明"内容换过"，不能说明新旧 ——
+            // 一旦 GitHub 源拉不到、退回还没同步的 jsDelivr 镜像，那条 id 不同但内容更旧，
+            // 按 id 会把已经看过的旧公告又弹一遍。比 updatedAt 才是"真的更新了才弹"。
+            if (announcement.UpdatedAt is { } updatedAt)
             {
-                return;
+                if (_settings.LastSeenAnnouncementAt is { } seenAt && updatedAt <= seenAt)
+                {
+                    return;
+                }
+            }
+            else if (string.Equals(announcement.Id.Trim(), (_settings.LastSeenAnnouncementId ?? "").Trim(), StringComparison.Ordinal))
+            {
+                return;   // 公告没写 updatedAt 时，退回按 id 判断
             }
 
+            _lastAnnouncement = announcement;   // 给【查看公告】兜底
             var dialog = new AnnouncementWindow(announcement) { Owner = this };
             dialog.ShowDialog();
 
+            _settings.LastSeenAnnouncementAt = announcement.UpdatedAt;
             _settings.LastSeenAnnouncementId = announcement.Id.Trim();
             SettingsService.Save(_settings);
             AppendDebugLog("[公告] 已显示并标记：" + announcement.Id);
@@ -56,6 +67,31 @@ public partial class MainWindow
         catch (Exception ex)
         {
             AppendDebugLog("[公告] 检查失败：" + ex.Message);
+        }
+    }
+
+    /// <summary>上一次拉到的公告。【查看公告】重新拉失败时拿它兜底。</summary>
+    private Announcement? _lastAnnouncement;
+
+    /// <summary>右上角【查看公告】：重新拉一次并**强制弹窗**（不管之前看过没有）。</summary>
+    private async void ShowAnnouncementButton_Click(object sender, System.Windows.RoutedEventArgs e)
+    {
+        try
+        {
+            var a = await AnnouncementClient.FetchAsync(CancellationToken.None).ConfigureAwait(true) ?? _lastAnnouncement;
+            if (a is null)
+            {
+                ShowToast("没拉到公告（网络不通，或者仓库里还没有公告）");
+                return;
+            }
+
+            _lastAnnouncement = a;
+            new AnnouncementWindow(a) { Owner = this }.ShowDialog();
+        }
+        catch (Exception ex)
+        {
+            AppendDebugLog("[公告] 手动查看失败：" + ex.Message);
+            ShowToast("拉公告失败：" + ex.Message);
         }
     }
 

@@ -323,8 +323,8 @@
                                         Style="{StaticResource SmallGhostButtonStyle}"
                                         Margin="0,0,8,0"/>
                                 <Button x:Name="SaveButton"
-                                        Content="保存配置"
-                                        Click="SaveButton_Click"
+                                        Content="查看公告"
+                                        Click="ShowAnnouncementButton_Click"
                                         Style="{StaticResource SmallPrimaryButtonStyle}"/>
                             </StackPanel>
                         </Grid>

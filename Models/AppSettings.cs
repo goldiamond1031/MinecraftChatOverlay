@@ -205,6 +205,13 @@ public sealed class AppSettings
     /// </summary>
     public string LastSeenAnnouncementId { get; set; } = "";
 
+    /// <summary>
+    /// 上一次弹过的公告的**更新时间**。判断"要不要再弹"用的是它，不是 id：
+    /// id 只能说明"内容换过"，不能说明新旧 —— 一旦 GitHub 源拉不到、退回还没同步的
+    /// jsDelivr 镜像，那条的 id 不同但内容更旧，按 id 就会把旧公告又弹一遍。
+    /// </summary>
+    public DateTime? LastSeenAnnouncementAt { get; set; }
+
     public AppSettings Clone() => (AppSettings)MemberwiseClone();
 
     private static string GetDefaultLogPath()
