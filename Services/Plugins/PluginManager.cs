@@ -168,8 +168,6 @@ public sealed class PluginManager
                     var entry = new PluginEntry { Manifest = manifest, Directory = directory };
                     if (_disabled.Contains(manifest.Id))
                     {
-                    // 文件删不掉是 dll 被运行时锁着，那是宿主自己的事，不该让用户"卸载完还要重启才看不到它"：
-                    // 直接把条目从列表里摘掉（界面上立刻消失），目录记进 pending-delete，下次启动自动清。
                         entry.Error = "被用户禁用";
                         Add(entry);
                         continue;
@@ -511,15 +509,15 @@ public sealed class PluginManager
             }
 
             Unload(entry);
-                    // 文件删不掉是 dll 被运行时锁着，那是宿主自己的事，不该让用户"卸载完还要重启才看不到它"：
-                    // 直接把条目从列表里摘掉（界面上立刻消失），目录记进 pending-delete，下次启动自动清。
             entry.Error = "被用户禁用";
+
+            // 只是"不再装载"，**条目要留在列表里** —— 卡片还在、开关变成关，
+            // 用户随时能再打开；同时记进 _disabled（会持久化到 settings），下次启动不再装载。
+            // （曾经这里误写成 _entries.Remove(entry)：卡片当场从列表里消失、还存不下来禁用状态。）
             lock (_lock)
             {
-                        _entries.Remove(entry);
-                        _disabled.Remove(entry.Manifest.Id);
+                _disabled.Add(entry.Manifest.Id);
             }
-
             message = $"已禁用 {entry.DisplayName}（下次启动不会再装载）";
             RaiseChanged();
             return true;
