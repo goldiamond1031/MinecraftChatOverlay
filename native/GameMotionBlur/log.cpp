@@ -42,7 +42,16 @@ void LogInit()
                        (LPCWSTR)(const void*)&LogInit, &self);
 
     wchar_t path[MAX_PATH] = {};
-    GetModuleFileNameW(self, path, MAX_PATH);
+
+    // 手动映射（不走 LoadLibrary）时，这个模块不在 loader 的模块表里，
+    // GetModuleFileNameW 会返回 0 —— 那就退到临时目录，别让日志整个哑掉。
+    if (GetModuleFileNameW(self, path, MAX_PATH) == 0)
+    {
+        if (GetTempPathW(MAX_PATH, path) == 0)
+        {
+            wcscpy_s(path, MAX_PATH, L"C:\\");
+        }
+    }
 
     // 取 DLL 所在目录
     for (int i = (int)wcslen(path) - 1; i >= 0; --i)

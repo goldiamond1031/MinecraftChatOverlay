@@ -26,6 +26,39 @@ public sealed class GameProcessInfo
 /// </summary>
 public static class GameProcessInjector
 {
+
+    /// <summary>
+    /// 优先用手动映射（自己当加载器，不走 LoadLibrary）：模块不出现在目标进程的模块表里、
+    /// 磁盘上没有对应的加载痕迹。失败会自动回退到老的 LoadLibraryW 注入 —— 功能不能因为新路径挂掉。
+    /// </summary>
+    public static bool PreferManualMapping { get; set; } = true;
+
+    /// <summary>手动映射过的 pid → 镜像基址。手动映射的模块不在模块表里，IsModuleLoaded 查不到，只能自己记。</summary>
+    private static readonly Dictionary<int, long> ManualMapped = new();
+    private static readonly object ManualMappedLock = new();
+
+    private static bool IsManuallyMapped(int pid)
+    {
+        lock (ManualMappedLock)
+        {
+            if (!ManualMapped.ContainsKey(pid))
+            {
+                return false;
+            }
+
+            try
+            {
+                using var alive = System.Diagnostics.Process.GetProcessById(pid);
+                return true;
+            }
+            catch
+            {
+                ManualMapped.Remove(pid);   // 进程没了，记录作废
+                return false;
+            }
+        }
+    }
+
     private const uint PROCESS_CREATE_THREAD = 0x0002;
     private const uint PROCESS_QUERY_INFORMATION = 0x0400;
     private const uint PROCESS_VM_OPERATION = 0x0008;
@@ -122,6 +155,31 @@ public static class GameProcessInjector
     /// </summary>
     public static void Inject(int pid, string dllPath)
     {
+        // 已经有一份手动映射的在跑了？别再来一份（两个钩子抢同一个后备缓冲会花屏/崩）
+        if (IsManuallyMapped(pid))
+        {
+            return;
+        }
+
+        if (PreferManualMapping)
+        {
+            try
+            {
+                var mapped = ManualMapper.MapRemote(pid, dllPath, invokeEntry: true, out var res);
+                lock (ManualMappedLock)
+                {
+                    ManualMapped[pid] = mapped.Base.ToInt64();
+                }
+
+                return;
+            }
+            catch (Exception mappEx)
+            {
+                // 手动映射这条路挂了就退回 LoadLibrary —— 用户要的是"能亮"，不是"必须用手动映射"
+                System.Diagnostics.Debug.WriteLine("[动态映射] 手动映射失败，回退 LoadLibrary：" + mappEx.Message);
+            }
+        }
+
         if (!File.Exists(dllPath))
         {
             throw new InvalidOperationException("找不到钩子 DLL：" + dllPath + "\n先跑一下 native\\build.ps1 把它编出来。");
@@ -216,6 +274,12 @@ public static class GameProcessInjector
     /// </summary>
     public static bool IsModuleLoaded(int pid, string moduleName)
     {
+        // 手动映射进去的镜像不在模块表里，EnumProcessModules 查不到 —— 但它确实在跑，这里必须认
+        if (IsManuallyMapped(pid))
+        {
+            return true;
+        }
+
         if (pid <= 0 || string.IsNullOrWhiteSpace(moduleName))
         {
             return false;
