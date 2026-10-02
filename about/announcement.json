@@ -1,8 +1,10 @@
 {
     "schemaVersion": 1,
-    "id": "2026-10-2-1009",
-    "updatedAt": "2026-10-02T10:09:26+08:00",
+    "id": "2026-10-2-v127",
+    "updatedAt": "2026-10-02T09:45:00+08:00",
     "enabled": true,
-    "title": "",
-    "body": ""
+    "title": "更新提示",
+    "body": "更新了 1.2.7 版本\n\n· 游戏动态模糊的注入方式换成手动映射（不再走 LoadLibrary），旧注入路径已删除\n· 插件页修复：禁用不再让卡片消失、开关状态正确、禁用状态会记住\n· 插件目录不会再被删成一半\n· 开屏公告改成按更新时间判断新旧；右上角新增【查看公告】\n\n详情见 GitHub Releases。",
+    "link": "https://github.com/goldiamond1031/MinecraftChatOverlay/releases",
+    "linkText": "有可用更新"
 }
