@@ -33,12 +33,14 @@ public static class RandomPicker
     /// <param name="randomEnabled">随机开关。</param>
     /// <param name="lastPicked">上一次抽中的那个，用来避免连续重复。</param>
     /// <param name="selected">关掉随机时要用的那一项（通常是列表里选中的）。为空则退回第一项。</param>
+    /// <param name="sequential">顺序播放开关：为 true 时不抽签，直接返回"当前轮到的那一项"（就是 <paramref name="selected"/>）。</param>
     public static string? Pick(
         IReadOnlyList<string> all,
         IReadOnlyCollection<string> picked,
         bool randomEnabled,
         string? lastPicked = null,
-        string? selected = null)
+        string? selected = null,
+        bool sequential = false)
     {
         if (all.Count == 0)
         {
@@ -57,12 +59,24 @@ public static class RandomPicker
             return all[0];
         }
 
-        // 只看勾中的。一个都没勾就退回全部（见类注释第 1 条）。
-        var pool = all.Where(picked.Contains).ToList();
-        if (pool.Count == 0)
+        // 顺序播放：不抽签，直接返回"轮到的那一项" —— 也就是列表里选中（紫色高亮）的那个。
+        // 它不在候选项里（没勾 / 刚被移除）就退回候选项的第一个。
+        // 放完该轮到谁，由调用方用 Next() 算出来，再把列表的选中项搬过去（高亮跟着走）。
+        if (sequential)
         {
-            pool = all.ToList();
+            var queue = Pool(all, picked);
+            if (queue.Count == 0)
+            {
+                return null;
+            }
+
+            return queue.Any(q => string.Equals(q, selected, StringComparison.OrdinalIgnoreCase))
+                ? selected
+                : queue[0];
         }
+
+        // 只看勾中的。一个都没勾就退回全部（见类注释第 1 条）。
+        var pool = Pool(all, picked);
 
         if (pool.Count == 1)
         {
@@ -82,5 +96,49 @@ public static class RandomPicker
         }
 
         return pool[Rng.Next(pool.Count)];
+    }
+
+    /// <summary>
+    /// 顺序播放时"下一个轮到谁"：候选项里排在 <paramref name="current"/> 之后的那一项，
+    /// 到末尾就绕回第一个；current 不在候选项里（或为空）则返回第一个。
+    /// </summary>
+    /// <param name="all">全部候选项（保持用户排序）。</param>
+    /// <param name="picked">其中被勾中的那些。</param>
+    /// <param name="current">当前轮到的那个。</param>
+    public static string? Next(
+        IReadOnlyList<string> all,
+        IReadOnlyCollection<string> picked,
+        string? current)
+    {
+        var queue = Pool(all, picked);
+        if (queue.Count == 0)
+        {
+            return null;
+        }
+
+        if (string.IsNullOrEmpty(current))
+        {
+            return queue[0];
+        }
+
+        var index = queue.FindIndex(q => string.Equals(q, current, StringComparison.OrdinalIgnoreCase));
+        if (index < 0)
+        {
+            return queue[0];
+        }
+
+        return queue[(index + 1) % queue.Count];
+    }
+
+    /// <summary>真正参与抽取的池子：勾中的那些；一个都没勾就退回全部。</summary>
+    private static List<string> Pool(IReadOnlyList<string> all, IReadOnlyCollection<string> picked)
+    {
+        var pool = all.Where(picked.Contains).ToList();
+        if (pool.Count == 0)
+        {
+            pool = all.ToList();
+        }
+
+        return pool;
     }
 }

@@ -1881,7 +1881,7 @@
                                                   Unchecked="KillFeedbackEnableCheckBox_Changed">
                                             <StackPanel>
                                                 <TextBlock Text="击杀反馈" FontSize="15" FontWeight="ExtraBold"/>
-                                                <TextBlock Text="匹配到你的击杀时做一次反馈。规则由示例消息自动切出来，不用会写正则 —— 只留「你的 ID + 紧挨着的一小段固定词」，不要求出现在行首，一局里有几种格式就写几条"
+                                                <TextBlock Text="打开此开关不等于打开了视觉特效，视觉特效只有在注入动态模糊时才会自动开启"
                                                            FontSize="12"
                                                            Foreground="{DynamicResource TextSecondaryBrush}"
                                                            TextWrapping="Wrap"
@@ -2391,15 +2391,26 @@
                                                                         Style="{StaticResource SmallPrimaryButtonStyle}" Margin="0,0,8,0"/>
                                                                 <Button Grid.Column="1" Content="移除" Click="KillBannerRemoveButton_Click"
                                                                         Style="{StaticResource SmallDangerButtonStyle}"/>
-                                                                <CheckBox Grid.Column="2"
-                                                                          x:Name="KillBannerRandomCheckBox"
-                                                                          Content="随机显示"
-                                                                          Style="{StaticResource InlineToggleStyle}"
-                                                                          VerticalAlignment="Center"
-                                                                          Margin="14,0,0,0"
-                                                                          ToolTip="开启后每次击杀从勾选的图标里随机抽一个；关掉就用列表中选中的那张"
-                                                                          Checked="KillBannerRandomCheckBox_Changed"
-                                                                          Unchecked="KillBannerRandomCheckBox_Changed"/>
+                                                                <StackPanel Grid.Column="2"
+                                                                            Orientation="Horizontal"
+                                                                            VerticalAlignment="Center"
+                                                                            Margin="14,0,0,0">
+                                                                    <CheckBox x:Name="KillBannerRandomCheckBox"
+                                                                              Content="随机显示"
+                                                                              Style="{StaticResource InlineToggleStyle}"
+                                                                              VerticalAlignment="Center"
+                                                                              ToolTip="开启后每次击杀从勾选的图标里随机抽一个；关掉就用列表中选中的那张"
+                                                                              Checked="KillBannerRandomCheckBox_Changed"
+                                                                              Unchecked="KillBannerRandomCheckBox_Changed"/>
+                                                                    <CheckBox x:Name="KillBannerSequentialCheckBox"
+                                                                              Content="顺序播放"
+                                                                              Style="{StaticResource InlineToggleStyle}"
+                                                                              VerticalAlignment="Center"
+                                                                              Margin="12,0,0,0"
+                                                                              ToolTip="开启后按列表顺序轮着放：紫色高亮的那张就是下一个要用的，放完自动把高亮移到下一张；点列表里任意一张可以把「轮到谁」改成它。和「随机显示」互斥"
+                                                                              Checked="KillBannerSequentialCheckBox_Changed"
+                                                                              Unchecked="KillBannerSequentialCheckBox_Changed"/>
+                                                                </StackPanel>
                                                             </Grid>
                                                         </StackPanel>
 
@@ -2632,15 +2643,26 @@
                                                                 Style="{StaticResource SmallGhostButtonStyle}" Margin="0,0,8,0"/>
                                                         <Button Grid.Column="2" Content="移除" Click="RemoveKillSoundChoiceButton_Click"
                                                                 Style="{StaticResource SmallDangerButtonStyle}"/>
-                                                        <CheckBox Grid.Column="3"
-                                                                  x:Name="KillSoundRandomCheckBox"
-                                                                  Content="随机播放"
-                                                                  Style="{StaticResource InlineToggleStyle}"
-                                                                  VerticalAlignment="Center"
-                                                                  Margin="14,0,0,0"
-                                                                  ToolTip="开启后每次击杀从勾选的音效里随机抽一个；关掉就用列表中选中的那个"
-                                                                  Checked="KillSoundRandomCheckBox_Changed"
-                                                                  Unchecked="KillSoundRandomCheckBox_Changed"/>
+                                                        <StackPanel Grid.Column="3"
+                                                                    Orientation="Horizontal"
+                                                                    VerticalAlignment="Center"
+                                                                    Margin="14,0,0,0">
+                                                            <CheckBox x:Name="KillSoundRandomCheckBox"
+                                                                      Content="随机播放"
+                                                                      Style="{StaticResource InlineToggleStyle}"
+                                                                      VerticalAlignment="Center"
+                                                                      ToolTip="开启后每次击杀从勾选的音效里随机抽一个；关掉就用列表中选中的那个"
+                                                                      Checked="KillSoundRandomCheckBox_Changed"
+                                                                      Unchecked="KillSoundRandomCheckBox_Changed"/>
+                                                            <CheckBox x:Name="KillSoundSequentialCheckBox"
+                                                                      Content="顺序播放"
+                                                                      Style="{StaticResource InlineToggleStyle}"
+                                                                      VerticalAlignment="Center"
+                                                                      Margin="12,0,0,0"
+                                                                      ToolTip="开启后按列表顺序轮着放：紫色高亮的那个就是下一个要用的，放完自动把高亮移到下一个；点列表里任意一个可以把「轮到谁」改成它。和「随机播放」互斥"
+                                                                      Checked="KillSoundSequentialCheckBox_Changed"
+                                                                      Unchecked="KillSoundSequentialCheckBox_Changed"/>
+                                                        </StackPanel>
                                                         <TextBlock Grid.Column="4"
                                                                    Margin="12,0,0,0"
                                                                    Text="连杀时上一声不会被掐断，会叠着响"

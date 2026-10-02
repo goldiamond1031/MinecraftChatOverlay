@@ -1302,6 +1302,7 @@ public partial class MainWindow
         KillBannerHoldSlider.Value = Math.Clamp(k.BannerHoldMs, 0, 6000);
         KillBannerFadeOutSlider.Value = Math.Clamp(k.BannerFadeOutMs, 0, 2000);
         KillBannerRandomCheckBox.IsChecked = k.BannerIconRandom;
+        KillBannerSequentialCheckBox.IsChecked = k.BannerIconSequential;
 
         RebuildKillIconChoices();
         UpdateKillIconColorSwatch();
@@ -1321,6 +1322,7 @@ public partial class MainWindow
         k.BannerHoldMs = Math.Clamp(KillBannerHoldSlider.Value, 0, 6000);
         k.BannerFadeOutMs = Math.Clamp(KillBannerFadeOutSlider.Value, 0, 2000);
         k.BannerIconRandom = KillBannerRandomCheckBox.IsChecked == true;
+        k.BannerIconSequential = KillBannerSequentialCheckBox.IsChecked == true;
 
         // 图片列表和勾选状态都是从配置直接驱动的（列表项的双向绑定直接改配置集合），
         // 这里不用回收 —— 回收反而容易把用户刚点的勾覆盖掉。
@@ -1351,8 +1353,45 @@ public partial class MainWindow
         var random = KillBannerRandomCheckBox.IsChecked == true;
         _settings.KillFeedback.BannerIconRandom = random;
 
-        // 勾选框跟着随机开关显隐：关掉就不再显示（用列表里选中的那张）
-        ApplyKillIconCheckBoxVisibility(random);
+        // 随机和顺序都是"轮着放"，同时开没有意义 —— 勾一个就把另一个取消
+        if (random && KillBannerSequentialCheckBox.IsChecked == true)
+        {
+            KillBannerSequentialCheckBox.IsChecked = false;
+            _settings.KillFeedback.BannerIconSequential = false;
+        }
+
+        // 勾选框跟着显隐：两种"轮着放"都关掉时才收起（那时固定用列表里选中的那张）
+        ApplyKillIconCheckBoxVisibility(random || _settings.KillFeedback.BannerIconSequential);
+
+        QueueKillFeedbackSave();
+        RefreshKillBannerStatus();
+        RefreshKillIconPreview();
+    }
+
+    /// <summary>「顺序播放」开关变了。</summary>
+    private void KillBannerSequentialCheckBox_Changed(object sender, RoutedEventArgs e)
+    {
+        if (!_killFeedbackUiReady)
+        {
+            return;
+        }
+
+        var sequential = KillBannerSequentialCheckBox.IsChecked == true;
+        _settings.KillFeedback.BannerIconSequential = sequential;
+
+        if (sequential && KillBannerRandomCheckBox.IsChecked == true)
+        {
+            KillBannerRandomCheckBox.IsChecked = false;
+            _settings.KillFeedback.BannerIconRandom = false;
+        }
+
+        // 打开顺序播放时得先有"轮到谁"：列表里没有选中项就退回第一张
+        if (sequential && KillBannerIconListBox?.SelectedItem == null)
+        {
+            KillBannerIconListBox!.SelectedItem = _killIconChoices.FirstOrDefault();
+        }
+
+        ApplyKillIconCheckBoxVisibility(sequential || _settings.KillFeedback.BannerIconRandom);
 
         QueueKillFeedbackSave();
         RefreshKillBannerStatus();
@@ -1667,7 +1706,7 @@ public partial class MainWindow
 
         return RandomPicker.Pick(
                    k.BannerIconFiles, k.BannerIconPicked, k.BannerIconRandom,
-                   _lastShownKillIcon, selected)
+                   _lastShownKillIcon, selected, k.BannerIconSequential)
                ?? k.BannerIconFiles.FirstOrDefault()
                ?? "";
     }
@@ -1703,7 +1742,7 @@ public partial class MainWindow
         KillBannerIconListBox.SelectedItem = _killIconChoices.FirstOrDefault();
 
         // 勾选框只在开随机时才显示
-        ApplyKillIconCheckBoxVisibility(k.BannerIconRandom);
+        ApplyKillIconCheckBoxVisibility(k.BannerIconRandom || k.BannerIconSequential);
 
         // 挂钩子：用户点勾选框 → 双向绑定写回 IsPicked → 通知 → 同步进配置。
         ClearHandlers(_killIconHandlers);
@@ -1767,6 +1806,20 @@ public partial class MainWindow
     }
 
     /// <summary>状态行：列表有几张 / 勾了几张 / 总时长多少，一眼能看明白。</summary>
+    /// <summary>把列表的选中项（紫色高亮）挪到指定文件上 —— 顺序播放靠它显示"轮到谁"。</summary>
+    private void SelectKillIcon(string file)
+    {
+        var match = _killIconChoices.FirstOrDefault(
+            c => string.Equals(c.File, file, StringComparison.OrdinalIgnoreCase));
+        if (match == null)
+        {
+            return;
+        }
+
+        KillBannerIconListBox.SelectedItem = match;
+        KillBannerIconListBox.ScrollIntoView(match);
+    }
+
     private void RefreshKillBannerStatus()
     {
         if (KillBannerStatusText == null)
@@ -1795,9 +1848,13 @@ public partial class MainWindow
                 ? (pickedCount == 0
                     ? "随机显示（一张都没勾，会从全部里抽）"
                     : $"随机显示（已勾 {pickedCount} 张）")
-                : (string.IsNullOrWhiteSpace(selectedName)
-                    ? "固定用列表中选中的那张"
-                    : $"固定用「{selectedName}」")
+                : k.BannerIconSequential
+                    ? (string.IsNullOrWhiteSpace(selectedName)
+                        ? "顺序播放（点列表里的一张来决定轮到谁）"
+                        : $"顺序播放 —— 下一个轮到「{selectedName}」")
+                    : (string.IsNullOrWhiteSpace(selectedName)
+                        ? "固定用列表中选中的那张"
+                        : $"固定用「{selectedName}」")
         };
 
         parts.Add($"总时长 {k.BannerTotalMs:F0} ms（{k.BannerFadeInMs:F0} + {k.BannerHoldMs:F0} + {k.BannerFadeOutMs:F0}）");
@@ -1841,6 +1898,16 @@ public partial class MainWindow
 
             // 抽中的路径记下来，下一抽避开它（连着两次一样会让人怀疑随机没生效）
             _lastShownKillIcon = path;
+
+            // 顺序播放：这一张放完了，把"轮到谁"的高亮挪到下一个（列表选中项 = 紫色高亮）
+            if (k.BannerIconSequential)
+            {
+                var next = RandomPicker.Next(k.BannerIconFiles, k.BannerIconPicked, path);
+                if (!string.IsNullOrEmpty(next))
+                {
+                    SelectKillIcon(next);
+                }
+            }
 
             var loaded = _killBanner!.ShowIcon(
                 path,

@@ -87,6 +87,13 @@ public sealed class KillFeedbackSettings
     public bool BannerIconRandom { get; set; }
 
     /// <summary>
+    /// 顺序播放：打开后按列表顺序一个一个轮，当前"轮到"的是列表里选中的那个（界面上紫色高亮），
+    /// 放完自动把高亮移到下一个；用户点哪一项，就把"轮到"改成哪一项。
+    /// 和 <see cref="BannerIconRandom"/> 互斥（界面勾一个会取消另一个）。
+    /// </summary>
+    public bool BannerIconSequential { get; set; }
+
+    /// <summary>
     /// 图标在屏幕上的横向位置，0 ~ 1（0 = 最左，0.5 = 水平居中，1 = 最右）。
     /// </summary>
     public double BannerPosX { get; set; } = 0.5;
@@ -153,6 +160,12 @@ public sealed class KillFeedbackSettings
 
     /// <summary>开了之后每次击杀从勾选的提示音里随机抽一个；关掉就用列表中选中的那个。</summary>
     public bool SoundRandom { get; set; }
+
+    /// <summary>
+    /// 顺序播放：语义同图标那边（<see cref="BannerIconSequential"/>）—— 按列表顺序轮，
+    /// 当前"轮到"的就是列表里选中的那个。和 <see cref="SoundRandom"/> 互斥。
+    /// </summary>
+    public bool SoundSequential { get; set; }
 
     /// <summary>
     /// 旧字段（v7）：当前选中的那一个声音文件。保留是为了迁移，新代码用 <see cref="SoundFiles"/>。

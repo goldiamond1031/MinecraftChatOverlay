@@ -53,6 +53,7 @@ public partial class MainWindow
     {
         KillSoundEnableCheckBox.IsChecked = _settings.KillFeedback.SoundEnabled;
         KillSoundRandomCheckBox.IsChecked = _settings.KillFeedback.SoundRandom;
+        KillSoundSequentialCheckBox.IsChecked = _settings.KillFeedback.SoundSequential;
 
         RebuildKillSoundChoices();
         ApplyKillSoundToNotifier();
@@ -133,7 +134,7 @@ public partial class MainWindow
             HookSoundChoiceNotifications(_killSoundHandlers, _killSoundChoices, OnKillSoundPickedChanged);
 
             // 勾选框只在开随机时才显示
-            ApplySoundChoiceCheckBoxVisibility(_killSoundChoices, _settings.KillFeedback.SoundRandom);
+            ApplySoundChoiceCheckBoxVisibility(_killSoundChoices, _settings.KillFeedback.SoundRandom || _settings.KillFeedback.SoundSequential);
 
             KillSoundChoiceListBox.SelectedItem = _killSoundChoices.FirstOrDefault();
         }
@@ -178,6 +179,13 @@ public partial class MainWindow
                 ? "随机播放（一个都没勾，会从全部里抽）"
                 : $"随机播放（已勾 {pickedCount} 个）");
         }
+        else if (_settings.KillFeedback.SoundSequential)
+        {
+            var selectedName = (KillSoundChoiceListBox?.SelectedItem as SoundChoice)?.Name;
+            parts.Add(string.IsNullOrWhiteSpace(selectedName)
+                ? "顺序播放（点列表里的一个来决定轮到谁）"
+                : $"顺序播放 —— 下一个轮到「{selectedName}」");
+        }
         else
         {
             var selectedName = (KillSoundChoiceListBox?.SelectedItem as SoundChoice)?.Name;
@@ -192,6 +200,20 @@ public partial class MainWindow
         }
 
         KillSoundStatusText.Text = string.Join(" —— ", parts);
+    }
+
+    /// <summary>把列表的选中项（紫色高亮）挪到指定文件上 —— 顺序播放靠它显示"轮到谁"。</summary>
+    private void SelectKillSound(string file)
+    {
+        var match = _killSoundChoices.FirstOrDefault(
+            c => string.Equals(c.File, file, StringComparison.OrdinalIgnoreCase));
+        if (match == null)
+        {
+            return;
+        }
+
+        KillSoundChoiceListBox.SelectedItem = match;
+        KillSoundChoiceListBox.ScrollIntoView(match);
     }
 
     private void KillSoundEnableCheckBox_Changed(object sender, RoutedEventArgs e)
@@ -224,8 +246,46 @@ public partial class MainWindow
         var random = KillSoundRandomCheckBox.IsChecked == true;
         _settings.KillFeedback.SoundRandom = random;
 
-        // 勾选框跟着随机开关显隐：关掉就不再显示（用列表里选中的那个）
-        ApplySoundChoiceCheckBoxVisibility(_killSoundChoices, random);
+        // 随机和顺序都是"轮着放"，同时开没有意义 —— 勾一个就把另一个取消
+        if (random && KillSoundSequentialCheckBox.IsChecked == true)
+        {
+            KillSoundSequentialCheckBox.IsChecked = false;
+            _settings.KillFeedback.SoundSequential = false;
+        }
+
+        // 勾选框跟着显隐：两种"轮着放"都关掉时才收起（那时固定用列表里选中的那个）
+        ApplySoundChoiceCheckBoxVisibility(
+            _killSoundChoices, random || _settings.KillFeedback.SoundSequential);
+
+        SaveKillFeedbackSettings();
+        RefreshKillSoundStatus();
+    }
+
+    /// <summary>「顺序播放」开关变了。</summary>
+    private void KillSoundSequentialCheckBox_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_killSoundLoading)
+        {
+            return;
+        }
+
+        var sequential = KillSoundSequentialCheckBox.IsChecked == true;
+        _settings.KillFeedback.SoundSequential = sequential;
+
+        if (sequential && KillSoundRandomCheckBox.IsChecked == true)
+        {
+            KillSoundRandomCheckBox.IsChecked = false;
+            _settings.KillFeedback.SoundRandom = false;
+        }
+
+        // 打开顺序播放时得先有"轮到谁"：列表里没有选中项就退回第一个
+        if (sequential && KillSoundChoiceListBox?.SelectedItem == null)
+        {
+            KillSoundChoiceListBox!.SelectedItem = _killSoundChoices.FirstOrDefault();
+        }
+
+        ApplySoundChoiceCheckBoxVisibility(
+            _killSoundChoices, sequential || _settings.KillFeedback.SoundRandom);
 
         SaveKillFeedbackSettings();
         RefreshKillSoundStatus();
@@ -365,13 +425,23 @@ public partial class MainWindow
             var selected = (KillSoundChoiceListBox?.SelectedItem as SoundChoice)?.File;
 
             var file = RandomPicker.Pick(
-                k.SoundFiles, k.SoundPicked, k.SoundRandom, _lastPlayedKillSound, selected);
+                k.SoundFiles, k.SoundPicked, k.SoundRandom, _lastPlayedKillSound, selected, k.SoundSequential);
             if (string.IsNullOrWhiteSpace(file))
             {
                 return;
             }
 
             _lastPlayedKillSound = file;
+
+            // 顺序播放：这一声放完了，把"轮到谁"的高亮挪到下一个（列表选中项 = 紫色高亮）
+            if (k.SoundSequential)
+            {
+                var next = RandomPicker.Next(k.SoundFiles, k.SoundPicked, file);
+                if (!string.IsNullOrEmpty(next))
+                {
+                    SelectKillSound(next);
+                }
+            }
 
             // 不传 SoundFile —— 直接把抽中的这个交给播放器。
             // 播放器那边会另开一路实例，不会掐断上一个还没放完的音。
