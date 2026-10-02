@@ -156,28 +156,10 @@ public static class GameProcessInjector
     public static void Inject(int pid, string dllPath)
     {
         // 已经有一份手动映射的在跑了？别再来一份（两个钩子抢同一个后备缓冲会花屏/崩）
+        // 已经有一份手动映射的在跑了？别再来一份（两个钩子抢同一个后备缓冲会花屏/崩）
         if (IsManuallyMapped(pid))
         {
             return;
-        }
-
-        if (PreferManualMapping)
-        {
-            try
-            {
-                var mapped = ManualMapper.MapRemote(pid, dllPath, invokeEntry: true, out var res);
-                lock (ManualMappedLock)
-                {
-                    ManualMapped[pid] = mapped.Base.ToInt64();
-                }
-
-                return;
-            }
-            catch (Exception mappEx)
-            {
-                // 手动映射这条路挂了就退回 LoadLibrary —— 用户要的是"能亮"，不是"必须用手动映射"
-                System.Diagnostics.Debug.WriteLine("[动态映射] 手动映射失败，回退 LoadLibrary：" + mappEx.Message);
-            }
         }
 
         if (!File.Exists(dllPath))
@@ -185,85 +167,21 @@ public static class GameProcessInjector
             throw new InvalidOperationException("找不到钩子 DLL：" + dllPath + "\n先跑一下 native\\build.ps1 把它编出来。");
         }
 
-        IntPtr process = OpenProcess(
-            PROCESS_CREATE_THREAD | PROCESS_QUERY_INFORMATION | PROCESS_VM_OPERATION | PROCESS_VM_WRITE | PROCESS_VM_READ,
-            false, pid);
-
-        if (process == IntPtr.Zero)
-        {
-            var error = Marshal.GetLastWin32Error();
-            if (error == 5)
-            {
-                throw new InvalidOperationException(
-                    "打开进程被拒绝（错误 5）。目标游戏大概是【以管理员身份运行】的，本程序也要用管理员身份启动才行。");
-            }
-            throw new InvalidOperationException("OpenProcess 失败，错误码 " + error + "。");
-        }
-
+        // 只走手动映射。原来的 CreateRemoteThread + LoadLibraryW 那条路已经删掉了：
+        // 它会往目标进程的模块表里留记录、磁盘上留加载痕迹 —— 既然全程改成手动映射，
+        // 就不该再有一条"会留下痕迹"的注入方式摆在代码里（也避免哪天被误用）。
+        // 代价：手动映射失败就是注入失败，界面会直接把原因显示出来，没有兜底可退。
         try
         {
-            EnsureSameBitness(process, pid);
-
-            var remoteLoadLibrary = GetRemoteLoadLibraryAddress(process);
-            var pathBytes = System.Text.Encoding.Unicode.GetBytes(dllPath + "\0");
-
-            var remoteMemory = VirtualAllocEx(process, IntPtr.Zero, (UIntPtr)(uint)pathBytes.Length,
-                                              MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
-            if (remoteMemory == IntPtr.Zero)
+            var mapped = ManualMapper.MapRemote(pid, dllPath, invokeEntry: true, out _);
+            lock (ManualMappedLock)
             {
-                throw new InvalidOperationException("VirtualAllocEx 失败，错误码 " + Marshal.GetLastWin32Error() + "。");
-            }
-
-            try
-            {
-                UIntPtr written;
-                if (!WriteProcessMemory(process, remoteMemory, pathBytes, (UIntPtr)(uint)pathBytes.Length, out written))
-                {
-                    throw new InvalidOperationException("WriteProcessMemory 失败，错误码 " + Marshal.GetLastWin32Error() + "。");
-                }
-
-                uint threadId;
-                var thread = CreateRemoteThread(process, IntPtr.Zero, UIntPtr.Zero, remoteLoadLibrary, remoteMemory, 0, out threadId);
-                if (thread == IntPtr.Zero)
-                {
-                    throw new InvalidOperationException("CreateRemoteThread 失败，错误码 " + Marshal.GetLastWin32Error() +
-                                                        "。多数是目标进程有反作弊拦住了远程线程。");
-                }
-
-                try
-                {
-                    // LoadLibraryW 里要跑我们的 DllMain，等久一点
-                    var wait = WaitForSingleObject(thread, 15000);
-                    if (wait != 0)
-                    {
-                        throw new InvalidOperationException("等待远端 LoadLibrary 超时，注入结果未知。");
-                    }
-
-                    UIntPtr exitCode;
-                    if (!GetExitCodeThread(thread, out exitCode))
-                    {
-                        throw new InvalidOperationException("GetExitCodeThread 失败。");
-                    }
-
-                    if (exitCode == UIntPtr.Zero)
-                    {
-                        throw new InvalidOperationException(
-                            "目标进程拒绝了 LoadLibrary（返回 0）。可能是 DLL 位数不对、路径不可读，或者被杀软/反作弊拦了。");
-                    }
-                }
-                finally
-                {
-                    CloseHandle(thread);
-                }
-            }
-            finally
-            {
-                VirtualFreeEx(process, remoteMemory, UIntPtr.Zero, MEM_RELEASE);
+                ManualMapped[pid] = mapped.Base.ToInt64();
             }
         }
-        finally
+        catch (Exception ex)
         {
-            CloseHandle(process);
+            throw new InvalidOperationException("手动映射注入失败：" + ex.Message, ex);
         }
     }
 
