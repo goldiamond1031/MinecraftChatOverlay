@@ -96,7 +96,16 @@ public partial class ColorPickerWindow : Window
         return TryPickWithSystemDialog(current, out var picked) ? picked : PickWithOwnWindow(owner, current);
     }
 
-    /// <summary>能不能用系统调色盘。false = 调不起来，调用方该走兜底。</summary>
+    /// <summary>
+    /// 能不能用系统调色盘。false = 调不起来，调用方该走兜底。
+    ///
+    /// ⚠ 这里的写法**逐条对齐宿主 <c>MainWindow.PickColorHex</c>**（击杀反馈页选边缘颜色用的那个）：
+    ///   · <c>FullOpen = true</c> —— 一打开就展开色域，不用再点一下「规定自定义颜色」
+    ///   · **不设 <c>AnyColor</c>** —— 宿主也没设。有 <c>FullOpen</c> 就能调任意色了
+    ///   · **显式保留原来的 A 通道** —— 调色盘不支持 alpha，它返回的 A 恒为 255，
+    ///     直接拿来用会把用户设好的透明度抹平（纯色）
+    ///   · hex 格式也跟宿主一致：**纯色时省略 A**（`#RRGGBB`），半透明才写 `#AARRGGBB`
+    /// </summary>
     private static bool TryPickWithSystemDialog(string currentHex, out string result)
     {
         result = currentHex;
@@ -107,8 +116,7 @@ public partial class ColorPickerWindow : Window
 
             using var dialog = new System.Windows.Forms.ColorDialog
             {
-                FullOpen = true,     // 一打开就展开色域，不用再点一下「规定自定义颜色」
-                AnyColor = true,     // 允许任意颜色；false 的话只能在那 48 个预设里挑
+                FullOpen = true,
                 ShowHelp = false,
                 Color = System.Drawing.Color.FromArgb(start.A, start.R, start.G, start.B),
             };
@@ -116,7 +124,10 @@ public partial class ColorPickerWindow : Window
             if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
             {
                 var c = dialog.Color;
-                result = $"#{c.A:X2}{c.R:X2}{c.G:X2}{c.B:X2}";
+
+                // 只取 RGB，A 用原来那个 —— ColorDialog 的 A 恒为 255，照抄会把透明度抹掉
+                var picked = Color.FromArgb(start.A, c.R, c.G, c.B);
+                result = FormatHex(picked);
             }
 
             // 能弹出来就算成功 —— 用户点取消时 result 保持原值
@@ -127,6 +138,17 @@ public partial class ColorPickerWindow : Window
             return false;
         }
     }
+
+    /// <summary>
+    /// 输出 hex，格式跟宿主 <c>MainWindow.PickColorHex</c> 一致：**纯色省掉 A**，半透明才写全。
+    /// 好处是色块旁边那行字不会一直挂着一串没必要的 "FF"，跟宿主界面看起来是同一套。
+    ///
+    /// internal：页面写回颜色时也走这里，别两处各写一遍格式化。
+    /// </summary>
+    internal static string FormatHex(Color color) =>
+        color.A == 0xFF
+            ? $"#{color.R:X2}{color.G:X2}{color.B:X2}"
+            : $"#{color.A:X2}{color.R:X2}{color.G:X2}{color.B:X2}";
 
     private static string PickWithOwnWindow(Window? owner, string current)
     {
@@ -162,6 +184,9 @@ public partial class ColorPickerWindow : Window
         return Colors.White;
     }
 
+    /// <summary>自检用：验 hex 能不能解析回来（尤其"纯色省掉 A"之后那种 7 字符写法）。</summary>
+    internal static Color ParseForTest(string hex) => Parse(hex);
+
     private void Slider_Changed(object sender, RoutedEventArgs e) => UpdatePreview();
 
     private void UpdatePreview()
@@ -173,8 +198,10 @@ public partial class ColorPickerWindow : Window
 
         var color = Color.FromArgb((byte)ASlider.Value, (byte)RSlider.Value, (byte)GSlider.Value, (byte)BSlider.Value);
         Preview.Background = new SolidColorBrush(color);
-        HexText.Text = $"#{color.A:X2}{color.R:X2}{color.G:X2}{color.B:X2}";
-        ResultHex = HexText.Text;
+
+        // 跟系统调色盘那条路径统一格式（纯色省略 A）—— 两条路的输出不该长得不一样
+        ResultHex = FormatHex(color);
+        HexText.Text = ResultHex;
 
         if (!_loading)
         {

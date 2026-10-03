@@ -62,6 +62,32 @@ public sealed class KeyCell
 
     /// <summary>阴影光照方向。-1 = 跟随全局。</summary>
     public double ShadowDirectionOverride { get; set; } = -1;
+
+    // ---- 彩色循环（每键覆盖：null = 跟随全局）----
+    //
+    // ⚠ 用 bool? 而不是 bool：这三个状态必须分得开 ——
+    //    · null  = 这个格子没设过，跟随全局开关（全局开了它就跟着转）
+    //    · true  = 这个格子单独设为"开启"
+    //    · false = 这个格子单独设为"关闭"（全局开着，就这一个不变色）
+    // 这也跟上面那些覆盖项（空串 / -1 = 跟随全局）是同一套约定。
+
+    /// <summary>没按下时的文字颜色跟着色相循环转。null = 跟随全局。</summary>
+    public bool? TextColorCycleOverride { get; set; }
+
+    /// <summary>没按下时的背景颜色跟着循环。null = 跟随全局。</summary>
+    public bool? BackgroundColorCycleOverride { get; set; }
+
+    /// <summary>按下时的文字颜色跟着循环。null = 跟随全局。</summary>
+    public bool? PressedTextColorCycleOverride { get; set; }
+
+    /// <summary>按下时的背景颜色跟着循环。null = 跟随全局。</summary>
+    public bool? PressedBackgroundColorCycleOverride { get; set; }
+
+    /// <summary>边框颜色跟着循环。null = 跟随全局。</summary>
+    public bool? BorderColorCycleOverride { get; set; }
+
+    /// <summary>阴影颜色跟着循环。null = 跟随全局。</summary>
+    public bool? ShadowColorCycleOverride { get; set; }
 }
 
 /// <summary>
@@ -98,6 +124,63 @@ public sealed class KeyDisplaySettings
     public double CornerRadius { get; set; } = 10;
     public double BorderThickness { get; set; }
     public string BorderColor { get; set; } = "#33FFFFFF";
+
+    /// <summary>
+    /// 整体缩放（0.5 ~ 2.0）。
+    ///
+    /// 它是**显示缩放**，不是改数据：格子的 X/Y/宽/高 存的还是原始值，
+    /// 每次重建时乘上这个倍数。所以滑块来回拖不会累积误差，用户摆好的布局也不会被改掉。
+    /// 字号、圆角、边框、阴影这些**一起缩放** —— 要的是"整个按键显示看起来大了/小了"，
+    /// 不是只把格子拉大而字还那么点。
+    /// </summary>
+    public double OverallScale { get; set; } = 1.0;
+
+    // ---- 彩色循环 ----
+    //
+    // 只对"能换颜色的那几处"各给一个开关。开着就把这个位置渲染时用的颜色往色相上推着走，
+    // **配置里存的 hex 一个字都不改** —— 关掉开关立刻回到用户原来选的颜色，来回切不累积误差
+    // （跟 OverallScale 那套"显示缩放不改数据"是同一个思路）。
+
+    /// <summary>没按下时的文字颜色跟着色相循环转。</summary>
+    public bool TextColorCycle { get; set; }
+
+    /// <summary>没按下时的背景颜色跟着循环。</summary>
+    public bool BackgroundColorCycle { get; set; }
+
+    /// <summary>按下时的文字颜色跟着循环。</summary>
+    public bool PressedTextColorCycle { get; set; }
+
+    /// <summary>按下时的背景颜色跟着循环。</summary>
+    public bool PressedBackgroundColorCycle { get; set; }
+
+    /// <summary>边框颜色跟着循环。</summary>
+    public bool BorderColorCycle { get; set; }
+
+    /// <summary>阴影颜色跟着循环。</summary>
+    public bool ShadowColorCycle { get; set; }
+
+    /// <summary>
+    /// 循环速度：转一整圈要多少秒。
+    ///
+    /// 默认 6 秒 —— 快过 2 秒会像警灯闪、看着累；慢过 15 秒又几乎看不出在动。
+    /// </summary>
+    public double CycleSeconds { get; set; } = 6;
+
+    /// <summary>
+    /// 有没有任何一处开了循环。没有的话插件连重绘都不做 —— 省得白白每秒重画一遍。
+    ///
+    /// ⚠ <c>Keys?</c> 那个问号是必要的：配置是从 JSON 读出来的，
+    ///   文件里写成 <c>"Keys": null</c> 就会把它冲成 null（初始化器只管新建的对象）。
+    /// </summary>
+    public bool AnyColorCycle =>
+        TextColorCycle || BackgroundColorCycle || PressedTextColorCycle
+        || PressedBackgroundColorCycle || BorderColorCycle || ShadowColorCycle
+        || Keys?.Any(k => k.TextColorCycleOverride == true
+                          || k.BackgroundColorCycleOverride == true
+                          || k.PressedTextColorCycleOverride == true
+                          || k.PressedBackgroundColorCycleOverride == true
+                          || k.BorderColorCycleOverride == true
+                          || k.ShadowColorCycleOverride == true) == true;
 
     // ---- 阴影 ----
     public bool ShadowEnabled { get; set; } = true;

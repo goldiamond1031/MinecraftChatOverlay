@@ -191,6 +191,9 @@
                                 ValueChanged="ColorAlpha_Changed" Tag="CellText"/>
                         <TextBlock x:Name="CellTextAlphaText" Style="{DynamicResource HintStyle}" Width="52"
                                    Margin="12,0,0,0" VerticalAlignment="Center"/>
+                        <ComboBox x:Name="CellTextCycleComboBox" Width="112" Height="32" Margin="12,0,0,0"
+                                  Loaded="ComboBox_Loaded" SelectionChanged="CellColorCycle_Changed" Tag="CellText"
+                                  ToolTip="这个键的文字颜色要不要单独跟着循环"/>
                     </StackPanel>
 
                     <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
@@ -209,6 +212,9 @@
                                 ValueChanged="ColorAlpha_Changed" Tag="CellBg"/>
                         <TextBlock x:Name="CellBgAlphaText" Style="{DynamicResource HintStyle}" Width="52"
                                    Margin="12,0,0,0" VerticalAlignment="Center"/>
+                        <ComboBox x:Name="CellBgCycleComboBox" Width="112" Height="32" Margin="12,0,0,0"
+                                  Loaded="ComboBox_Loaded" SelectionChanged="CellColorCycle_Changed" Tag="CellBg"
+                                  ToolTip="这个键的背景颜色要不要单独跟着循环"/>
                     </StackPanel>
 
                     <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
@@ -227,6 +233,9 @@
                                 ValueChanged="ColorAlpha_Changed" Tag="CellPressedText"/>
                         <TextBlock x:Name="CellPressedTextAlphaText" Style="{DynamicResource HintStyle}" Width="52"
                                    Margin="12,0,0,0" VerticalAlignment="Center"/>
+                        <ComboBox x:Name="CellPressedTextCycleComboBox" Width="112" Height="32" Margin="12,0,0,0"
+                                  Loaded="ComboBox_Loaded" SelectionChanged="CellColorCycle_Changed" Tag="CellPressedText"
+                                  ToolTip="这个键按下时的文字颜色要不要单独跟着循环"/>
                     </StackPanel>
 
                     <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
@@ -245,6 +254,9 @@
                                 ValueChanged="ColorAlpha_Changed" Tag="CellPressedBg"/>
                         <TextBlock x:Name="CellPressedBgAlphaText" Style="{DynamicResource HintStyle}" Width="52"
                                    Margin="12,0,0,0" VerticalAlignment="Center"/>
+                        <ComboBox x:Name="CellPressedBgCycleComboBox" Width="112" Height="32" Margin="12,0,0,0"
+                                  Loaded="ComboBox_Loaded" SelectionChanged="CellColorCycle_Changed" Tag="CellPressedBg"
+                                  ToolTip="这个键按下时的背景颜色要不要单独跟着循环"/>
                     </StackPanel>
 
                     <TextBlock Style="{DynamicResource HintStyle}" TextWrapping="Wrap" Margin="0,18,0,8"
@@ -311,6 +323,9 @@
                                 ValueChanged="ColorAlpha_Changed" Tag="CellBorderColor"/>
                         <TextBlock x:Name="CellBorderAlphaText" Style="{DynamicResource HintStyle}" Width="52"
                                    VerticalAlignment="Center" Margin="8,0,0,0"/>
+                        <ComboBox x:Name="CellBorderColorCycleComboBox" Width="112" Height="32" Margin="12,0,0,0"
+                                  Loaded="ComboBox_Loaded" SelectionChanged="CellColorCycle_Changed" Tag="CellBorderColor"
+                                  ToolTip="这个键的边框颜色要不要单独跟着循环"/>
                         <Button Content="清除" Click="CellOverrideClear_Click" Tag="CellBorderColor"
                                 Style="{DynamicResource SwatchButtonStyle}" Margin="8,0,0,0" ToolTip="恢复跟随全局"/>
                     </StackPanel>
@@ -329,6 +344,9 @@
                                 MouseLeftButtonDown="ColorSwatch_Click" Tag="CellShadowColor"/>
                         <TextBlock x:Name="CellShadowColorHexText" Style="{DynamicResource HintStyle}" Width="88"
                                    Margin="8,0,0,0" VerticalAlignment="Center"/>
+                        <ComboBox x:Name="CellShadowColorCycleComboBox" Width="112" Height="32" Margin="12,0,0,0"
+                                  Loaded="ComboBox_Loaded" SelectionChanged="CellColorCycle_Changed" Tag="CellShadowColor"
+                                  ToolTip="这个键的阴影颜色要不要单独跟着循环"/>
                         <Button Content="清除" Click="CellOverrideClear_Click" Tag="CellShadowColor"
                                 Style="{DynamicResource SwatchButtonStyle}" Margin="8,0,0,0" ToolTip="恢复跟随全局"/>
                     </StackPanel>
@@ -395,6 +413,16 @@
                 </StackPanel>
 
                 <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                    <TextBlock Text="整体大小" Style="{DynamicResource FieldLabelStyle}" Width="72" VerticalAlignment="Center"/>
+                    <Slider x:Name="OverallScaleSlider" Width="300" Minimum="50" Maximum="200" TickFrequency="5"
+                            IsSnapToTickEnabled="True" VerticalAlignment="Center"
+                            ValueChanged="OverallScale_Changed"/>
+                    <TextBlock x:Name="OverallScaleText" Style="{DynamicResource HintStyle}" Width="48" VerticalAlignment="Center" Margin="12,0,0,0"/>
+                </StackPanel>
+                <TextBlock Style="{DynamicResource HintStyle}" TextWrapping="Wrap" Margin="84,4,0,0"
+                           Text="整体放大或缩小按键显示（50%~200%）。格子位置、大小、字号、圆角、边框、阴影会一起按比例缩放。上面画布只是排版工具，不受这里影响 —— 摆位时看到的格子大小始终是编辑尺度。"/>
+
+                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
                     <TextBlock Text="字号" Style="{DynamicResource FieldLabelStyle}" Width="72" VerticalAlignment="Center"/>
                     <Slider x:Name="FontSizeSlider" Width="300" Minimum="8" Maximum="72" TickFrequency="1"
                             IsSnapToTickEnabled="True" VerticalAlignment="Center" ValueChanged="Option_Changed"/>
@@ -430,11 +458,15 @@
                     <TextBlock x:Name="BorderColorHexText" Style="{DynamicResource HintStyle}" Width="88"
                                Margin="8,0,0,0" VerticalAlignment="Center"/>
                     <TextBlock Text="透明度" Style="{DynamicResource HintStyle}" Margin="12,0,8,0" VerticalAlignment="Center"/>
-                    <Slider x:Name="BorderAlphaSlider" Width="200" Minimum="0" Maximum="100" TickFrequency="1"
+                    <Slider x:Name="BorderAlphaSlider" Width="140" Minimum="0" Maximum="100" TickFrequency="1"
                             IsSnapToTickEnabled="True" VerticalAlignment="Center"
                             ValueChanged="ColorAlpha_Changed" Tag="Border"/>
                     <TextBlock x:Name="BorderAlphaText" Style="{DynamicResource HintStyle}" Width="52"
                                Margin="12,0,0,0" VerticalAlignment="Center"/>
+                    <CheckBox x:Name="BorderCycleCheckBox" Content="彩色循环" Margin="16,0,0,0"
+                              VerticalAlignment="Center" Style="{DynamicResource ToggleSwitchStyle}"
+                              Tag="Border" Checked="ColorCycle_Changed" Unchecked="ColorCycle_Changed"
+                              ToolTip="打开后，这个颜色沿完整 RGB 光谱跑（红→橙→黄→绿→青→蓝→紫→红）。跑的时候不看原来选的是什么色，关掉立刻回原样；配置里存的颜色不会被改"/>
                 </StackPanel>
 
                 <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
@@ -446,11 +478,15 @@
                     <TextBlock x:Name="IdleTextColorHexText" Style="{DynamicResource HintStyle}" Width="88"
                                Margin="8,0,0,0" VerticalAlignment="Center"/>
                     <TextBlock Text="透明度" Style="{DynamicResource HintStyle}" Margin="12,0,8,0" VerticalAlignment="Center"/>
-                    <Slider x:Name="IdleTextAlphaSlider" Width="200" Minimum="0" Maximum="100" TickFrequency="1"
+                    <Slider x:Name="IdleTextAlphaSlider" Width="140" Minimum="0" Maximum="100" TickFrequency="1"
                             IsSnapToTickEnabled="True" VerticalAlignment="Center"
                             ValueChanged="ColorAlpha_Changed" Tag="IdleText"/>
                     <TextBlock x:Name="IdleTextAlphaText" Style="{DynamicResource HintStyle}" Width="52"
                                Margin="12,0,0,0" VerticalAlignment="Center"/>
+                    <CheckBox x:Name="IdleTextCycleCheckBox" Content="彩色循环" Margin="16,0,0,0"
+                              VerticalAlignment="Center" Style="{DynamicResource ToggleSwitchStyle}"
+                              Tag="IdleText" Checked="ColorCycle_Changed" Unchecked="ColorCycle_Changed"
+                              ToolTip="打开后，这个颜色沿完整 RGB 光谱跑（红→橙→黄→绿→青→蓝→紫→红）。跑的时候不看原来选的是什么色，关掉立刻回原样；配置里存的颜色不会被改"/>
                 </StackPanel>
 
                 <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
@@ -462,11 +498,15 @@
                     <TextBlock x:Name="IdleBgColorHexText" Style="{DynamicResource HintStyle}" Width="88"
                                Margin="8,0,0,0" VerticalAlignment="Center"/>
                     <TextBlock Text="透明度" Style="{DynamicResource HintStyle}" Margin="12,0,8,0" VerticalAlignment="Center"/>
-                    <Slider x:Name="IdleBgAlphaSlider" Width="200" Minimum="0" Maximum="100" TickFrequency="1"
+                    <Slider x:Name="IdleBgAlphaSlider" Width="140" Minimum="0" Maximum="100" TickFrequency="1"
                             IsSnapToTickEnabled="True" VerticalAlignment="Center"
                             ValueChanged="ColorAlpha_Changed" Tag="IdleBg"/>
                     <TextBlock x:Name="IdleBgAlphaText" Style="{DynamicResource HintStyle}" Width="52"
                                Margin="12,0,0,0" VerticalAlignment="Center"/>
+                    <CheckBox x:Name="IdleBgCycleCheckBox" Content="彩色循环" Margin="16,0,0,0"
+                              VerticalAlignment="Center" Style="{DynamicResource ToggleSwitchStyle}"
+                              Tag="IdleBg" Checked="ColorCycle_Changed" Unchecked="ColorCycle_Changed"
+                              ToolTip="打开后，这个颜色沿完整 RGB 光谱跑（红→橙→黄→绿→青→蓝→紫→红）。跑的时候不看原来选的是什么色，关掉立刻回原样；配置里存的颜色不会被改"/>
                 </StackPanel>
 
                 <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
@@ -478,11 +518,15 @@
                     <TextBlock x:Name="PressedTextColorHexText" Style="{DynamicResource HintStyle}" Width="88"
                                Margin="8,0,0,0" VerticalAlignment="Center"/>
                     <TextBlock Text="透明度" Style="{DynamicResource HintStyle}" Margin="12,0,8,0" VerticalAlignment="Center"/>
-                    <Slider x:Name="PressedTextAlphaSlider" Width="200" Minimum="0" Maximum="100" TickFrequency="1"
+                    <Slider x:Name="PressedTextAlphaSlider" Width="140" Minimum="0" Maximum="100" TickFrequency="1"
                             IsSnapToTickEnabled="True" VerticalAlignment="Center"
                             ValueChanged="ColorAlpha_Changed" Tag="PressedText"/>
                     <TextBlock x:Name="PressedTextAlphaText" Style="{DynamicResource HintStyle}" Width="52"
                                Margin="12,0,0,0" VerticalAlignment="Center"/>
+                    <CheckBox x:Name="PressedTextCycleCheckBox" Content="彩色循环" Margin="16,0,0,0"
+                              VerticalAlignment="Center" Style="{DynamicResource ToggleSwitchStyle}"
+                              Tag="PressedText" Checked="ColorCycle_Changed" Unchecked="ColorCycle_Changed"
+                              ToolTip="打开后，这个颜色沿完整 RGB 光谱跑（红→橙→黄→绿→青→蓝→紫→红）。跑的时候不看原来选的是什么色，关掉立刻回原样；配置里存的颜色不会被改"/>
                 </StackPanel>
 
                 <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
@@ -494,11 +538,27 @@
                     <TextBlock x:Name="PressedBgColorHexText" Style="{DynamicResource HintStyle}" Width="88"
                                Margin="8,0,0,0" VerticalAlignment="Center"/>
                     <TextBlock Text="透明度" Style="{DynamicResource HintStyle}" Margin="12,0,8,0" VerticalAlignment="Center"/>
-                    <Slider x:Name="PressedBgAlphaSlider" Width="200" Minimum="0" Maximum="100" TickFrequency="1"
+                    <Slider x:Name="PressedBgAlphaSlider" Width="140" Minimum="0" Maximum="100" TickFrequency="1"
                             IsSnapToTickEnabled="True" VerticalAlignment="Center"
                             ValueChanged="ColorAlpha_Changed" Tag="PressedBg"/>
                     <TextBlock x:Name="PressedBgAlphaText" Style="{DynamicResource HintStyle}" Width="52"
                                Margin="12,0,0,0" VerticalAlignment="Center"/>
+                    <CheckBox x:Name="PressedBgCycleCheckBox" Content="彩色循环" Margin="16,0,0,0"
+                              VerticalAlignment="Center" Style="{DynamicResource ToggleSwitchStyle}"
+                              Tag="PressedBg" Checked="ColorCycle_Changed" Unchecked="ColorCycle_Changed"
+                              ToolTip="打开后，这个颜色沿完整 RGB 光谱跑（红→橙→黄→绿→青→蓝→紫→红）。跑的时候不看原来选的是什么色，关掉立刻回原样；配置里存的颜色不会被改"/>
+                </StackPanel>
+                <!-- 彩色循环：速度是全局一条，所有开了循环的地方一起转 —— 各转各的会很乱 -->
+                <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+                    <TextBlock Text="循环一圈" Style="{DynamicResource FieldLabelStyle}" Width="112" VerticalAlignment="Center"/>
+                    <Slider x:Name="CycleSecondsSlider" Width="240" Minimum="1" Maximum="30" TickFrequency="1"
+                            IsSnapToTickEnabled="True" VerticalAlignment="Center"
+                            ValueChanged="CycleSeconds_Changed"/>
+                    <TextBlock x:Name="CycleSecondsText" Style="{DynamicResource HintStyle}" Width="52"
+                               Margin="12,0,0,0" VerticalAlignment="Center"/>
+                    <TextBlock Style="{DynamicResource HintStyle}" VerticalAlignment="Center" Margin="8,0,0,0"
+                               TextWrapping="Wrap"
+                               Text="开了循环的颜色沿 RGB 光谱跑一整圈要多久。跑的时候不看原来选的是什么色（白、黑也会跑成彩色）。"/>
                 </StackPanel>
                 <!-- 果冻动感：按下时先被压扁，再带过冲地 Q 弹回来 -->
                 <CheckBox x:Name="DynamicCheckBox"
@@ -550,6 +610,10 @@
                                 MouseLeftButtonDown="ColorSwatch_Click" Tag="Shadow"/>
                         <TextBlock x:Name="ShadowColorHexText" Style="{DynamicResource HintStyle}" Width="88"
                                    Margin="8,0,0,0" VerticalAlignment="Center"/>
+                        <CheckBox x:Name="ShadowCycleCheckBox" Content="彩色循环" Margin="16,0,0,0"
+                                  VerticalAlignment="Center" Style="{DynamicResource ToggleSwitchStyle}"
+                                  Tag="Shadow" Checked="ColorCycle_Changed" Unchecked="ColorCycle_Changed"
+                                  ToolTip="打开后，这个颜色沿完整 RGB 光谱跑（红→橙→黄→绿→青→蓝→紫→红）。跑的时候不看原来选的是什么色，关掉立刻回原样；配置里存的颜色不会被改"/>
                     </StackPanel>
                 </Grid>
 

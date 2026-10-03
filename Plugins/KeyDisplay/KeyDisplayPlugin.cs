@@ -41,6 +41,9 @@ public sealed class KeyDisplayPlugin : IPlugin
     private KeyOverlayWindow? _window;
     private KeyDisplayPage? _page;
     private DispatcherTimer? _timer;
+    private DispatcherTimer? _cycleTimer;
+    private DateTime _cycleStart = DateTime.UtcNow;
+    private double _lastCycleProgress = -1;
 
     public string Id => PluginId;
 
@@ -84,6 +87,22 @@ public sealed class KeyDisplayPlugin : IPlugin
         _timer.Tick += (_, _) => Tick();
         _timer.Start();
 
+        // 彩色循环的推进定时器。
+        //
+        // ⚠ 间隔**必须跟配置页画布的 `_liveTimer` 一致（40ms）**，否则两条路径的流畅度天差地别：
+        // 画布丝滑连续、悬浮窗一跳一跳（每格 60°），并排一看就像悬浮窗坏了。
+        // 早先这里是 1 秒 + `DispatcherPriority.Background`（最低档），系统一忙还会被继续往后拖，
+        // 表现就是"隔几秒才刷新一下颜色"（gold_ 报过）。
+        //
+        // 开销不用担心：`SetCycleProgress` 只给几个元素换画笔、不重建视觉树，25fps 毫无压力。
+        _cycleStart = DateTime.UtcNow;
+        _cycleTimer = new DispatcherTimer(DispatcherPriority.Render)
+        {
+            Interval = TimeSpan.FromMilliseconds(40),
+        };
+        _cycleTimer.Tick += (_, _) => TickCycle();
+        _cycleTimer.Start();
+
         host.RegisterPage(new PluginPage
         {
             Title = "按键显示",
@@ -120,6 +139,9 @@ public sealed class KeyDisplayPlugin : IPlugin
 
         RunSelfTestIfRequested();
 
+        // 开发期用：验"循环定时器在真实消息循环里到底有没有在推颜色"
+        RunCycleTraceIfRequested();
+
         // 开发期用：把配置页渲染成 PNG，用来目视核对排版（见方法注释）
         RunUiSnapshotIfRequested();
 
@@ -130,6 +152,9 @@ public sealed class KeyDisplayPlugin : IPlugin
     {
         try { _timer?.Stop(); } catch { }
         _timer = null;
+
+        try { _cycleTimer?.Stop(); } catch { }
+        _cycleTimer = null;
 
         try { _page?.StopTimers(); } catch { }
         _page = null;
@@ -165,6 +190,70 @@ public sealed class KeyDisplayPlugin : IPlugin
         catch (Exception ex)
         {
             LogLine("刷新异常：" + ex.Message);
+        }
+    }
+
+    // ===================== 彩色循环 =====================
+
+    /// <summary>
+    /// 推进彩色循环：按真实流逝的时间算出现在该转到哪，交给悬浮窗刷颜色。
+    ///
+    /// **为什么按真实时间算而不是每次 +30°**：`DispatcherTimer` 的实际间隔会被消息循环拉长，
+    /// 按次数累加的话界面一忙循环就变慢，看着一顿一顿的。按时间算就始终匀速。
+    ///
+    /// 这里只读 <see cref="CycleProgressNow"/>、从不写基准 —— 时间轴归插件所有，
+    /// 悬浮窗只是"使用者"（见 <see cref="KeyOverlayWindow.SetCycleProgress"/>）。
+    /// </summary>
+    private void TickCycle()
+    {
+        var window = _window;
+
+        if (window is null || !window.IsVisible || !Settings.AnyColorCycle)
+        {
+            return;
+        }
+
+        try
+        {
+            var progress = CycleProgressNow;
+
+            // 40ms 一刷，但「循环一圈」最长能设到 60 秒 —— 那一帧也就动 0.24°，肉眼根本看不出。
+            // 进度几乎没变就别白刷了；变化够一格再推（1/360 ≈ 每度推一次，够细腻也不浪费）。
+            if (Math.Abs(progress - _lastCycleProgress) < 1.0 / 360.0)
+            {
+                return;
+            }
+
+            _lastCycleProgress = progress;
+            window.SetCycleProgress(progress, Settings);
+        }
+        catch (Exception ex)
+        {
+            LogLine("彩色循环刷新异常：" + ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// 当前循环进度（0~1 = 沿 RGB 光谱走完一圈的比例）。速度来自「循环一圈」设置。
+    ///
+    /// **这是全插件唯一的时间轴** —— 悬浮窗、配置页画布、每一处开了循环的颜色，
+    /// 拿到的都是这同一个值。所以"什么时候打开开关"完全不影响相位：
+    /// 12:00 开的和 12:05 开的，在 12:06 这一刻颜色是一样的。
+    /// 基准 <see cref="_cycleStart"/> 只在插件装载时定一次，**开关动作一律不动它**。
+    /// </summary>
+    internal double CycleProgressNow
+    {
+        get
+        {
+            var seconds = Math.Clamp(Settings.CycleSeconds, 1, 60);
+            var elapsed = (DateTime.UtcNow - _cycleStart).TotalSeconds;
+
+            if (elapsed < 0)
+            {
+                elapsed = 0;
+            }
+
+            return (elapsed / seconds) % 1.0;
         }
     }
 
@@ -386,8 +475,25 @@ public sealed class KeyDisplayPlugin : IPlugin
         return $"正在显示 {keys} 个按键 · 当前按下 {pressed} 个 · 刷新 {Settings.RefreshMs}ms · {through}";
     }
 
+    /// <summary>
+    /// 自检期间禁止写盘的总闸。
+    ///
+    /// 为什么要有这个：自检会**临时篡改** Settings 里的值来量尺寸 / 验颜色（比如把
+    /// OverallScale 改成 0.5 量完再还回来）。这些改动**绝不能落进用户的 settings.json** ——
+    /// 一旦中间某步抛异常跳过还原，或者页面那边正好有个攒着的 ScheduleSave 落下来，
+    /// 用户下次打开就会发现"我的配置被改了"。这个坑真的踩过（2026-10-03：100% 被自检刷成 50%）。
+    /// 所以：自检一开始就把这道闸关上，跑完再打开。
+    /// </summary>
+    private bool _suppressSave;
+
     public void SaveSettings()
     {
+        // 自检跑的时候一律不落盘 —— 那时 Settings 里是临时探针值，不是用户的配置
+        if (_suppressSave)
+        {
+            return;
+        }
+
         try
         {
             if (_host is not null)
@@ -401,6 +507,30 @@ public sealed class KeyDisplayPlugin : IPlugin
     }
 
     // ===================== 自检 =====================
+
+    /// <summary>
+    /// 自检用：把缩放设成 <paramref name="scale"/> 重建一次，看窗口是不是真的容得下内容。
+    ///
+    /// 判据：窗口尺寸 ≥ 内容包围盒（算上留白）。容不下就是内容会被窗口边缘裁掉 ——
+    /// 这正是"放大后被一圈像边框的东西挡住"那个 bug。
+    /// </summary>
+    private bool ContainedInScaleTest(KeyOverlayWindow window, KeyDisplaySettings settings, double scale)
+    {
+        settings.OverallScale = scale;
+        window.Rebuild(settings);
+
+        double contentW = 0;
+        double contentH = 0;
+
+        foreach (var cell in settings.Keys)
+        {
+            contentW = Math.Max(contentW, (cell.X + cell.Width) * scale);
+            contentH = Math.Max(contentH, (cell.Y + cell.Height) * scale);
+        }
+
+        // 给 1px 容差（DPI 取整的影响）
+        return window.Width + 1 >= contentW && window.Height + 1 >= contentH;
+    }
 
     /// <summary>
     /// 数据链路自检：设了 <c>MCO_KEY_SELFTEST=1</c> 时才会跑。
@@ -417,6 +547,39 @@ public sealed class KeyDisplayPlugin : IPlugin
         }
 
         LogLine("=== 自检开始（发一个真实的右 Shift，看轮询读不读得到）===");
+
+        // ⚠ 自检全程**禁止写盘**。自检会临时篡改 Settings 来量尺寸 / 验颜色，
+        // 那些是探针值、不是用户的配置，绝不能落进 settings.json。
+        // 这里关上闸，跑完在 finally 里**从磁盘重载**（而不是保存）——
+        // 这样就算哪个自检忘了还原、或还原前抛了异常，内存里也不会残留探针值。
+        _suppressSave = true;
+        try
+        {
+            RunSelfTestBody();
+        }
+        finally
+        {
+            _suppressSave = false;
+
+            // 从磁盘重载：磁盘上永远是用户自己的配置（写盘闸一直关着，没人能污染它），
+            // 拿它覆盖内存，等于把现场还原到自检开始之前。
+            if (_host is not null)
+            {
+                try
+                {
+                    Settings = PluginSettingsFile.Load<KeyDisplaySettings>(_host.PluginDirectory);
+                }
+                catch
+                {
+                    // 重载失败极罕见（自检开始前刚加载成功过）。留着内存现状总比拿空配置覆盖强。
+                }
+            }
+        }
+    }
+
+    /// <summary>自检主体。由 <see cref="RunSelfTestIfRequested"/> 包着写盘闸调用。</summary>
+    private void RunSelfTestBody()
+    {
 
         // 默认配置核对：gold_ 调好的那套固化进代码之后，这些数字应该对得上他的配置
         try
@@ -566,6 +729,11 @@ public sealed class KeyDisplayPlugin : IPlugin
                 {
                     var globalSize = Settings.FontSize;
 
+                    // ⚠ 比的是**渲染出来的字号**，它已经乘过整体缩放；而 Settings.FontSize 是原始值。
+                    // 不乘的话，只要用户把「整体大小」拉离 100%，这条自检就会假失败
+                    // （2026-10-03 实际遇到过：他把整体大小调到 50%，这里就报了"覆盖后=20 清除后=9"）。
+                    var expected = globalSize * KeyOverlayWindow.OverallScaleOf(Settings);
+
                     probeCell.FontSizeOverride = 40;
                     window.Rebuild(Settings);
                     var overridden = window.GetCellFontSize(probeCell.VirtualKey);
@@ -576,13 +744,15 @@ public sealed class KeyDisplayPlugin : IPlugin
 
                     var othersUntouched = Settings.Keys
                         .Where(k => !ReferenceEquals(k, probeCell))
-                        .All(k => Math.Abs(window.GetCellFontSize(k.VirtualKey) - globalSize) < 0.5);
+                        .All(k => Math.Abs(window.GetCellFontSize(k.VirtualKey) - expected) < 0.5);
 
-                    LogLine(overridden > 39.5 && Math.Abs(restored - globalSize) < 0.5 && othersUntouched
-                        ? string.Format("局部外观自检通过：单独设的那格是 {0:0}，清除后回到全局 {1:0}，其它格一直是 {1:0}。",
-                            overridden, restored)
-                        : string.Format("局部外观自检失败：覆盖后={0:0} 清除后={1:0} 其它格未受影响={2}。",
-                            overridden, restored, othersUntouched));
+                    LogLine(Math.Abs(overridden - (40 * KeyOverlayWindow.OverallScaleOf(Settings))) < 0.5
+                            && Math.Abs(restored - expected) < 0.5
+                            && othersUntouched
+                        ? string.Format("局部外观自检通过：单独设的那格是 {0:0.#}（40×缩放 {1:0.##}），清除后回到全局 {2:0.#}，其它格一直是 {2:0.#}。",
+                            overridden, KeyOverlayWindow.OverallScaleOf(Settings), restored)
+                        : string.Format("局部外观自检失败：覆盖后={0:0.#} 清除后={1:0.#}（期望 {2:0.#}）其它格未受影响={3}。",
+                            overridden, restored, expected, othersUntouched));
                 }
             }
             catch (Exception lookEx)
@@ -721,11 +891,590 @@ public sealed class KeyDisplayPlugin : IPlugin
             {
                 LogLine("CPS 采样线程自检异常：" + threadEx);
             }
+            // 整体大小自检：缩放要真的把格子尺寸和窗口尺寸都按比例改掉，
+            // 而且**不能改坏原始布局数据**（滑块来回拖不该累积误差）
+            try
+            {
+                var scaleWindow = _window;
+                if (scaleWindow is null)
+                {
+                    LogLine("整体大小自检跳过：悬浮窗还没建出来。");
+                }
+                else
+                {
+                    var wasScale = Settings.OverallScale;
+                    var probeKey = Settings.Keys.Count > 0 ? Settings.Keys[0] : null;
+
+                    if (probeKey is null)
+                    {
+                        LogLine("整体大小自检跳过：没有按键格子。");
+                    }
+                    else
+                    {
+                        // ⚠ 整段必须包在 try/finally 里。这里会把 OverallScale 改成 1.0 / 2.0 / 0.5 来量尺寸，
+                        // 中间任何一步抛异常（Rebuild 失败、取尺寸越界…）都会**跳过还原**，
+                        // 结果 OverallScale 就永久卡在 0.5 —— 用户下次打开发现"悬浮窗莫名小了一半"。
+                        // 这个坑真的踩过（2026-10-03），所以还原动作一律放 finally。
+                        try
+                        {
+                            var rawW = probeKey.Width;
+                            var rawX = probeKey.X;
+
+                            // 100% 时的基准
+                            Settings.OverallScale = 1.0;
+                            scaleWindow.Rebuild(Settings);
+                            var size100 = new Size(scaleWindow.Width, scaleWindow.Height);
+                            var cell100 = scaleWindow.FirstCellSize();
+
+                            // 200%
+                            Settings.OverallScale = 2.0;
+                            scaleWindow.Rebuild(Settings);
+                            var size200 = new Size(scaleWindow.Width, scaleWindow.Height);
+                            var cell200 = scaleWindow.FirstCellSize();
+
+                            // 50%
+                            Settings.OverallScale = 0.5;
+                            scaleWindow.Rebuild(Settings);
+                            var size50 = new Size(scaleWindow.Width, scaleWindow.Height);
+                            var cell50 = scaleWindow.FirstCellSize();
+
+                            // 数据没被改坏
+                            var dataIntact = Math.Abs(probeKey.Width - rawW) < 0.001
+                                             && Math.Abs(probeKey.X - rawX) < 0.001;
+
+                            // 格子尺寸按比例（余量不参与缩放，所以只验格子本身）
+                            var cellRatio = cell100.Width > 1 ? cell200.Width / cell100.Width : 0;
+                            var cellRatioSmall = cell100.Width > 1 ? cell50.Width / cell100.Width : 0;
+
+                            // ⚠ 窗口必须容得下缩放后的内容。这条是补的 —— 早先 ResizeToContent
+                            // 用原始坐标算包围盒，放大后内容超出窗口边界被裁掉，
+                            // 表现是"放大之后有一圈像边框的东西把内容挡住"。
+                            var fits200 = ContainedInScaleTest(scaleWindow, Settings, 2.0);
+                            var fits50 = ContainedInScaleTest(scaleWindow, Settings, 0.5);
+
+                            var ok = Math.Abs(cellRatio - 2.0) < 0.05
+                                     && Math.Abs(cellRatioSmall - 0.5) < 0.05
+                                     && size200.Width > size100.Width
+                                     && size100.Width > size50.Width
+                                     && dataIntact
+                                     && fits200
+                                     && fits50;
+
+                            LogLine(ok
+                                ? string.Format(
+                                    "整体大小自检通过：格子 50%→{0:0.#} / 100%→{1:0.#} / 200%→{2:0.#} px（按比例）；" +
+                                    "窗口 50%→{3:0} / 100%→{4:0} / 200%→{5:0} px；窗口容得下内容；原始布局数据未被改写。",
+                                    cell50.Width, cell100.Width, cell200.Width,
+                                    size50.Width, size100.Width, size200.Width)
+                                : string.Format(
+                                    "整体大小自检失败：格子 50%→{0:0.#} / 100%→{1:0.#} / 200%→{2:0.#} px（比值 {3:0.00} / {4:0.00}，应约 0.5 / 2.0）；" +
+                                    "窗口 50%→{5:0} / 100%→{6:0} / 200%→{7:0} px；容得下内容={8}/{9}；原始布局数据完好={10}。",
+                                    cell50.Width, cell100.Width, cell200.Width, cellRatioSmall, cellRatio,
+                                    size50.Width, size100.Width, size200.Width, fits50, fits200, dataIntact));
+                        }
+                        finally
+                        {
+                            Settings.OverallScale = wasScale;
+                            scaleWindow.Rebuild(Settings);
+                        }
+                    }
+                }
+            }
+            catch (Exception scaleEx)
+            {
+                LogLine("整体大小自检异常：" + scaleEx);
+            }
+            // 颜色格式自检：hex 格式跟宿主对齐（纯色省 A），而且**两种格式都要能解析回来**。
+            // 这条是防"省掉 A 之后解析退化成白色" —— 那种 bug 肉眼是"颜色突然全白"，很难查。
+            try
+            {
+                var opaque = ColorPickerWindow.FormatHex(Color.FromArgb(0xFF, 0x3B, 0x82, 0xF6));
+                var translucent = ColorPickerWindow.FormatHex(Color.FromArgb(0x80, 0x00, 0x00, 0x00));
+
+                var roundOpaque = ColorPickerWindow.ParseForTest(opaque);
+                var roundTranslucent = ColorPickerWindow.ParseForTest(translucent);
+
+                var formatOk = opaque == "#3B82F6" && translucent == "#80000000";
+                var parseOk = roundOpaque.A == 0xFF && roundOpaque.R == 0x3B && roundOpaque.G == 0x82 && roundOpaque.B == 0xF6
+                              && roundTranslucent.A == 0x80 && roundTranslucent.R == 0x00;
+
+                LogLine(formatOk && parseOk
+                    ? string.Format("颜色格式自检通过：纯色写作 {0}（省 A）、半透明写作 {1}；两种都能解析回原值。", opaque, translucent)
+                    : string.Format("颜色格式自检失败：纯色={0}（期望 #3B82F6）、半透明={1}（期望 #80000000）；" +
+                                    "回解析 纯色 A={2:X2}/R={3:X2} 半透明 A={4:X2}。",
+                        opaque, translucent, roundOpaque.A, roundOpaque.R, roundTranslucent.A));
+            }
+            catch (Exception colorEx)
+            {
+                LogLine("颜色格式自检异常：" + colorEx);
+            }
+
+            // 彩色循环自检：走的是**完整 RGB 光谱**，要验这几件事 ——
+            //   1) 光谱路径对：0% = 纯红、1/3 圈 = 纯绿、1/2 圈 = 纯青、2/3 圈 = 纯蓝（加色通道的本来面目）
+            //   2) 首尾接得上：进度 1.0 回到纯红（接缝处不"跳"）
+            //   3) **不看源色**：白 / 黑 / 灰当源色也照样跑出彩色（gold_ 明确要求 —— 否则默认的白字、
+            //      黑阴影打开开关"看着没反应"，会被当成功能坏了）
+            //   4) A 通道原样带过去
+            try
+            {
+                var accent = Color.FromArgb(0xFF, 0x00, 0x00, 0x00);   // 源色故意用**纯黑**
+                var white = Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF);    // 纯白（默认文字色）
+                var gray = Color.FromArgb(0x80, 0x80, 0x80, 0x80);     // 半透明纯灰
+
+                // 不管源色是什么，取的都是同一条光谱 —— 下面用纯黑源色验路径
+                var start = ColorCycle.Shift(accent, 0.0);
+                var atGreen = ColorCycle.Shift(accent, 1.0 / 3.0);
+                var atCyan = ColorCycle.Shift(accent, 0.5);
+                var atBlue = ColorCycle.Shift(accent, 2.0 / 3.0);
+                var fullTurn = ColorCycle.Shift(accent, 1.0);
+
+                bool Near(Color c, int r, int g, int b, int tol = 3) =>
+                    Math.Abs(c.R - r) <= tol && Math.Abs(c.G - g) <= tol && Math.Abs(c.B - b) <= tol;
+
+                bool IsColorful(Color c) =>
+                    c.R != c.G || c.G != c.B;   // 三通道不全等 = 是彩色
+
+                var startsAtRed = Near(start, 255, 0, 0);
+                var hitsGreen = Near(atGreen, 0, 255, 0);
+                var hitsCyan = Near(atCyan, 0, 255, 255);
+                var hitsBlue = Near(atBlue, 0, 0, 255);
+                var fullIsRed = Near(fullTurn, 255, 0, 0);
+
+                // 黑白灰也必须跑起来（这是本轮的核心改动）
+                var whiteRuns = IsColorful(ColorCycle.Shift(white, 0.25));
+                var blackRuns = IsColorful(ColorCycle.Shift(accent, 0.25));
+                var grayRuns = IsColorful(ColorCycle.Shift(gray, 0.25));
+
+                // A 通道原样保留
+                var alphaKept = atGreen.A == accent.A && ColorCycle.Shift(gray, 0.25).A == gray.A && whiteRuns;
+
+                var cycleOk = startsAtRed && hitsGreen && hitsCyan && hitsBlue && fullIsRed
+                              && whiteRuns && blackRuns && grayRuns && alphaKept;
+
+                LogLine(cycleOk
+                    ? string.Format(
+                        "彩色循环自检通过：RGB 光谱 红→绿(1/3)→青(1/2)→蓝(2/3)→红(整圈)，首尾接得上；" +
+                        "白/黑/灰当源色也照样跑出彩色（白→{0}）—— 开了就一定能看见在变；A 保持。",
+                        Describe(ColorCycle.Shift(white, 0.25)))
+                    : string.Format(
+                        "彩色循环自检失败：0%={0} 绿{1} 青{2} 蓝{3} 整圈=红{4}；" +
+                        "白跑起来={5} 黑跑起来={6} 灰跑起来={7} A保持={8}。",
+                        startsAtRed, hitsGreen, hitsCyan, hitsBlue, fullIsRed,
+                        whiteRuns, blackRuns, grayRuns, alphaKept));
+            }
+            catch (Exception cycleEx)
+            {
+                LogLine("彩色循环自检异常：" + cycleEx);
+            }
+
+            // 循环开关联动自检：把全局的循环打开，看悬浮窗上那一格的颜色是不是真的跟着进度变了。
+            // 这条验的是"开关 → 渲染"这条链路通不通 —— 光验 ColorCycle 算法对不算数，
+            // 还得验它确实接到了窗口的画笔上。
+            try
+            {
+                if (_window is null)
+                {
+                    LogLine("彩色循环联动自检跳过：悬浮窗还没建出来。");
+                }
+                else
+                {
+                    var wasCycle = Settings.TextColorCycle;
+                    var wasIdleText = Settings.IdleTextColor;
+                    var wasProgress = _cycleStart;
+
+                    try
+                    {
+                        // 源色给个纯白也照样能测 —— 现在循环**不看源色**，无条件走光谱
+                        // （早先那版是"对齐源色色相"，纯白 S=0 转不动，才需要特意喂个饱和色）
+                        Settings.IdleTextColor = "#FFFFFFFF";
+                        Settings.TextColorCycle = true;
+
+                        _window.Rebuild(Settings);
+                        _window.SetCycleProgress(0.0, Settings);
+                        var atZero = SnapshotFirstTextColor();
+
+                        _window.SetCycleProgress(0.25, Settings);
+                        var atQuarter = SnapshotFirstTextColor();
+
+                        var linked = atZero is Color c0 && atQuarter is Color c1 && c0 != c1;
+
+                        LogLine(linked
+                            ? string.Format(
+                                "彩色循环联动自检通过：全局文字循环打开后，进度 0%={0} vs 25%={1} —— 开关确实接到了画笔上。",
+                                Describe(atZero), Describe(atQuarter))
+                            : string.Format(
+                                "彩色循环联动自检失败：进度 0%={0} 25%={1}，期望两者不同。",
+                                Describe(atZero), Describe(atQuarter)));
+                    }
+                    finally
+                    {
+                        // 复原：开关、颜色、进度基准全部还回去，别动他的配置
+                        Settings.TextColorCycle = wasCycle;
+                        Settings.IdleTextColor = wasIdleText;
+                        _cycleStart = wasProgress;
+                        _window.Rebuild(Settings);
+                    }
+                }
+            }
+            catch (Exception linkEx)
+            {
+                LogLine("彩色循环联动自检异常：" + linkEx);
+            }
+
+            // ===================== 边框/阴影循环自检（复现"只变一次就固定"） =====================
+            //
+            // 这条是用来守住 2026-10-03 那个 bug 的：
+            // 彩色循环的高频刷新走的是 SetCycleProgress → ApplyColors，
+            // 而边框色和阴影色当时只在 Rebuild / ApplyAppearance 里算 —— 于是
+            // "打开开关时刷成一次光谱色，之后永远不动"。
+            // 现在验证：**只推进度、不重建**，边框色和阴影色也必须跟着变。
+            try
+            {
+                if (_window is null)
+                {
+                    LogLine("边框/阴影循环自检跳过：悬浮窗还没建出来。");
+                }
+                else
+                {
+                    var wasBorderCycle = Settings.BorderColorCycle;
+                    var wasShadowCycle = Settings.ShadowColorCycle;
+                    var wasShadowEnabled = Settings.ShadowEnabled;
+                    var wasBorderColor = Settings.BorderColor;
+                    var wasShadowColor = Settings.ShadowColor;
+                    var wasTextCycle = Settings.TextColorCycle;
+
+                    try
+                    {
+                        // 只开边框 + 阴影循环，文字循环关掉 —— 这样变的一定是边框/阴影，不是文字带出来的错觉
+                        Settings.TextColorCycle = false;
+                        Settings.BorderColorCycle = true;
+                        Settings.ShadowColorCycle = true;
+                        Settings.ShadowEnabled = true;
+                        Settings.BorderColor = "#FFFFFFFF";
+                        Settings.ShadowColor = "#FF000000";
+
+                        _window.Rebuild(Settings);
+
+                        // ⚠ 关键：只推进度，**不重建**。重建能把颜色算对，但推不动——那正是这个 bug
+                        _window.SetCycleProgress(0.0, Settings);
+                        var border0 = _window.BorderColorAt(0);
+                        var shadow0 = _window.ShadowColorAt(0);
+
+                        _window.SetCycleProgress(0.33, Settings);
+                        var border1 = _window.BorderColorAt(0);
+                        var shadow1 = _window.ShadowColorAt(0);
+
+                        var borderMoves = border0 is Color b0 && border1 is Color b1 && b0 != b1;
+                        var shadowMoves = shadow0 is Color s0 && shadow1 is Color s1 && s0 != s1;
+
+                        LogLine(borderMoves && shadowMoves
+                            ? string.Format(
+                                "边框/阴影循环自检通过：只推进度（不重建）时边框 {0}→{1}、阴影 {2}→{3} —— 两者都跟着循环在变。",
+                                Describe(border0), Describe(border1), Describe(shadow0), Describe(shadow1))
+                            : string.Format(
+                                "边框/阴影循环自检失败：边框 {0}→{1}（{2}）、阴影 {3}→{4}（{5}）——" +
+                                "两者都必须随进度变，不动就说明高频路径漏刷了边框/阴影的颜色。",
+                                Describe(border0), Describe(border1), borderMoves ? "在动" : "没动",
+                                Describe(shadow0), Describe(shadow1), shadowMoves ? "在动" : "没动"));
+                    }
+                    finally
+                    {
+                        Settings.BorderColorCycle = wasBorderCycle;
+                        Settings.ShadowColorCycle = wasShadowCycle;
+                        Settings.ShadowEnabled = wasShadowEnabled;
+                        Settings.BorderColor = wasBorderColor;
+                        Settings.ShadowColor = wasShadowColor;
+                        Settings.TextColorCycle = wasTextCycle;
+                        _window.Rebuild(Settings);
+                    }
+                }
+            }
+            catch (Exception bsEx)
+            {
+                LogLine("边框/阴影循环自检异常：" + bsEx);
+            }
+
+            // ===================== 共用时间轴自检 =====================
+            // 这条验的是"**不同对象之间不会错位**"，跟上面那条验的不是一回事 ——
+            // 上面只能证明"开关接到了画笔上"，证明不了"两个对象在相同时刻颜色一致"。
+            //
+            // 错位是怎么来的：只要有人在开关/改速度时把时间基准（_cycleStart）归零，
+            // 整圈已经走过的相位就被抹掉，**后开的对象从 0% 起跑、先开的那个跳回去**，
+            // 于是两者永远差着一段。所以这里要同时验两件事：
+            //   1) 基准**不会被**开关动作改动（归零/重置都会当场露馅）
+            //   2) 两个**不同源色**的格子，在同一 progress 下走过的相位一致（各自对齐到自己源色后，角度差恒定）
+            try
+            {
+                var before = _cycleStart;
+
+                // 1) 反复开开关、改速度，基准必须纹丝不动
+                var wasText = Settings.TextColorCycle;
+                var wasSeconds = Settings.CycleSeconds;
+                try
+                {
+                    Settings.TextColorCycle = !wasText;
+                    Settings.CycleSeconds = wasSeconds >= 20 ? 5 : wasSeconds + 3;
+                    Settings.TextColorCycle = wasText;
+                    Settings.CycleSeconds = wasSeconds;
+                }
+                finally
+                {
+                    Settings.TextColorCycle = wasText;
+                    Settings.CycleSeconds = wasSeconds;
+                }
+
+                var baseHeld = _cycleStart == before;
+
+                // 2) 同一 progress、两个不同源色 → 各自的相位推进量必须相等
+                //    取"红"和"半亮蓝"两个源色，比较 progress 从 0.1 到 0.6 时**色相**各自前进了多少度。
+                var red = Color.FromArgb(0xFF, 0xFF, 0x00, 0x00);
+                var blue = Color.FromArgb(0xFF, 0x00, 0x00, 0x80);
+
+                var redStep = HueDelta(ColorCycle.Shift(red, 0.1), ColorCycle.Shift(red, 0.6));
+                var blueStep = HueDelta(ColorCycle.Shift(blue, 0.1), ColorCycle.Shift(blue, 0.6));
+
+                // 两者的"前进步长"应当相等（同一段时间走同一段光谱），允许几度的取整误差
+                var inPhase = Math.Abs(redStep - blueStep) <= 5.0;
+
+                var axisOk = baseHeld && inPhase;
+
+                LogLine(axisOk
+                    ? string.Format(
+                        "共用时间轴自检通过：开关/改速度后基准未被改动（{0}）；" +
+                        "两个不同源色在同一 progress 下步长一致（红走 {1:0.#}°、蓝走 {2:0.#}°）—— 不会错位。",
+                        baseHeld ? "纹丝不动" : "被改了", redStep, blueStep)
+                    : string.Format(
+                        "共用时间轴自检失败：基准保持不变={0}（期望 true）；" +
+                        "同段 progress 步长 红={1:0.#}° 蓝={2:0.#}°（期望两者差 ≤5°）。",
+                        baseHeld, redStep, blueStep));
+            }
+            catch (Exception axisEx)
+            {
+                LogLine("共用时间轴自检异常：" + axisEx);
+            }
+
+            // ===================== 循环真实运转自检（复现"运行时不变色"） =====================
+            // 上面两条都是"手动塞 progress 进去"验的，验不出"定时器到底有没有在推、推进的值有没有被用上"。
+            // 这条**真的让定时器跑起来**：开循环 → 记下颜色 → 等 3 个 tick → 再记一次，必须不同。
+            // 另外把每个格子的开关状态和 AnyColorCycle 一起打出来，一眼看出"到底开没开"。
+            try
+            {
+                var any = Settings.AnyColorCycle;
+                LogLine(string.Format(
+                    "循环状态快照：AnyColorCycle={0}；全局 文字={1} 背景={2} 按文={3} 按背={4} 边框={5} 阴影={6}；" +
+                    "每键覆盖 {7} 个非 null；CycleSeconds={8}；窗口IsVisible={9}",
+                    any,
+                    Settings.TextColorCycle, Settings.BackgroundColorCycle,
+                    Settings.PressedTextColorCycle, Settings.PressedBackgroundColorCycle,
+                    Settings.BorderColorCycle, Settings.ShadowColorCycle,
+                    CountCellOverrides(), Settings.CycleSeconds,
+                    _window?.IsVisible.ToString() ?? "(无窗口)"));
+
+                if (_window is not null)
+                {
+                    var wasIdleText = Settings.IdleTextColor;
+                    var wasText = Settings.TextColorCycle;
+
+                    try
+                    {
+                        // 挑一个真有颜色的源色，否则纯白按设计转不动
+                        Settings.IdleTextColor = "#FFFF0000";
+                        Settings.TextColorCycle = true;
+                        _window.Rebuild(Settings);
+
+                        // 真的把进度推进器跑起来：直接调 TickCycle 三次，中间 sleep 让时间流逝
+                        var t0 = SnapshotFirstTextColor();
+                        TickCycle();
+                        var s0 = SnapshotFirstTextColor();
+
+                        Thread.Sleep(1200);
+                        TickCycle();
+                        var s1 = SnapshotFirstTextColor();
+
+                        Thread.Sleep(1200);
+                        TickCycle();
+                        var s2 = SnapshotFirstTextColor();
+
+                        var moves = s0 is Color c0 && s1 is Color c1 && c0 != c1;
+                        var keepsMoving = s1 is Color d1 && s2 is Color d2 && d1 != d2;
+
+                        LogLine(moves && keepsMoving
+                            ? string.Format(
+                                "循环真实运转自检通过：TickCycle 连推三次得到 {0} → {1} → {2}，颜色在动。",
+                                Describe(s0), Describe(s1), Describe(s2))
+                            : string.Format(
+                                "循环真实运转自检失败：三次快照 {0} / {1} / {2}（起始 {3}）" +
+                                "，颜色{4}。progress 现在={5:0.###}。",
+                                Describe(s0), Describe(s1), Describe(s2), Describe(t0),
+                                moves ? "第二次后就不动了" : "压根没动",
+                                CycleProgressNow));
+                    }
+                    finally
+                    {
+                        Settings.IdleTextColor = wasIdleText;
+                        Settings.TextColorCycle = wasText;
+                        _window.Rebuild(Settings);
+                    }
+                }
+            }
+            catch (Exception liveEx)
+            {
+                LogLine("循环真实运转自检异常：" + liveEx);
+            }
+
+            // ===================== UI 开关链路自检（复现"点了开关没反应"） =====================
+            // 上面所有自检都是**直接改 Settings** 验的，绕过了 UI。这条走真实的 UI 路径：
+            // new 一个页面 → 找到那个复选框 → 真的把它 IsChecked 置 true（模拟用户点击），
+            // 看 _settings.TextColorCycle 有没有跟着变。断了就说明"复选框 → 设置"这一段坏了。
+            try
+            {
+                var page = new KeyDisplayPage(this);
+
+                var was = Settings.TextColorCycle;
+
+                try
+                {
+                    // ⚠ 先把开关**掰成 false** 再测 —— 否则它本来就是 true 的话，
+                    // "置 true 后没变"会被误判成"复选框没接上"（假失败）。
+                    Settings.TextColorCycle = false;
+                    page.ProbeCycleCheckBox();
+                    var after = Settings.TextColorCycle;
+                    var uiChanged = after;
+
+                    LogLine(string.Format("UI 开关诊断：{0}；页面 _loading={1}",
+                        page.CycleCheckBoxInfo, page.LoadingGate));
+
+                    LogLine(uiChanged
+                        ? "UI 开关链路自检通过：把「没按下 · 文字」的彩色循环复选框置 true 后，" +
+                          "设置从 False 变成了 True —— 复选框确实接到了设置上。"
+                        : "UI 开关链路自检失败：先置 False、再把复选框置 true 后，设置仍是 False —— " +
+                          "复选框没接到设置上。");
+                }
+                finally
+                {
+                    Settings.TextColorCycle = was;
+                }
+            }
+            catch (Exception uiEx)
+            {
+                LogLine("UI 开关链路自检异常：" + uiEx);
+            }
         }
         catch (Exception ex)
         {
             LogLine("自检异常：" + ex);
         }
+    }
+
+    /// <summary>自检用：读悬浮窗上第一个格子当前文字用的颜色（验循环有没有真的接到画笔上）。</summary>
+    private Color? SnapshotFirstTextColor() => _window?.FirstTextColor();
+
+    /// <summary>自检用：数有多少个格子设了循环覆盖（不为 null）。</summary>
+    private int CountCellOverrides()
+    {
+        var n = 0;
+
+        foreach (var cell in Settings.Keys)
+        {
+            if (cell.TextColorCycleOverride is not null
+                || cell.BackgroundColorCycleOverride is not null
+                || cell.PressedTextColorCycleOverride is not null
+                || cell.PressedBackgroundColorCycleOverride is not null
+                || cell.BorderColorCycleOverride is not null
+                || cell.ShadowColorCycleOverride is not null)
+            {
+                n++;
+            }
+        }
+
+        return n;
+    }
+
+    /// <summary>
+    /// 自检用：两个颜色的色相角之差（归一化 0~360）。用来判断"同一段时间各自走了多远"。
+    /// </summary>
+    private static double HueDelta(Color from, Color to)
+    {
+        static double Hue(Color c)
+        {
+            var r = c.R / 255.0;
+            var g = c.G / 255.0;
+            var b = c.B / 255.0;
+
+            var max = Math.Max(r, Math.Max(g, b));
+            var min = Math.Min(r, Math.Min(g, b));
+            var d = max - min;
+
+            if (d <= 1e-9)
+            {
+                return 0;
+            }
+
+            double h;
+            if (Math.Abs(max - r) < 1e-9)
+            {
+                h = 60 * (((g - b) / d) % 6);
+            }
+            else if (Math.Abs(max - g) < 1e-9)
+            {
+                h = 60 * (((b - r) / d) + 2);
+            }
+            else
+            {
+                h = 60 * (((r - g) / d) + 4);
+            }
+
+            return ((h % 360) + 360) % 360;
+        }
+
+        var delta = Hue(to) - Hue(from);
+        return ((delta % 360) + 360) % 360;
+    }
+
+    private static string Describe(Color? color) =>
+        color is Color c ? string.Format("#{0:X2}{1:X2}{2:X2}", c.R, c.G, c.B) : "(无)";
+
+    /// <summary>
+    /// 开发期用：设了 <c>MCO_CYCLE_TRACE=1</c> 时，在**真实消息循环**里隔几秒记一行悬浮窗颜色，
+    /// 用来验"循环定时器到底有没有在推颜色"。
+    ///
+    /// 为什么不并进自检：自检是在 <c>Initialize</c> 里同步跑的，那时消息循环还没启动，
+    /// `DispatcherTimer` 一次都不会触发 —— 只能手动调 <c>TickCycle()</c>，验不出"定时器自己会不会跑"。
+    /// 这个方法用 `Dispatcher.BeginInvoke` 把采样排进 UI 队列，等消息循环转起来之后才真正执行。
+    /// </summary>
+    private void RunCycleTraceIfRequested()
+    {
+        if (Environment.GetEnvironmentVariable("MCO_CYCLE_TRACE") != "1")
+        {
+            return;
+        }
+
+        LogLine(string.Format("循环轨迹开始记录：AnyColorCycle={0}，每 100ms 采一次，共 30 次（约 3 秒）。",
+            Settings.AnyColorCycle));
+
+        var remaining = 30;
+
+        var timer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromMilliseconds(100),
+        };
+
+        timer.Tick += (_, _) =>
+        {
+            var color = SnapshotFirstTextColor();
+            var progress = CycleProgressNow;
+
+            LogLine(string.Format("循环轨迹 #{0:00}：progress={1:0.###} 悬浮窗第一格文字={2}",
+                31 - remaining, progress, Describe(color)));
+
+            if (--remaining <= 0)
+            {
+                timer.Stop();
+                LogLine("循环轨迹记录结束。");
+            }
+        };
+
+        timer.Start();
     }
 
     /// <summary>

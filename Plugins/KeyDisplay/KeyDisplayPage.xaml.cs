@@ -70,6 +70,7 @@ public partial class KeyDisplayPage : System.Windows.Controls.UserControl
     // ---- 定时器 ----
     private DispatcherTimer? _liveTimer;     // 画布实时预览 + 按键捕获
     private DispatcherTimer? _commitTimer;   // 把改动攒一下再应用/存盘，别拖一次滑块重建十几次窗口
+    private DispatcherTimer? _scaleRebuildTimer;   // 整体大小专用：滑块停 60ms 才重建一次（重建比改属性重）
 
     private readonly KeyCapture _capture = new();
 
@@ -142,10 +143,34 @@ public partial class KeyDisplayPage : System.Windows.Controls.UserControl
     {
         try { _liveTimer?.Stop(); } catch { }
         try { _commitTimer?.Stop(); } catch { }
+        try { _scaleRebuildTimer?.Stop(); } catch { }
         _liveTimer = null;
         _commitTimer = null;
+        _scaleRebuildTimer = null;
         _capture.Stop();
     }
+
+    /// <summary>
+    /// 自检用：模拟用户点「没按下 · 文字」那一行的彩色循环复选框（false → true）。
+    /// **必须走真实控件**才能验出"复选框没接到设置上"这类断链。
+    ///
+    /// ⚠ 控件**当前是 true 的话得先掰成 false** —— WPF 的 `CheckBox`
+    /// 在值没变化时**不会**触发 `Checked` 事件，直接赋 true 会静默什么都不发生。
+    /// </summary>
+    internal void ProbeCycleCheckBox()
+    {
+        IdleTextCycleCheckBox.IsChecked = false;
+        IdleTextCycleCheckBox.IsChecked = true;
+    }
+
+    /// <summary>自检用：页面当前的 <c>_loading</c> 闸门状态（一直卡在 true 就会"点什么都没反应"）。</summary>
+    internal bool LoadingGate => _loading;
+
+    /// <summary>自检用：循环复选框的 Tag / IsChecked，用来判断绑定还在不在。</summary>
+    internal string CycleCheckBoxInfo =>
+        string.Format("Tag={0} IsChecked={1} 可见={2} 使能={3}",
+            IdleTextCycleCheckBox.Tag, IdleTextCycleCheckBox.IsChecked,
+            IdleTextCycleCheckBox.Visibility, IdleTextCycleCheckBox.IsEnabled);
 
     // ===================== 初始化 =====================
 
@@ -236,6 +261,7 @@ public partial class KeyDisplayPage : System.Windows.Controls.UserControl
         FontComboBox.Text = s.FontFamily;
 
         FontSizeSlider.Value = Math.Clamp(s.FontSize, FontSizeSlider.Minimum, FontSizeSlider.Maximum);
+        OverallScaleSlider.Value = Math.Clamp(s.OverallScale * 100, OverallScaleSlider.Minimum, OverallScaleSlider.Maximum);
         CornerSlider.Value = Math.Clamp(s.CornerRadius, CornerSlider.Minimum, CornerSlider.Maximum);
         BorderThicknessSlider.Value = Math.Clamp(s.BorderThickness, BorderThicknessSlider.Minimum, BorderThicknessSlider.Maximum);
         ShadowBlurSlider.Value = Math.Clamp(s.ShadowBlur, ShadowBlurSlider.Minimum, ShadowBlurSlider.Maximum);
@@ -247,6 +273,8 @@ public partial class KeyDisplayPage : System.Windows.Controls.UserControl
 
         var index = Array.FindIndex(RefreshChoices, c => c.Ms == s.RefreshMs);
         RefreshComboBox.SelectedIndex = index >= 0 ? index : 2;
+
+        RefreshCycleToggles();
     }
 
     // ===================== 画布 =====================
@@ -373,6 +401,7 @@ public partial class KeyDisplayPage : System.Windows.Controls.UserControl
             double contentRight = 0;
             double contentBottom = 0;
 
+            // 画布不乘整体缩放 —— 它只是排版工具，包围盒按格子的原始尺寸算
             foreach (var cell in _settings.Keys)
             {
                 contentRight = Math.Max(contentRight, cell.X + cell.Width);
@@ -467,13 +496,22 @@ public partial class KeyDisplayPage : System.Windows.Controls.UserControl
         var s = _settings;
         var cell = visual.Model;
 
+        // ⚠ 画布**不乘整体缩放**。画布是用来排版的编辑工具，格子在这里就该是稳定的编辑尺度 ——
+        // 如果跟着整体缩放变，用户放大到 200% 后就不好摆位了（格子太大、能看见的范围太小）。
+        // 整体缩放是"最终显示多大"，调它不该改变排版时的工作感受。
+
         visual.Text.Text = string.IsNullOrWhiteSpace(cell.DisplayText)
             ? VirtualKeys.Name(cell.VirtualKey)
             : cell.DisplayText;
 
         visual.Text.FontFamily = new FontFamily(string.IsNullOrWhiteSpace(s.FontFamily) ? "Microsoft YaHei UI" : s.FontFamily);
-        visual.Text.FontSize = Math.Clamp(s.FontSize, 6, 200);
-        visual.Text.FontWeight = s.Bold ? FontWeights.Bold : FontWeights.Normal;
+
+        // 字号跟随每键覆盖，但**不乘整体缩放**（同上，画布保持编辑尺度）
+        var fontSize = cell.FontSizeOverride >= 0 ? cell.FontSizeOverride : s.FontSize;
+        visual.Text.FontSize = Math.Clamp(fontSize, 6, 200);
+
+        var bold = cell.BoldOverride < 0 ? s.Bold : cell.BoldOverride == 1;
+        visual.Text.FontWeight = bold ? FontWeights.Bold : FontWeights.Normal;
 
         var textHex = visual.IsDown
             ? Pick(cell.PressedTextColorOverride, s.PressedTextColor)
@@ -483,15 +521,31 @@ public partial class KeyDisplayPage : System.Windows.Controls.UserControl
             ? Pick(cell.PressedBackgroundColorOverride, s.PressedBackgroundColor)
             : Pick(cell.BackgroundColorOverride, s.IdleBackgroundColor);
 
-        visual.Text.Foreground = MakeBrush(textHex, Colors.White);
-        visual.Root.Background = MakeBrush(backgroundHex, Colors.Transparent);
+        // 画布上也跟着循环转 —— 不然在这儿看不出效果，得跑到悬浮窗上才看得到。
+        // 用插件的进度（跟悬浮窗同一个来源），两边颜色才是同步的
+        var progress = _plugin.CycleProgressNow;
+
+        var textCycle = ResolveCycleFor(
+            visual.IsDown ? cell.PressedTextColorCycleOverride : cell.TextColorCycleOverride,
+            visual.IsDown ? s.PressedTextColorCycle : s.TextColorCycle);
+
+        var bgCycle = ResolveCycleFor(
+            visual.IsDown ? cell.PressedBackgroundColorCycleOverride : cell.BackgroundColorCycleOverride,
+            visual.IsDown ? s.PressedBackgroundColorCycle : s.BackgroundColorCycle);
+
+        visual.Text.Foreground = new SolidColorBrush(CycleIf(textHex, Colors.White, textCycle, progress));
+        visual.Root.Background = new SolidColorBrush(CycleIf(backgroundHex, Colors.Transparent, bgCycle, progress));
 
         visual.Root.Width = Math.Max(8, cell.Width);
         visual.Root.Height = Math.Max(8, cell.Height);
-        visual.Root.CornerRadius = new CornerRadius(Math.Max(0, s.CornerRadius));
+
+        var corner = cell.CornerRadiusOverride < 0 ? s.CornerRadius : cell.CornerRadiusOverride;
+        visual.Root.CornerRadius = new CornerRadius(Math.Max(0, corner));
+
+        var borderThickness = cell.BorderThicknessOverride < 0 ? s.BorderThickness : cell.BorderThicknessOverride;
 
         var isSelected = ReferenceEquals(cell, _selected);
-        visual.Root.BorderThickness = new Thickness(isSelected ? 2 : Math.Max(0, s.BorderThickness));
+        visual.Root.BorderThickness = new Thickness(isSelected ? 2 : Math.Max(0, borderThickness));
         visual.Root.BorderBrush = isSelected ? AccentBrush : MakeBrush(s.BorderColor, Colors.Transparent);
         visual.Handle.Visibility = isSelected ? Visibility.Visible : Visibility.Collapsed;
 
@@ -543,6 +597,13 @@ public partial class KeyDisplayPage : System.Windows.Controls.UserControl
 
             visual.IsDown = down;
             ApplyCanvasLook(visual);
+        }
+
+        // 彩色循环开着时，色相一直在动 —— 这里按 40ms 刷一遍。
+        // 只在真有格子开着循环时才刷，不然就是纯粹白烧 CPU
+        if (_settings.AnyColorCycle && _canvasCells.Count > 0)
+        {
+            RefreshAllCanvasLooks();
         }
     }
 
@@ -621,8 +682,8 @@ public partial class KeyDisplayPage : System.Windows.Controls.UserControl
         // 只动这一个元素，别整块重建（拖拽时重建会闪）
         Canvas.SetLeft(visual.Root, cell.X);
         Canvas.SetTop(visual.Root, cell.Y);
-        visual.Root.Width = cell.Width;
-        visual.Root.Height = cell.Height;
+        visual.Root.Width = Math.Max(8, cell.Width);
+        visual.Root.Height = Math.Max(8, cell.Height);
 
         _dirty = true;
         UpdateCellPropBoxes();
@@ -731,6 +792,7 @@ public partial class KeyDisplayPage : System.Windows.Controls.UserControl
 
         RefreshColorPreviews();
         RefreshCellLookControls();
+        RefreshCellCycleCombos();
     }
 
     private void UpdateCellPropBoxes()
@@ -956,6 +1018,7 @@ public partial class KeyDisplayPage : System.Windows.Controls.UserControl
         RebuildCanvas();
         UpdateSelectionPanel();
         RefreshColorPreviews();
+        RefreshCellCycleCombos();
         UpdateCanvasHint();
     }
 
@@ -1047,6 +1110,48 @@ public partial class KeyDisplayPage : System.Windows.Controls.UserControl
         ScheduleSave();                // 只有「写盘」这一件事被攒起来
     }
 
+    /// <summary>
+    /// 整体大小滑块。
+    ///
+    /// ⚠ 这条**不能**走 <see cref="Option_Changed"/> 的轻路径：整体缩放改的是每个格子的
+    /// 宽高和位置，属于"结构变了"，必须重建视觉树（<see cref="KeyDisplayPlugin.OnSettingsChanged"/>）。
+    /// 只改属性的话，格子宽高是变了，但里面那些依赖 <c>ResizeToContent</c> 的东西对不上。
+    ///
+    /// 重建是整棵树重来，拖起来一秒几十次会卡，所以这里做个**合并**：
+    /// 滑块拖出的连续 ValueChanged 只让最后一次真正跑重建。
+    /// 合并的是"重建"这件事本身，不是"生效"—— 停下来那一刻立刻就是最终尺寸，没有延迟感。
+    /// </summary>
+    private void OverallScale_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_loading)
+        {
+            return;
+        }
+
+        _settings.OverallScale = OverallScaleSlider.Value / 100.0;
+        UpdateValueLabels();
+
+        // 拖动期间先只改数值提示，重建交给下面的合并定时器（滑块一停就重建一次）
+        if (_scaleRebuildTimer is null)
+        {
+            _scaleRebuildTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(60) };
+            _scaleRebuildTimer.Tick += (_, _) =>
+            {
+                _scaleRebuildTimer!.Stop();
+
+                // 只重建悬浮窗。画布**不跟着动** —— 它是排版工具，格子在那儿保持编辑尺度，
+                // 整体缩放只影响最终显示多大（见 ApplyCanvasLook 的注释）。
+                _plugin.OnSettingsChanged();
+                _plugin.SyncWindowState();
+            };
+        }
+
+        _scaleRebuildTimer.Stop();
+        _scaleRebuildTimer.Start();
+
+        ScheduleSave();
+    }
+
     private void BoldButton_Click(object sender, RoutedEventArgs e)
     {
         _settings.Bold = !_settings.Bold;
@@ -1059,6 +1164,7 @@ public partial class KeyDisplayPage : System.Windows.Controls.UserControl
     private void UpdateValueLabels()
     {
         FontSizeText.Text = ((int)Math.Round(FontSizeSlider.Value)) + " px";
+        OverallScaleText.Text = ((int)Math.Round(OverallScaleSlider.Value)) + "%";
         CornerText.Text = ((int)Math.Round(CornerSlider.Value)).ToString();
         BorderThicknessText.Text = BorderThicknessSlider.Value.ToString("0.#");
         ShadowBlurText.Text = ((int)Math.Round(ShadowBlurSlider.Value)).ToString();
@@ -1090,11 +1196,13 @@ public partial class KeyDisplayPage : System.Windows.Controls.UserControl
         var baseHex = ResolveBaseColor(field);
         var picked = ColorPickerWindow.Pick(Window.GetWindow(this), baseHex);
 
+        // 调色盘返回的 A 恒为 255（它不支持 alpha），所以只取它的 RGB，A 用原来那个。
+        // hex 格式统一走 ColorPickerWindow.FormatHex —— 纯色省略 A，跟宿主一致。
         var before = MakeColor(baseHex, Colors.White);
         var after = MakeColor(picked, before);
 
-        // 调色盘返回的颜色 A 恒为 255，直接存下去会把原来的透明度抹掉 —— 这里只取它的 RGB
-        SetColorField(field, $"#{before.A:X2}{after.R:X2}{after.G:X2}{after.B:X2}");
+        SetColorField(field, ColorPickerWindow.FormatHex(
+            System.Windows.Media.Color.FromArgb(before.A, after.R, after.G, after.B)));
 
         AfterColorChanged();
     }
@@ -1120,8 +1228,8 @@ public partial class KeyDisplayPage : System.Windows.Controls.UserControl
     }
 
     /// <summary>
-    /// 局部外观里的三个下拉框：字体（第一项是「跟随全局」）、粗体、阴影开关。
-    /// 后两个是三态 —— 跟随 / 开 / 关，索引 0/1/2，对应设置里的 -1/1/0。
+    /// 局部外观里的几个下拉框：字体（第一项是「跟随全局」）、粗体、阴影开关、彩色循环。
+    /// 后三个都是三态 —— 跟随 / 开 / 关，索引 0/1/2。
     /// </summary>
     private void FillCellLookCombos()
     {
@@ -1134,7 +1242,12 @@ public partial class KeyDisplayPage : System.Windows.Controls.UserControl
 
         CellFontComboBox.SelectedIndex = 0;
 
-        foreach (var combo in new[] { CellBoldComboBox, CellShadowEnabledComboBox })
+        foreach (var combo in new[]
+                 {
+                     CellBoldComboBox, CellShadowEnabledComboBox,
+                     CellTextCycleComboBox, CellBgCycleComboBox, CellPressedTextCycleComboBox,
+                     CellPressedBgCycleComboBox, CellBorderColorCycleComboBox, CellShadowColorCycleComboBox,
+                 })
         {
             combo.Items.Add("跟随全局");
             combo.Items.Add("开");
@@ -1199,6 +1312,149 @@ public partial class KeyDisplayPage : System.Windows.Controls.UserControl
         AfterCellLookChanged();
     }
 
+    // ===================== 彩色循环 =====================
+
+    /// <summary>
+    /// 全局那几个「彩色循环」开关（Tag 就是颜色字段名，跟 GetColorField 用的是同一套）。
+    /// </summary>
+    private void ColorCycle_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_loading || sender is not CheckBox box || box.Tag is not string field)
+        {
+            return;
+        }
+
+        SetGlobalCycleField(field, box.IsChecked == true);
+
+        // 循环开关动了 → 颜色要立刻按新状态重算。这是外观，走轻路径就行
+        AfterColorChanged();
+
+        // ⚠ 这里**绝不能**重置时间基准。
+        // 所有开了循环的对象共用同一条时间轴（同一个 progress），一旦在这里归零，
+        // 每点一个开关整圈已走过的相位就被抹掉 —— 前面已经开着的那些颜色会"跳"回起点，
+        // 多个开关之间就错位了。基准只在插件装载时定一次（见 KeyDisplayPlugin._cycleStart）。
+    }
+
+    /// <summary>「循环一圈」滑块：多少秒转一圈。</summary>
+    private void CycleSeconds_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_loading)
+        {
+            return;
+        }
+
+        _settings.CycleSeconds = CycleSecondsSlider.Value;
+        CycleSecondsText.Text = ((int)Math.Round(CycleSecondsSlider.Value)) + " 秒";
+
+        // ⚠ 同样不重置基准。改速度只是把"分母"换了，相位按同一时间轴连续推进 ——
+        // 重置反而会让所有颜色一起"跳"回起点。共用时间轴优先于"改速度时不跳"这个小顾虑。
+        ScheduleSave();
+        _plugin.ApplyAppearanceNow();
+    }
+
+    private void SetGlobalCycleField(string field, bool value)
+    {
+        var s = _settings;
+
+        switch (field)
+        {
+            case "IdleText": s.TextColorCycle = value; break;
+            case "IdleBg": s.BackgroundColorCycle = value; break;
+            case "PressedText": s.PressedTextColorCycle = value; break;
+            case "PressedBg": s.PressedBackgroundColorCycle = value; break;
+            case "Border": s.BorderColorCycle = value; break;
+            case "Shadow": s.ShadowColorCycle = value; break;
+        }
+    }
+
+    private bool GetGlobalCycleField(string field) => field switch
+    {
+        "IdleText" => _settings.TextColorCycle,
+        "IdleBg" => _settings.BackgroundColorCycle,
+        "PressedText" => _settings.PressedTextColorCycle,
+        "PressedBg" => _settings.PressedBackgroundColorCycle,
+        "Border" => _settings.BorderColorCycle,
+        "Shadow" => _settings.ShadowColorCycle,
+        _ => false,
+    };
+
+    /// <summary>每键的「彩色循环」下拉：第 0 项「跟随全局」/ 1 开 / 2 关，对应 null / true / false。</summary>
+    private void CellColorCycle_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_loading || _selected is null || sender is not ComboBox combo || combo.Tag is not string field)
+        {
+            return;
+        }
+
+        var cell = _selected;
+
+        bool? value = combo.SelectedIndex switch { 1 => true, 2 => false, _ => null };
+
+        switch (field)
+        {
+            case "CellText": cell.TextColorCycleOverride = value; break;
+            case "CellBg": cell.BackgroundColorCycleOverride = value; break;
+            case "CellPressedText": cell.PressedTextColorCycleOverride = value; break;
+            case "CellPressedBg": cell.PressedBackgroundColorCycleOverride = value; break;
+            case "CellBorderColor": cell.BorderColorCycleOverride = value; break;
+            case "CellShadowColor": cell.ShadowColorCycleOverride = value; break;
+        }
+
+        // ⚠ 不重置时间基准 —— 理由同 ColorCycle_Changed 里的注释：
+        // 单个键的开关不该影响其它对象的相位，共用时间轴才有意义。
+        AfterCellLookChanged();
+    }
+
+    /// <summary>把全局的循环开关填回那一排复选框。</summary>
+    private void RefreshCycleToggles()
+    {
+        var wasLoading = _loading;
+        _loading = true;
+        try
+        {
+            BorderCycleCheckBox.IsChecked = _settings.BorderColorCycle;
+            IdleTextCycleCheckBox.IsChecked = _settings.TextColorCycle;
+            IdleBgCycleCheckBox.IsChecked = _settings.BackgroundColorCycle;
+            PressedTextCycleCheckBox.IsChecked = _settings.PressedTextColorCycle;
+            PressedBgCycleCheckBox.IsChecked = _settings.PressedBackgroundColorCycle;
+            ShadowCycleCheckBox.IsChecked = _settings.ShadowColorCycle;
+
+            CycleSecondsSlider.Value = Math.Clamp(
+                _settings.CycleSeconds, CycleSecondsSlider.Minimum, CycleSecondsSlider.Maximum);
+        }
+        finally
+        {
+            _loading = wasLoading;
+        }
+
+        CycleSecondsText.Text = ((int)Math.Round(CycleSecondsSlider.Value)) + " 秒";
+    }
+
+    /// <summary>把选中格子的每键循环覆盖填回那排下拉框。</summary>
+    private void RefreshCellCycleCombos()
+    {
+        var cell = _selected;
+
+        var wasLoading = _loading;
+        _loading = true;
+        try
+        {
+            CellTextCycleComboBox.SelectedIndex = CycleIndex(cell?.TextColorCycleOverride);
+            CellBgCycleComboBox.SelectedIndex = CycleIndex(cell?.BackgroundColorCycleOverride);
+            CellPressedTextCycleComboBox.SelectedIndex = CycleIndex(cell?.PressedTextColorCycleOverride);
+            CellPressedBgCycleComboBox.SelectedIndex = CycleIndex(cell?.PressedBackgroundColorCycleOverride);
+            CellBorderColorCycleComboBox.SelectedIndex = CycleIndex(cell?.BorderColorCycleOverride);
+            CellShadowColorCycleComboBox.SelectedIndex = CycleIndex(cell?.ShadowColorCycleOverride);
+        }
+        finally
+        {
+            _loading = wasLoading;
+        }
+    }
+
+    /// <summary>null → 0（跟随全局）/ true → 1（开）/ false → 2（关）。</summary>
+    private static int CycleIndex(bool? value) => value switch { true => 1, false => 2, _ => 0 };
+
     /// <summary>清除某一项局部覆盖，恢复跟随全局。</summary>
     private void CellOverrideClear_Click(object sender, RoutedEventArgs e)
     {
@@ -1219,14 +1475,43 @@ public partial class KeyDisplayPage : System.Windows.Controls.UserControl
             case "CellBold": cell.BoldOverride = -1; break;
             case "CellCorner": cell.CornerRadiusOverride = -1; break;
             case "CellBorderThickness": cell.BorderThicknessOverride = -1; break;
-            case "CellBorderColor": cell.BorderColorOverride = ""; break;
+
+            // 颜色项清除时，顺手把这个颜色的**循环覆盖也清掉** —— 用户按「清除」的意思是
+            // "这一项恢复跟随全局"，只清颜色不清循环的话，会出现"颜色跟全局了、循环却还单设着"的怪状态
+            case "CellText":
+                cell.TextColorOverride = "";
+                cell.TextColorCycleOverride = null;
+                break;
+            case "CellBg":
+                cell.BackgroundColorOverride = "";
+                cell.BackgroundColorCycleOverride = null;
+                break;
+            case "CellPressedText":
+                cell.PressedTextColorOverride = "";
+                cell.PressedTextColorCycleOverride = null;
+                break;
+            case "CellPressedBg":
+                cell.PressedBackgroundColorOverride = "";
+                cell.PressedBackgroundColorCycleOverride = null;
+                break;
+            case "CellBorderColor":
+                cell.BorderColorOverride = "";
+                cell.BorderColorCycleOverride = null;
+                break;
+            case "CellShadowColor":
+                cell.ShadowColorOverride = "";
+                cell.ShadowColorCycleOverride = null;
+                break;
+
             case "CellShadowEnabled": cell.ShadowEnabledOverride = -1; break;
-            case "CellShadowColor": cell.ShadowColorOverride = ""; break;
             case "CellShadowBlur": cell.ShadowBlurOverride = -1; break;
             case "CellShadowOffset": cell.ShadowOffsetOverride = -1; break;
             case "CellShadowOpacity": cell.ShadowOpacityOverride = -1; break;
             case "CellShadowDirection": cell.ShadowDirectionOverride = -1; break;
         }
+
+        // 上面那几个 case 会带掉循环覆盖，这里把下拉框重新填一遍
+        RefreshCellCycleCombos();
 
         RefreshColorPreviews();
         AfterCellLookChanged();
@@ -1339,6 +1624,8 @@ public partial class KeyDisplayPage : System.Windows.Controls.UserControl
     private void AfterColorChanged()
     {
         RefreshColorPreviews();
+        RefreshCycleToggles();
+        RefreshCellCycleCombos();
         RefreshAllCanvasLooks();
         _plugin.ApplyAppearanceNow();
         ScheduleSave();
@@ -1387,6 +1674,26 @@ public partial class KeyDisplayPage : System.Windows.Controls.UserControl
             case "CellBorderColor": if (cell is not null) cell.BorderColorOverride = value; break;
             case "CellShadowColor": if (cell is not null) cell.ShadowColorOverride = value; break;
         }
+    }
+
+    /// <summary>
+    /// 画布预览用的循环：每键覆盖优先于全局，跟悬浮窗那边同一套规则。
+    /// （窗口侧的同名逻辑在 <c>KeyOverlayWindow.ResolveCycle</c> —— 两边都得有，
+    ///   因为它们一个在页面一个在窗口，但规则必须一致。）
+    /// </summary>
+    private static bool ResolveCycleFor(bool? cellOverride, bool global) => cellOverride ?? global;
+
+    /// <summary>按循环开关算最终要画的颜色（关着就是原色）。</summary>
+    private static Color CycleIf(string hex, Color fallback, bool cycle, double progress)
+    {
+        var color = MakeColor(hex, fallback);
+
+        if (!cycle)
+        {
+            return color;
+        }
+
+        return ColorCycle.Shift(color, progress);
     }
 
     private void RefreshColorPreviews()

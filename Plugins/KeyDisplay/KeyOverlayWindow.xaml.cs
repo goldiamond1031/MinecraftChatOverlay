@@ -56,6 +56,15 @@ public partial class KeyOverlayWindow : Window
 
     private readonly List<CellVisual> _cells = new();
 
+    /// <summary>
+    /// 彩色循环走到哪了（0~1 表示绕色环一圈的比例）。
+    ///
+    /// 由插件侧按真实时间推进后塞进来（<see cref="SetCycleProgress"/>），窗口只负责按它算颜色。
+    /// 为什么不在窗口里自己计时：循环是"所有开了循环的颜色一起转"，
+    /// 各处各自计时会互相跑偏、看着像不同步。
+    /// </summary>
+    private double _cycleProgress;
+
     /// <summary>给阴影留的余量（窗口边缘会裁掉超出的效果）。</summary>
     private double _shadowPadding;
 
@@ -77,6 +86,9 @@ public partial class KeyOverlayWindow : Window
         RootCanvas.Children.Clear();
         _cells.Clear();
 
+        // 整体缩放。格子数据本身不动，这里只是每次重建时乘一遍 —— 滑块来回拖不会累积误差
+        var overall = OverallScaleOf(settings);
+
         // 窗口要给阴影和果冻过冲留余量（按所有格子里最费空间的那个算，含各自的覆盖）
         _shadowPadding = PaddingOf(settings);
         RootCanvas.Margin = new Thickness(_shadowPadding);
@@ -84,7 +96,7 @@ public partial class KeyOverlayWindow : Window
         foreach (var cell in settings.Keys)
         {
             // 每个格子的外观单独解析：自己覆盖了就用覆盖，没覆盖就用全局
-            var look = ResolveLook(cell, settings);
+            var look = ResolveLook(cell, settings, CycleProgressFor(settings));
 
             var text = new TextBlock
             {
@@ -92,7 +104,7 @@ public partial class KeyOverlayWindow : Window
                     ? VirtualKeys.Name(cell.VirtualKey)
                     : cell.DisplayText,
                 FontFamily = look.Font,
-                FontSize = look.FontSize,
+                FontSize = look.FontSize * overall,
                 FontWeight = look.Weight,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
@@ -112,7 +124,7 @@ public partial class KeyOverlayWindow : Window
                 {
                     Text = "0",
                     FontFamily = look.Font,
-                    FontSize = Math.Max(8, look.FontSize * 0.62),
+                    FontSize = Math.Max(8, look.FontSize * 0.62 * overall),
                     FontWeight = look.Weight,
                     HorizontalAlignment = HorizontalAlignment.Center,
                     TextAlignment = TextAlignment.Center,
@@ -128,24 +140,34 @@ public partial class KeyOverlayWindow : Window
                 };
             }
 
-            // 果冻效果走 RenderTransform 缩放（不触碰布局），原点设在格子中心
-            var scale = new ScaleTransform(1, 1);
+            // 果冻效果走 RenderTransform 缩放（不触碰布局），原点设在格子中心。
+            // 注意这跟上面的「整体缩放」是两码事：这个是按下时的动画，那个是静态显示尺寸。
+            var popScale = new ScaleTransform(1, 1);
 
             var border = new Border
             {
-                Width = Math.Max(8, cell.Width),
-                Height = Math.Max(8, cell.Height),
-                CornerRadius = look.Corner,
-                BorderThickness = look.BorderThickness,
+                Width = Math.Max(8, cell.Width * overall),
+                Height = Math.Max(8, cell.Height * overall),
+
+                // 圆角、边框、阴影的体积感也要跟着整体缩放，
+                // 不然放大后圆角显小、边框显细、阴影显浅，看着就不像"同一个东西变大了"
+                CornerRadius = new CornerRadius(look.Corner.TopLeft * overall,
+                                               look.Corner.TopRight * overall,
+                                               look.Corner.BottomRight * overall,
+                                               look.Corner.BottomLeft * overall),
+                BorderThickness = new Thickness(look.BorderThickness.Left * overall,
+                                                look.BorderThickness.Top * overall,
+                                                look.BorderThickness.Right * overall,
+                                                look.BorderThickness.Bottom * overall),
                 BorderBrush = look.BorderBrush,
-                Effect = look.Shadow,
+                Effect = ScaleShadow(look.Shadow, overall),
                 RenderTransformOrigin = new Point(0.5, 0.5),
-                RenderTransform = scale,
+                RenderTransform = popScale,
                 Child = content,
             };
 
-            Canvas.SetLeft(border, cell.X);
-            Canvas.SetTop(border, cell.Y);
+            Canvas.SetLeft(border, cell.X * overall);
+            Canvas.SetTop(border, cell.Y * overall);
             RootCanvas.Children.Add(border);
 
             var visual = new CellVisual
@@ -153,7 +175,7 @@ public partial class KeyOverlayWindow : Window
                 Root = border,
                 Text = text,
                 CpsText = cpsText,
-                Scale = scale,
+                Scale = popScale,
                 Model = cell,
                 IsDown = false,
             };
@@ -173,6 +195,10 @@ public partial class KeyOverlayWindow : Window
     /// </summary>
     public void ApplyAppearance(KeyDisplaySettings settings)
     {
+        // 整体缩放也在这条路径上生效 —— 它虽然改的是"尺寸"，但格子宽高在 Rebuild 时已经乘过了，
+        // 这里只负责把字号/圆角/边框/阴影跟上。不乘的话拖一下别的滑块就会把整体缩放抹平。
+        var overall = OverallScaleOf(settings);
+
         // 阴影 / 果冻幅度变了，窗口要留的余量也跟着变，否则会被边缘切掉
         var padding = PaddingOf(settings);
 
@@ -187,25 +213,86 @@ public partial class KeyOverlayWindow : Window
         foreach (var visual in _cells)
         {
             // 每个格子重新解析一遍（局部覆盖可能刚改过）
-            var look = ResolveLook(visual.Model, settings);
+            var look = ResolveLook(visual.Model, settings, CycleProgressFor(settings));
 
             visual.Text.FontFamily = look.Font;
-            visual.Text.FontSize = look.FontSize;
+            visual.Text.FontSize = look.FontSize * overall;
             visual.Text.FontWeight = look.Weight;
 
             if (visual.CpsText is not null)
             {
                 visual.CpsText.FontFamily = look.Font;
-                visual.CpsText.FontSize = Math.Max(8, look.FontSize * 0.62);
+                visual.CpsText.FontSize = Math.Max(8, look.FontSize * 0.62 * overall);
                 visual.CpsText.FontWeight = look.Weight;
             }
-            visual.Root.CornerRadius = look.Corner;
-            visual.Root.BorderThickness = look.BorderThickness;
+
+            visual.Root.Width = Math.Max(8, visual.Model.Width * overall);
+            visual.Root.Height = Math.Max(8, visual.Model.Height * overall);
+            visual.Root.CornerRadius = new CornerRadius(look.Corner.TopLeft * overall,
+                                                        look.Corner.TopRight * overall,
+                                                        look.Corner.BottomRight * overall,
+                                                        look.Corner.BottomLeft * overall);
+            visual.Root.BorderThickness = new Thickness(look.BorderThickness.Left * overall,
+                                                        look.BorderThickness.Top * overall,
+                                                        look.BorderThickness.Right * overall,
+                                                        look.BorderThickness.Bottom * overall);
             visual.Root.BorderBrush = look.BorderBrush;
-            visual.Root.Effect = look.Shadow;
+            visual.Root.Effect = ScaleShadow(look.Shadow, overall);
+
+            Canvas.SetLeft(visual.Root, visual.Model.X * overall);
+            Canvas.SetTop(visual.Root, visual.Model.Y * overall);
+
+            ApplyColors(visual, settings);
+        }
+
+        // 整体缩放（或字号）变了会改变内容包围盒，窗口要跟着重新贴合
+        ResizeToContent(settings);
+    }
+
+    // ===================== 彩色循环 =====================
+
+    /// <summary>
+    /// 插件侧推进了循环进度之后调这里：只**重刷颜色**，不重建视觉树、不动布局。
+    ///
+    /// 为什么单独开这条：循环是每秒一次的高频刷新，走 <see cref="Rebuild"/> 会每秒把整棵树重造一遍。
+    /// 走 <see cref="ApplyColors"/> 只是给几个元素换画笔，开销可以忽略。
+    /// </summary>
+    public void SetCycleProgress(double progress, KeyDisplaySettings settings)
+    {
+        _cycleProgress = progress;
+
+        // 没有任何一处开着循环 → 不必白刷（进度也顺手归零，免得关掉再开时"跳"一下）
+        if (!settings.AnyColorCycle)
+        {
+            return;
+        }
+
+        foreach (var visual in _cells)
+        {
             ApplyColors(visual, settings);
         }
     }
+
+    /// <summary>自检用：读第一个格子当前文字用的颜色（验彩色循环有没有真的接到画笔上）。</summary>
+    internal Color? FirstTextColor() => TextColorAt(0);
+
+    /// <summary>自检用：读第 <paramref name="index"/> 个格子当前**边框**用的颜色。</summary>
+    internal Color? BorderColorAt(int index) =>
+        (index >= 0 && index < _cells.Count
+            ? _cells[index].Root.BorderBrush as SolidColorBrush
+            : null)?.Color;
+
+    /// <summary>自检用：读第 <paramref name="index"/> 个格子当前**阴影**用的颜色（没开阴影返回 null）。</summary>
+    internal Color? ShadowColorAt(int index) =>
+        index >= 0 && index < _cells.Count
+            ? (_cells[index].Root.Effect as DropShadowEffect)?.Color
+            : null;
+
+    /// <summary>自检用：读第 <paramref name="index"/> 个格子当前文字用的颜色（验不同对象同不同步）。</summary>
+    internal Color? TextColorAt(int index) =>
+        (index >= 0 && index < _cells.Count
+            ? _cells[index].Text.Foreground as SolidColorBrush
+            : null)?.Color;
 
     /// <summary>一个格子解析完覆盖之后的有效外观。</summary>
     private sealed class CellLook
@@ -217,6 +304,18 @@ public partial class KeyOverlayWindow : Window
         public Thickness BorderThickness;
         public Brush BorderBrush = null!;
         public DropShadowEffect? Shadow;
+
+        /// <summary>边框颜色的**原始 hex**（没经过循环上色）—— 高频刷色路径要拿它重算。</summary>
+        public string BorderColorHex = "";
+
+        /// <summary>边框颜色循环开关（已解析过每键覆盖）。</summary>
+        public bool BorderCycleOn;
+
+        /// <summary>阴影颜色的**原始 hex**（没经过循环上色）。</summary>
+        public string ShadowColorHex = "";
+
+        /// <summary>阴影颜色循环开关（已解析过每键覆盖）。</summary>
+        public bool ShadowCycleOn;
     }
 
     /// <summary>
@@ -224,7 +323,48 @@ public partial class KeyOverlayWindow : Window
     ///
     /// Rebuild 和 ApplyAppearance 都走这里 —— 免得两处各写一遍解析逻辑，日后改一处漏一处。
     /// </summary>
-    private static CellLook ResolveLook(KeyCell cell, KeyDisplaySettings settings)
+    /// <param name="cycleProgress">
+    /// 彩色循环进度（0~1）。传 -1 表示"这次调用不算循环" —— 用于自检等需要拿到**原始颜色**的场合。
+    /// </param>
+    private static CellLook ResolveLook(KeyCell cell, KeyDisplaySettings settings, double cycleProgress)
+    {
+        var look = ResolveLookCore(cell, settings, cycleProgress);
+
+        var borderBrush = CycleBrushOf(
+            look.BorderColorHex, Colors.Transparent,
+            look.BorderCycleOn,
+            cycleProgress);
+
+        var effectiveShadowColor = CycleColorOf(
+            look.ShadowColorHex, Colors.Black,
+            look.ShadowCycleOn,
+            cycleProgress);
+
+        look.BorderBrush = borderBrush;
+        look.Shadow = look.Shadow
+            is null
+            ? null
+            : new DropShadowEffect
+            {
+                Color = effectiveShadowColor,
+                BlurRadius = look.Shadow.BlurRadius,
+                Opacity = look.Shadow.Opacity,
+                ShadowDepth = look.Shadow.ShadowDepth,
+                Direction = look.Shadow.Direction,
+            };
+
+        return look;
+    }
+
+    /// <summary>
+    /// 解析一个格子的外观，**但不算颜色循环**（边框色 / 阴影色原样带出、循环开关单独记着）。
+    ///
+    /// 为什么要把"颜色循环"从解析里拆出去：循环是每秒几十次的高频刷新，走 <see cref="ApplyColors"/>
+    /// 那条轻路径只换画笔；如果颜色在解析时就定死了，高频路径就得整份重新解析，
+    /// 而且——**边框和阴影会永远停在"解析那一刻"的颜色上**（这就是之前那个 bug：
+    /// 打开开关时刷成一次光谱色，之后再没人更新它）。
+    /// </summary>
+    private static CellLook ResolveLookCore(KeyCell cell, KeyDisplaySettings settings, double cycleProgress)
     {
         var fontName = string.IsNullOrWhiteSpace(cell.FontFamilyOverride)
             ? settings.FontFamily
@@ -255,6 +395,20 @@ public partial class KeyOverlayWindow : Window
         var shadowOpacity = cell.ShadowOpacityOverride < 0 ? settings.ShadowOpacity : cell.ShadowOpacityOverride;
         var shadowDirection = cell.ShadowDirectionOverride < 0 ? settings.ShadowDirection : cell.ShadowDirectionOverride;
 
+        // 彩色循环：边框、阴影各自看自己的开关（每键覆盖优先于全局）
+        var borderCycleOn = ResolveCycle(cell.BorderColorCycleOverride, settings.BorderColorCycle);
+        var shadowCycleOn = ResolveCycle(cell.ShadowColorCycleOverride, settings.ShadowColorCycle);
+
+        var borderBrush = CycleBrushOf(
+            borderColor, Colors.Transparent,
+            borderCycleOn,
+            cycleProgress);
+
+        var effectiveShadowColor = CycleColorOf(
+            shadowColor, Colors.Black,
+            shadowCycleOn,
+            cycleProgress);
+
         return new CellLook
         {
             Font = new FontFamily(string.IsNullOrWhiteSpace(fontName) ? "Microsoft YaHei UI" : fontName),
@@ -262,17 +416,90 @@ public partial class KeyOverlayWindow : Window
             Weight = bold ? FontWeights.Bold : FontWeights.Normal,
             Corner = new CornerRadius(Math.Max(0, corner)),
             BorderThickness = new Thickness(Math.Max(0, borderThickness)),
-            BorderBrush = new SolidColorBrush(ParseColor(borderColor, Colors.Transparent)),
+            BorderBrush = borderBrush,
+            BorderColorHex = borderColor,
+            BorderCycleOn = borderCycleOn,
+            ShadowColorHex = shadowColor,
+            ShadowCycleOn = shadowCycleOn,
             Shadow = shadowEnabled
                 ? new DropShadowEffect
                 {
-                    Color = ParseColor(shadowColor, Colors.Black),
+                    Color = effectiveShadowColor,
                     BlurRadius = Math.Max(0, shadowBlur),
                     Opacity = Math.Clamp(shadowOpacity, 0, 1),
                     ShadowDepth = Math.Max(0, shadowOffset),
                     Direction = ((shadowDirection % 360) + 360) % 360,
                 }
                 : null,
+        };
+    }
+
+    /// <summary>
+    /// 每键覆盖 vs 全局：覆盖设过就用覆盖，没设过（null）才看全局。
+    /// 跟其它覆盖项的"空 / 负数 = 跟随全局"是同一套约定。
+    /// </summary>
+    private static bool ResolveCycle(bool? cellOverride, bool global) =>
+        cellOverride ?? global;
+
+    /// <summary>按循环开关决定要用的颜色：关着就是原色，开着就往色相上推一格。</summary>
+    private static Color CycleColorOf(string hex, Color fallback, bool cycle, double progress)
+    {
+        var color = ParseColor(hex, fallback);
+
+        if (!cycle || progress < 0)
+        {
+            return color;
+        }
+
+        return ColorCycle.Shift(color, progress);
+    }
+
+    /// <summary>
+    /// 这次重建/刷外观时该用哪个循环进度。
+    ///
+    /// 只在**真有地方开着循环**时才把进度交出去 —— 否则拿原始颜色，
+    /// 免得"用户关了循环但进度残留在某处"这种状态下颜色对不上。
+    /// </summary>
+    private double CycleProgressFor(KeyDisplaySettings settings) =>
+        settings.AnyColorCycle ? _cycleProgress : -1;
+
+    /// <summary>同上，直接给画笔（边框、文字这些要的是一次性 Brush）。</summary>
+    private static Brush CycleBrushOf(string hex, Color fallback, bool cycle, double progress) =>
+        new SolidColorBrush(CycleColorOf(hex, fallback, cycle, progress));
+
+    /// <summary>非循环路径用的重载 —— 就是"这次不算循环"。</summary>
+    private static CellLook ResolveLook(KeyCell cell, KeyDisplaySettings settings) =>
+        ResolveLook(cell, settings, -1);
+
+    /// <summary>
+    /// 整体显示缩放，夹在 0.5 ~ 2.0。
+    ///
+    /// 下界 0.5 是防呆：再小字就看不清了，用户会以为插件坏了。
+    /// 上界 2.0 是防溢出：窗口是按内容包围盒算的，放到 4 倍一个 46px 的格子就 184px，
+    /// 几个格子铺开能占掉小半个屏幕，还容易盖住游戏里要紧的东西。
+    /// </summary>
+    internal static double OverallScaleOf(KeyDisplaySettings settings) =>
+        Math.Clamp(settings.OverallScale <= 0 ? 1.0 : settings.OverallScale, 0.5, 2.0);
+
+    /// <summary>
+    /// 阴影跟着整体缩放。模糊和偏移按比例放大，不透明度不动
+    /// （放大阴影的同时加深颜色会显得脏，跟 ModernControls 里"去掉 Effect 免得阴影显脏"是同一个考虑）。
+    /// </summary>
+    private static DropShadowEffect? ScaleShadow(DropShadowEffect? source, double scale)
+    {
+        if (source is null || Math.Abs(scale - 1.0) < 0.001)
+        {
+            return source;
+        }
+
+        return new DropShadowEffect
+        {
+            Color = source.Color,
+            BlurRadius = source.BlurRadius * scale,
+            ShadowDepth = source.ShadowDepth * scale,
+            Direction = source.Direction,
+            Opacity = source.Opacity,
+            RenderingBias = source.RenderingBias,
         };
     }
 
@@ -285,9 +512,12 @@ public partial class KeyOverlayWindow : Window
         double maxCell = 0;
         double maxShadow = 0;
 
+        // 留白是给"缩放后的格子"留的，所以也要乘整体缩放 —— 否则放大之后阴影会被窗口边缘切掉
+        var overall = OverallScaleOf(settings);
+
         foreach (var cell in settings.Keys)
         {
-            maxCell = Math.Max(maxCell, Math.Max(cell.Width, cell.Height));
+            maxCell = Math.Max(maxCell, Math.Max(cell.Width, cell.Height) * overall);
 
             var enabled = cell.ShadowEnabledOverride < 0
                 ? settings.ShadowEnabled
@@ -301,7 +531,7 @@ public partial class KeyOverlayWindow : Window
             var blur = cell.ShadowBlurOverride < 0 ? settings.ShadowBlur : cell.ShadowBlurOverride;
             var offset = cell.ShadowOffsetOverride < 0 ? settings.ShadowOffset : cell.ShadowOffsetOverride;
 
-            maxShadow = Math.Max(maxShadow, Math.Max(0, blur) + Math.Max(0, offset) + 2);
+            maxShadow = Math.Max(maxShadow, (Math.Max(0, blur) + Math.Max(0, offset) + 2) * overall);
         }
 
         // 果冻回弹会冲过原尺寸，按 25% 留（劲度拉到最低时振荡幅度相当大）
@@ -316,10 +546,15 @@ public partial class KeyOverlayWindow : Window
         double width = 0;
         double height = 0;
 
+        // ⚠ 包围盒必须按**缩放后**的坐标算：格子是按 cell.X * overall 摆的，
+        // 这里要是用原始值，放大后内容就会超出窗口边界、被窗口边缘裁掉
+        // （表现是"放大之后有一圈像边框的东西把内容挡住"）。
+        var overall = OverallScaleOf(settings);
+
         foreach (var cell in settings.Keys)
         {
-            width = Math.Max(width, cell.X + cell.Width);
-            height = Math.Max(height, cell.Y + cell.Height);
+            width = Math.Max(width, (cell.X + cell.Width) * overall);
+            height = Math.Max(height, (cell.Y + cell.Height) * overall);
         }
 
         Width = Math.Max(8, width + _shadowPadding * 2);
@@ -481,6 +716,10 @@ public partial class KeyOverlayWindow : Window
     /// <summary>自检用：内容左上角在屏幕上的位置（= 窗口位置 + 留白）。改留白时它应该纹丝不动。</summary>
     internal Point ContentOrigin => new Point(Left + _shadowPadding, Top + _shadowPadding);
 
+    /// <summary>自检用：第一个格子的实际渲染尺寸。整体缩放改的就是它。</summary>
+    internal Size FirstCellSize() =>
+        _cells.Count > 0 ? new Size(_cells[0].Root.Width, _cells[0].Root.Height) : new Size(0, 0);
+
     /// <summary>自检用：某个键的格子现在生效的字号。</summary>
     internal double GetCellFontSize(int virtualKey)
     {
@@ -544,9 +783,18 @@ public partial class KeyOverlayWindow : Window
         }
     }
 
-    private static void ApplyColors(CellVisual visual, KeyDisplaySettings settings)
+    private void ApplyColors(CellVisual visual, KeyDisplaySettings settings)
     {
         var cell = visual.Model;
+
+        // 文字 / 背景各自的循环开关（每键覆盖优先于全局）
+        var textCycle = ResolveCycle(
+            visual.IsDown ? cell.PressedTextColorCycleOverride : cell.TextColorCycleOverride,
+            visual.IsDown ? settings.PressedTextColorCycle : settings.TextColorCycle);
+
+        var bgCycle = ResolveCycle(
+            visual.IsDown ? cell.PressedBackgroundColorCycleOverride : cell.BackgroundColorCycleOverride,
+            visual.IsDown ? settings.PressedBackgroundColorCycle : settings.BackgroundColorCycle);
 
         var textHex = visual.IsDown
             ? Pick(cell.PressedTextColorOverride, settings.PressedTextColor)
@@ -556,7 +804,7 @@ public partial class KeyOverlayWindow : Window
             ? Pick(cell.PressedBackgroundColorOverride, settings.PressedBackgroundColor)
             : Pick(cell.BackgroundColorOverride, settings.IdleBackgroundColor);
 
-        var textBrush = new SolidColorBrush(ParseColor(textHex, Colors.White));
+        var textBrush = new SolidColorBrush(CycleColorOf(textHex, Colors.White, textCycle, _cycleProgress));
 
         visual.Text.Foreground = textBrush;
 
@@ -567,7 +815,56 @@ public partial class KeyOverlayWindow : Window
             visual.CpsText.Opacity = 0.75;
         }
 
-        visual.Root.Background = new SolidColorBrush(ParseColor(backgroundHex, Colors.Transparent));
+        visual.Root.Background = new SolidColorBrush(
+            CycleColorOf(backgroundHex, Colors.Transparent, bgCycle, _cycleProgress));
+
+        // ⚠ 边框和阴影也必须在这条路径上刷 —— 它们跟文字/背景一样是要跟着循环动的颜色。
+        //
+        // 这里曾经漏掉过：边框色和阴影色只在 Rebuild / ApplyAppearance 里算过一次，
+        // 而彩色循环的高频路径走的是本方法（Rebuild 期间压根不会被调）。
+        // 表现就是"打开开关后边框/阴影变成当时那个光谱色，然后固定不动"。
+        // 留意 `AnyColorCycle` 只统计"有没有任何一处开着循环"，不代表本格子的边框/阴影开着；
+        // 所以这里要各自再判一次开关，别让没开循环的格子白刷（也免得破坏它原来的颜色）。
+        if (_cycleProgress >= 0)
+        {
+            var look = ResolveLookCore(cell, settings, -1);
+
+            if (look.BorderCycleOn || visual.Root.BorderBrush is null)
+            {
+                visual.Root.BorderBrush = new SolidColorBrush(
+                    CycleColorOf(look.BorderColorHex, Colors.Transparent, look.BorderCycleOn, _cycleProgress));
+            }
+
+            if (look.ShadowCycleOn)
+            {
+                visual.Root.Effect = ScaleShadow(BuildShadow(look, _cycleProgress), OverallScaleOf(settings));
+            }
+        }
+    }
+
+    /// <summary>
+    /// 按解析结果（可选：带上循环换色）造一个阴影效果。
+    /// 抽出来是为了让「重建时的静态阴影」和「循环时的高频重算」走同一套参数，不会两处跑偏。
+    /// </summary>
+    private static DropShadowEffect? BuildShadow(CellLook look, double cycleProgress)
+    {
+        if (look.Shadow is null)
+        {
+            return null;
+        }
+
+        var color = cycleProgress >= 0
+            ? CycleColorOf(look.ShadowColorHex, Colors.Black, look.ShadowCycleOn, cycleProgress)
+            : look.Shadow.Color;
+
+        return new DropShadowEffect
+        {
+            Color = color,
+            BlurRadius = look.Shadow.BlurRadius,
+            Opacity = look.Shadow.Opacity,
+            ShadowDepth = look.Shadow.ShadowDepth,
+            Direction = look.Shadow.Direction,
+        };
     }
 
     /// <summary>
