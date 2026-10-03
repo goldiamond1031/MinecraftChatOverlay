@@ -1,10 +1,10 @@
 {
     "schemaVersion": 1,
-    "id": "2026-10-3-1100",
-    "updatedAt": "2026-10-03T11:00:55+08:00",
+    "id": "2026-10-3-1809",
+    "updatedAt": "2026-10-03T18:09:07+08:00",
     "enabled": true,
-    "title": "新插件可用,软件不用更新",
-    "body": "插件市场上新按键显示插件\n出现bug务必及时反馈",
+    "title": "按键显示更新",
+    "body": "新增调整整体大小的滑动控件\n新增RGB轮换",
     "link": "https://github.com/goldiamond1031/MinecraftChatOverlay/releases",
     "linkText": "无可用更新"
 }
