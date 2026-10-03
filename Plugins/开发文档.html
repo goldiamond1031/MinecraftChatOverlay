@@ -1,0 +1,2127 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MCO 插件开发文档（apiVersion 1）</title>
+<style>
+:root{
+  --bg:#EDEDF1; --surface:#FFFFFF; --surface2:#F4F4F7; --surface3:#EAEAEF;
+  --border:#E7E7EC; --border-strong:#D4D4DB;
+  --text:#2A2A31; --text2:#6E6E7A; --text3:#9B9BA7;
+  --primary:#7C6CF0; --primary-hover:#A18CFF; --primary-soft:rgba(124,108,240,.12);
+  --accent:#FF8FBE; --mint:#3FCFA9; --mint-soft:rgba(63,207,169,.15);
+  --danger:#FF6B81; --danger-soft:rgba(255,107,129,.12);
+  --amber:#FFB547; --amber-soft:rgba(255,181,71,.15);
+  --sky:#57C5F2;
+  --code-bg:#14121F; --code-text:#D8D2F5; --code-dim:#8B84B8;
+  --shadow:0 1px 3px rgba(30,30,40,.06),0 8px 24px rgba(30,30,40,.06);
+  --radius:14px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  font-family:"Segoe UI","Microsoft YaHei UI",system-ui,sans-serif;
+  background:var(--bg); color:var(--text); font-size:15px; line-height:1.75;
+}
+a{color:var(--primary); text-decoration:none}
+a:hover{color:var(--primary-hover); text-decoration:underline}
+
+/* ===== 布局 ===== */
+.layout{display:flex;max-width:1280px;margin:0 auto;align-items:flex-start}
+nav.toc{
+  position:sticky;top:0;width:262px;flex:none;height:100vh;overflow-y:auto;
+  padding:28px 10px 40px 22px;border-right:1px solid var(--border);
+  scrollbar-width:thin;
+}
+nav.toc::-webkit-scrollbar{width:5px}
+nav.toc::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:3px}
+main{flex:1;min-width:0;padding:36px 44px 120px}
+@media (max-width:980px){
+  .layout{display:block}
+  nav.toc{position:static;width:auto;height:auto;border-right:none;border-bottom:1px solid var(--border)}
+  main{padding:28px 18px 100px}
+}
+
+/* ===== 导航 ===== */
+.toc .brand{font-size:17px;font-weight:800;margin-bottom:4px;letter-spacing:.2px}
+.toc .brand .v{color:var(--primary)}
+.toc .sub{font-size:12px;color:var(--text3);margin-bottom:20px}
+.toc a.tlink{
+  display:block;padding:6px 10px;margin:1px 0;border-radius:9px;
+  font-size:13.5px;color:var(--text2);font-weight:600;
+}
+.toc a.tlink:hover{background:var(--surface2);color:var(--text);text-decoration:none}
+.toc a.tlink.active{background:var(--primary-soft);color:var(--primary)}
+.toc a.tlink.lv2{padding-left:24px;font-size:12.5px;font-weight:500}
+.toc .group{margin:16px 0 4px;font-size:11px;color:var(--text3);font-weight:700;
+  letter-spacing:.8px;text-transform:uppercase;padding-left:10px}
+
+/* ===== 文章结构 ===== */
+header.hero{
+  background:linear-gradient(135deg,#7C6CF0 0%,#9D8BFF 55%,#FF8FBE 130%);
+  color:#fff;border-radius:20px;padding:42px 44px 38px;margin-bottom:30px;
+  box-shadow:0 12px 40px rgba(124,108,240,.30);
+}
+header.hero h1{font-size:30px;font-weight:800;letter-spacing:.3px}
+header.hero p{margin-top:10px;font-size:14.5px;opacity:.94;max-width:640px}
+header.hero .meta{margin-top:18px;display:flex;gap:10px;flex-wrap:wrap}
+header.hero .chip{
+  background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.28);
+  border-radius:999px;padding:3px 13px;font-size:12.5px;font-weight:600;
+}
+section{margin:44px 0 0}
+h2{
+  font-size:23px;font-weight:800;padding-bottom:12px;margin-bottom:18px;
+  border-bottom:2px solid var(--border);
+  display:flex;align-items:baseline;gap:12px;
+}
+h2 .no{color:var(--primary);font-size:15px;font-weight:800;font-family:Consolas,monospace}
+h3{font-size:17.5px;font-weight:750;margin:30px 0 10px}
+h3 .no{color:var(--primary);font-family:Consolas,monospace;font-size:13.5px;margin-right:7px}
+h4{font-size:15px;font-weight:700;margin:20px 0 8px;color:var(--text)}
+p{margin:9px 0}
+ul,ol{padding-left:24px;margin:9px 0}
+li{margin:4px 0}
+strong{font-weight:700}
+code.inline{
+  font-family:Consolas,"Cascadia Mono",monospace;font-size:.88em;
+  background:var(--surface3);border:1px solid var(--border);
+  border-radius:6px;padding:1px 6px;color:#5B4BC4;white-space:nowrap;
+}
+
+/* ===== 卡片 / 提示框 ===== */
+.card{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  padding:20px 24px;margin:14px 0;box-shadow:var(--shadow);
+}
+.notice{border-radius:12px;padding:13px 18px;margin:14px 0;font-size:14px;border:1px solid;display:flex;gap:10px}
+.notice .ic{flex:none;font-weight:800;font-size:15px;line-height:1.6}
+.notice b{font-weight:750}
+.notice.info{background:var(--primary-soft);border-color:rgba(124,108,240,.28)}
+.notice.info .ic{color:var(--primary)}
+.notice.warn{background:var(--amber-soft);border-color:rgba(255,181,71,.4)}
+.notice.warn .ic{color:var(--amber)}
+.notice.danger{background:var(--danger-soft);border-color:rgba(255,107,129,.32)}
+.notice.danger .ic{color:var(--danger)}
+.notice.ok{background:var(--mint-soft);border-color:rgba(63,207,169,.35)}
+.notice.ok .ic{color:var(--mint)}
+
+/* ===== 表格 ===== */
+table{border-collapse:collapse;width:100%;margin:14px 0;font-size:13.5px;background:var(--surface)}
+th{
+  text-align:left;padding:9px 14px;background:var(--surface2);color:var(--text2);
+  font-weight:700;font-size:12.5px;border-bottom:2px solid var(--border-strong);
+}
+td{padding:9px 14px;border-bottom:1px solid var(--border);vertical-align:top}
+tr:last-child td{border-bottom:none}
+td code, th code{font-family:Consolas,monospace;font-size:.9em;color:#5B4BC4}
+td code.k{font-weight:600}
+.scrollx{overflow-x:auto;border:1px solid var(--border);border-radius:12px;margin:14px 0}
+.scrollx table{margin:0;border:none}
+.scrollx th:first-child{border-top-left-radius:11px}
+.scrollx th:last-child{border-top-right-radius:11px}
+
+/* ===== 代码块 ===== */
+.codeblock{
+  position:relative;background:var(--code-bg);border-radius:13px;margin:14px 0;
+  box-shadow:var(--shadow);overflow:hidden;
+}
+.codeblock .bar{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:8px 10px 8px 18px;background:rgba(255,255,255,.05);
+  border-bottom:1px solid rgba(255,255,255,.08);
+}
+.codeblock .lang{
+  font-family:Consolas,monospace;font-size:11.5px;color:var(--code-dim);
+  letter-spacing:1px;font-weight:700;
+}
+.codeblock .copy{
+  background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);color:#CFC9F5;
+  font-size:11.5px;padding:3px 12px;border-radius:7px;cursor:pointer;font-family:inherit;
+}
+.codeblock .copy:hover{background:rgba(255,255,255,.16)}
+.codeblock pre{
+  padding:16px 18px;overflow-x:auto;font-size:13px;line-height:1.62;
+  font-family:Consolas,"Cascadia Mono","Microsoft YaHei UI",monospace;color:var(--code-text);
+  scrollbar-width:thin;
+}
+.codeblock pre::-webkit-scrollbar{height:8px}
+.codeblock pre::-webkit-scrollbar-thumb{background:#3A3455;border-radius:4px}
+.codeblock pre .c{color:#776F9E}            /* 注释 */
+.codeblock pre .k{color:#9DB8FF}            /* 关键字 */
+.codeblock pre .s{color:#9BE7C4}            /* 字符串 */
+.codeblock pre .a{color:#FF8FBE}            /* 属性/标签 */
+.codeblock pre .n{color:#FFC069}            /* 数字 */
+
+/* ===== 徽标 ===== */
+.chip-demo{
+  display:inline-flex;align-items:center;border-radius:9px;padding:3px 11px;
+  font-size:12.5px;font-weight:600;margin:2px 6px 2px 0;
+}
+.tok{
+  display:inline-flex;align-items:center;gap:7px;border:1px solid var(--border);
+  border-radius:9px;padding:5px 11px;margin:3px 5px 3px 0;font-size:12.5px;
+  font-family:Consolas,monospace;background:var(--surface);font-weight:600;
+}
+.tok .dot{width:13px;height:13px;border-radius:4.5px;flex:none;border:1px solid rgba(0,0,0,.12)}
+.tok .hex{color:var(--text3);font-size:11px;font-weight:400}
+
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media (max-width:1100px){.grid2{grid-template-columns:1fr}}
+
+/* 控件效果小样 */
+.sample{
+  border:1px dashed var(--border-strong);border-radius:12px;background:var(--surface);
+  padding:16px 18px;margin:12px 0;
+}
+.sample .lbl{font-size:11.5px;color:var(--text3);font-weight:700;margin-bottom:10px;letter-spacing:.5px}
+
+kbd{
+  font-family:Consolas,monospace;font-size:12px;background:var(--surface2);
+  border:1px solid var(--border-strong);border-bottom-width:2px;border-radius:6px;padding:1px 7px;
+}
+.divider{border:none;border-top:1px solid var(--border);margin:26px 0}
+footer{margin-top:70px;padding-top:22px;border-top:2px solid var(--border);
+  color:var(--text3);font-size:12.5px}
+.checklist{list-style:none;padding-left:0}
+.checklist li{padding:7px 0 7px 32px;position:relative;border-bottom:1px dashed var(--border)}
+.checklist li::before{
+  content:"✓";position:absolute;left:4px;top:7px;color:var(--primary);
+  font-weight:800;font-size:15px;
+}
+.checklist li.warnitem::before{content:"!";color:var(--danger)}
+#backtop{
+  position:fixed;right:26px;bottom:26px;width:42px;height:42px;border-radius:13px;
+  background:var(--surface);border:1px solid var(--border-strong);box-shadow:var(--shadow);
+  color:var(--text2);font-size:17px;cursor:pointer;display:none;z-index:50;
+}
+#backtop:hover{color:var(--primary);border-color:var(--primary)}
+</style>
+</head>
+<body>
+<div class="layout">
+
+<!-- ==================== 侧边导航 ==================== -->
+<nav class="toc" id="toc">
+  <div class="brand">MCO 插件开发文档</div>
+  <div class="sub">MinecraftChatOverlay · apiVersion 1</div>
+
+  <div class="group">上手</div>
+  <a class="tlink" href="#s0">0 · 先建立三个认知</a>
+  <a class="tlink" href="#s1">1 · 三十分钟写一个能跑的</a>
+
+  <div class="group">规范</div>
+  <a class="tlink" href="#s2">2 · plugin.json 完整规范</a>
+  <a class="tlink" href="#s3">3 · 生命周期</a>
+  <a class="tlink" href="#s4">4 · 契约参考</a>
+
+  <div class="group">界面</div>
+  <a class="tlink" href="#s5">5 · 页面系统</a>
+  <a class="tlink" href="#s6">6 · 控件样式大全 ★</a>
+  <a class="tlink lv2" href="#s6-1">6.1 总原则与颜色 token</a>
+  <a class="tlink lv2" href="#s6-2">6.2 卡片</a>
+  <a class="tlink lv2" href="#s6-3">6.3 文本</a>
+  <a class="tlink lv2" href="#s6-4">6.4 开关</a>
+  <a class="tlink lv2" href="#s6-5">6.5 按钮</a>
+  <a class="tlink lv2" href="#s6-6">6.6 滑动条</a>
+  <a class="tlink lv2" href="#s6-7">6.7 下拉框</a>
+  <a class="tlink lv2" href="#s6-8">6.8 文本框</a>
+  <a class="tlink lv2" href="#s6-9">6.9 调色板</a>
+  <a class="tlink lv2" href="#s6-10">6.10 芯片与徽标</a>
+  <a class="tlink lv2" href="#s6-11">6.11 列表</a>
+  <a class="tlink lv2" href="#s6-12">6.12 一行设置·组装模板</a>
+
+  <div class="group">进阶</div>
+  <a class="tlink" href="#s7">7 · 配置持久化</a>
+  <a class="tlink" href="#s8">8 · 自己开窗口（悬浮窗）</a>
+
+  <div class="group">发布</div>
+  <a class="tlink" href="#s9">9 · 能力与红线</a>
+  <a class="tlink" href="#s10">10 · 打包与分发</a>
+
+  <div class="group">调试</div>
+  <a class="tlink" href="#s11">11 · 调试手册</a>
+  <a class="tlink" href="#s12">12 · 常见坑速查</a>
+  <a class="tlink" href="#s13">13 · 参考实现</a>
+  <a class="tlink" href="#s14">14 · AI 开发检查清单</a>
+</nav>
+
+<!-- ==================== 正文 ==================== -->
+<main id="top">
+
+<header class="hero">
+  <h1>MCO 插件开发文档</h1>
+  <p>给 MinecraftChatOverlay（MCO）写插件的一切：从零跑起来、和宿主长一个样的控件模板、
+  悬浮窗的 Win32 要点、调试手法，以及踩过的每一个坑。</p>
+  <div class="meta">
+    <span class="chip">apiVersion 1</span>
+    <span class="chip">.NET 8 · WPF</span>
+    <span class="chip">面向真人 &amp; AI 双读者</span>
+  </div>
+</header>
+
+<!-- ============ 双受众导读 ============ -->
+<div class="card" id="audience">
+  <h3 style="margin-top:0">这份文档怎么读</h3>
+  <div class="grid2">
+    <div>
+      <h4>👤 给真人读者</h4>
+      <p>按章节顺序读就是正常的学习路径：<b>0 → 1</b> 建立认知并跑通第一个插件；
+      <b>2~4</b> 查规范；<b>5~6</b> 做界面（第 6 章每节都有可直接复制的 XAML 模板）；
+      <b>7~8</b> 做持久化和悬浮窗；<b>12</b> 是踩坑速查表，出问题先翻它。</p>
+      <p>不熟 WPF 也能写：第 1 章的表单式页面<b>一行 XAML 都不用写</b>，宿主替你画。</p>
+    </div>
+    <div>
+      <h4>🤖 给 AI 读者（辅助编程的智能体）</h4>
+      <p>你被要求写一个 MCO 插件。请遵守：</p>
+      <ul>
+        <li>先读 <a href="#s0">第 0 章</a>（三条铁律）和 <a href="#s14">第 14 章检查清单</a>；</li>
+        <li>界面控件直接复制 <a href="#s6">第 6 章</a> 的模板，<b>样式引用一律用 <code class="inline">DynamicResource</code></b>，不要自造样式；</li>
+        <li>悬浮窗照抄 <a href="#s8">第 8 章</a> 模板，Win32 三件套缺一不可；</li>
+        <li>写「值变化即保存」的逻辑必须配 <code class="inline">_loading</code> 闸门（<a href="#s7">第 7 章</a>）；</li>
+        <li>提交前对照 <a href="#s14">第 14 章检查清单</a> 逐条自查，再交给用户实测。</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================ -->
+<!-- 0. 三个认知 -->
+<!-- ================================================================ -->
+<section id="s0">
+<h2><span class="no">00</span>先建立三个认知</h2>
+
+<h3><span class="no">0.1</span>插件是一个独立的 .NET 程序，跑在 MCO 的进程里</h3>
+<p>插件编译成自己的 dll，由宿主用 AssemblyLoadContext 隔离加载，和主程序同进程、
+<b>权限与主程序完全相同</b>——它能读写文件、联网、操作窗口。所以装一个插件等于
+把主程序的权限交给它，<b>安装即信任</b>。反过来说：你自己写的插件想做什么都可以做，
+不需要「申请权限」这个环节。</p>
+
+<h3><span class="no">0.2</span>契约是唯一官方接口，永远不要引用主程序 exe</h3>
+<p>宿主暴露给插件的全部能力都在契约程序集
+<code class="inline">MinecraftChatOverlay.Plugin.Abstractions.dll</code> 里
+（源码是 <code class="inline">Plugins/Abstractions/PluginApi.cs</code>，一个文件，两百多行）。
+插件的 csproj <b>只引用它</b>，绝不要引用主程序 exe——那会让你绑死在某个内部实现上，
+主程序一改你就碎，而且宿主根本不保证内部类型可访问。</p>
+<div class="notice danger"><span class="ic">⛔</span><div>
+<b>铁律一：</b>插件工程里只出现 <code class="inline">ProjectReference</code> 或
+<code class="inline">Compile Include</code> 到契约（Abstractions），<b>任何情况下都不引用主程序 exe / 主程序工程</b>。
+需要「和宿主一样的界面」不是靠引用它，而是靠第 6 章的资源键。
+</div></div>
+<p>契约的版本号是 <code class="inline">PluginApi.Version</code>（当前 = 1）。
+宿主只加载 <b>ApiVersion 完全相同</b> 的插件，不匹配直接拒装并说明原因。
+契约演进的原则是<b>只增不减不改签名</b>——已发布插件不能因为宿主升级而碎。</p>
+
+<h3><span class="no">0.3</span>宿主管生杀，插件要经得起「被处理」</h3>
+<ul>
+  <li><code class="inline">Initialize</code> 抛异常 → 插件被标成「加载失败」，主程序不受影响；</li>
+  <li>页面 <code class="inline">ContentFactory</code> 抛异常 → 该页显示出错信息，主程序不受影响；</li>
+  <li><code class="inline">Shutdown</code> 可能被调用<b>多次</b>（禁用、卸载、退出都会调）→ 必须写成幂等的；</li>
+  <li>「禁用」≠「卸载」：禁用只是不再调用你的页面与消息事件，dll 还在内存里；卸载会删掉你的整个数据目录。</li>
+</ul>
+<div class="notice warn"><span class="ic">⚠️</span><div>
+<b>铁律二：</b>自己开的窗口、定时器、线程、事件订阅，全部要在 <code class="inline">Shutdown</code> 里收干净。
+收不干净的典型症状：插件明明禁用了，悬浮窗还飘在游戏上；日志里还在刷消息。
+</div></div>
+</section>
+
+<!-- ================================================================ -->
+<!-- 1. 三十分钟 -->
+<!-- ================================================================ -->
+<section id="s1">
+<h2><span class="no">01</span>三十分钟写一个能跑的</h2>
+<p>目标：一个「收到聊天消息就在右下角弹提示」的最小插件。不需要写任何 XAML。</p>
+
+<h3><span class="no">1.1</span>目录结构</h3>
+<div class="codeblock"><div class="bar"><span class="lang">TEXT</span><button class="copy">复制</button></div><pre>MyFirstPlugin/
+├── MyFirstPlugin.csproj
+├── plugin.json
+└── MyFirstPlugin.cs        ← 一个文件就够</pre></div>
+
+<h3><span class="no">1.2</span>工程文件</h3>
+<div class="codeblock"><div class="bar"><span class="lang">XML · MyFirstPlugin.csproj</span><button class="copy">复制</button></div><pre>&lt;Project Sdk="Microsoft.NET.Sdk"&gt;
+  &lt;PropertyGroup&gt;
+    &lt;TargetFramework&gt;net8.0-windows&lt;/TargetFramework&gt;
+    &lt;Nullable&gt;enable&lt;/Nullable&gt;
+    &lt;ImplicitUsings&gt;enable&lt;/ImplicitUsings&gt;
+    &lt;UseWPF&gt;true&lt;/UseWPF&gt;
+    &lt;AssemblyName&gt;MyFirstPlugin&lt;/AssemblyName&gt;
+    <span class="c">&lt;!-- 不做应用（exe），只是类库。插件里若有 Window 会由宿主的 Application 承载 --&gt;</span>
+    &lt;EnableDefaultApplicationDefinition&gt;false&lt;/EnableDefaultApplicationDefinition&gt;
+  &lt;/PropertyGroup&gt;
+  &lt;ItemGroup&gt;
+    <span class="c">&lt;!-- 方式 A：引用契约工程（推荐，主程序源码树里就有） --&gt;</span>
+    &lt;ProjectReference Include="..\Abstractions\MinecraftChatOverlay.Plugin.Abstractions.csproj" /&gt;
+    <span class="c">&lt;!-- 方式 B：手里只有契约源文件时，直接把它编进来（同样不要引用 exe）：
+    &lt;Compile Include="..\PluginApi.cs" /&gt; --&gt;</span>
+  &lt;/ItemGroup&gt;
+  &lt;ItemGroup&gt;
+    &lt;None Update="plugin.json" CopyToOutputDirectory="PreserveNewest" /&gt;
+  &lt;/ItemGroup&gt;
+&lt;/Project&gt;</pre></div>
+<div class="notice info"><span class="ic">💡</span><div>
+纯逻辑插件（收消息、发通知、无自绘界面）可以不开 <code class="inline">UseWPF</code>。
+要画页面或开窗口再开。另外 <b>不要开 <code class="inline">UseWindowsForms</code></b>，
+除非你明确要调 WinForms 的 ColorDialog（见 <a href="#s6-9">6.9 调色板</a> 的撞名警告）。
+</div></div>
+
+<h3><span class="no">1.3</span>插件本体</h3>
+<div class="codeblock"><div class="bar"><span class="lang">C# · MyFirstPlugin.cs</span><button class="copy">复制</button></div><pre><span class="k">using</span> MinecraftChatOverlay.Plugin;
+
+<span class="k">public sealed class</span> MyFirstPlugin : IPlugin
+{
+    <span class="k">private</span> IPluginHost? _host;
+
+    <span class="k">public string</span> Id =&gt; <span class="s">"yourname.myfirstplugin"</span>;      <span class="c">// 稳定唯一，装插件/存配置都靠它</span>
+    <span class="k">public string</span> DisplayName =&gt; <span class="s">"我的第一个插件"</span>;
+
+    <span class="k">public void</span> Initialize(IPluginHost host)
+    {
+        _host = host;
+
+        <span class="c">// 订阅聊天消息（注意：事件在宿主 UI 线程上触发，别做耗时操作）</span>
+        host.ChatLineReceived += line =&gt;
+        {
+            <span class="k">if</span> (line.Raw.Contains(<span class="s">"gg"</span>))
+            {
+                host.ShowToast(<span class="s">"有人 gg 了："</span> + line.Raw);
+            }
+        };
+
+        host.Log(<span class="s">"[MyFirst] 已装载"</span>);
+
+        <span class="c">// 注册一个导航页（表单式：宿主负责画，插件只交数据）</span>
+        host.RegisterPage(<span class="k">new</span> PluginPage
+        {
+            Title = <span class="s">"我的第一个插件"</span>,
+            Description = <span class="s">"收到含关键词的消息时弹提示。"</span>,
+            Fields =
+            {
+                <span class="k">new</span> PluginField
+                {
+                    Key = <span class="s">"keyword"</span>,
+                    Label = <span class="s">"关键词"</span>,
+                    Kind = PluginFieldKind.Text,
+                    Text = <span class="s">"gg"</span>,
+                    Hint = <span class="s">"消息里包含这个词就弹提示"</span>,
+                    Changed = f =&gt; host.ShowToast(<span class="s">"关键词已改为："</span> + f.Text),
+                },
+            },
+            Actions =
+            {
+                <span class="k">new</span> PluginAction
+                {
+                    Label = <span class="s">"测试一条提示"</span>,
+                    Primary = <span class="k">true</span>,
+                    Invoke = () =&gt; { host.ShowToast(<span class="s">"这是测试提示"</span>); <span class="k">return</span> <span class="s">"已弹出"</span>; },
+                },
+            },
+        });
+    }
+
+    <span class="k">public void</span> Shutdown()
+    {
+        <span class="c">// 这里必须幂等：退订事件、关定时器、关窗口。最小插件没开任何东西，留空即可。</span>
+    }
+}</pre></div>
+<div class="notice info"><span class="ic">💡</span><div>
+实现类必须是 <b>public、非抽象、有公开无参构造函数</b>，否则宿主 new 不出来。
+入口类不写进 plugin.json 时，宿主会在 dll 里自动找「唯一实现 IPlugin 的公开类」；
+实现类有多个时必须用 <code class="inline">Entry</code> 指明（见第 2 章）。
+</div></div>
+
+<h3><span class="no">1.4</span>plugin.json</h3>
+<div class="codeblock"><div class="bar"><span class="lang">JSON · plugin.json</span><button class="copy">复制</button></div><pre>{
+  <span class="a">"id"</span>: <span class="s">"yourname.myfirstplugin"</span>,
+  <span class="a">"name"</span>: <span class="s">"我的第一个插件"</span>,
+  <span class="a">"version"</span>: <span class="s">"1.0.0"</span>,
+  <span class="a">"author"</span>: <span class="s">"你的名字"</span>,
+  <span class="a">"description"</span>: <span class="s">"收到含关键词的聊天消息时弹右下角提示。"</span>,
+  <span class="a">"apiVersion"</span>: <span class="n">1</span>,
+  <span class="a">"capabilities"</span>: [ <span class="s">"读取宿主转发的游戏聊天消息"</span> ]
+}</pre></div>
+
+<h3><span class="no">1.5</span>编译、打包、安装</h3>
+<ol>
+  <li><code class="inline">dotnet build -c Release</code> → 产物 <code class="inline">bin\Release\net8.0-windows\MyFirstPlugin.dll</code></li>
+  <li>把 <b>plugin.json 和 dll（以及依赖 dll，如果有）</b> 压成一个 zip，两个文件都在 zip <b>根目录</b>：
+  <div class="codeblock"><div class="bar"><span class="lang">TEXT · MyFirstPlugin-v1.0.0.zip</span><button class="copy">复制</button></div><pre>MyFirstPlugin-v1.0.0.zip
+├── plugin.json          ← 必须在根目录
+└── MyFirstPlugin.dll</pre></div></li>
+  <li>主程序 → <b>设置 → 插件 → 安装插件</b>，选这个 zip。安装时会展示 Capabilities（知情同意），确认后装入
+  <code class="inline">%APPDATA%\MinecraftChatOverlay\plugins\&lt;id&gt;\</code></li>
+  <li>左侧导航栏出现「我的第一个插件」页面 → 完成。</li>
+</ol>
+<div class="notice ok"><span class="ic">✅</span><div>
+到这里你已经有了一个能装、能配、能收消息的插件。接下来按需求跳：
+要做自己的界面 → <a href="#s5">第 5 章</a> + <a href="#s6">第 6 章</a>；
+要在游戏上飘窗口 → <a href="#s8">第 8 章</a>；要存配置 → <a href="#s7">第 7 章</a>。
+</div></div>
+</section>
+
+<!-- ================================================================ -->
+<!-- 2. plugin.json -->
+<!-- ================================================================ -->
+<section id="s2">
+<h2><span class="no">02</span>plugin.json 完整规范</h2>
+<p>plugin.json 是插件包的身份证+说明书，作者手写。宿主解析时很宽容：
+<b>字段名大小写不敏感、允许 // 注释、允许尾逗号</b>。装不上的第一排查对象就是它。</p>
+
+<div class="scrollx"><table>
+<tr><th style="width:130px">字段</th><th style="width:70px">类型</th><th style="width:60px">必填</th><th>说明</th></tr>
+<tr><td><code class="k">id</code></td><td>string</td><td>✅</td>
+<td>稳定唯一 id，形如 <code class="inline">goldiamond.keydisplay</code>（作者名.插件名）。
+决定安装目录名，也是「禁用列表」的键。<b>发布后不要改</b>——改了等于另一个插件。</td></tr>
+<tr><td><code class="k">name</code></td><td>string</td><td>✅</td><td>界面显示名。</td></tr>
+<tr><td><code class="k">version</code></td><td>string</td><td>✅</td><td>插件自己的版本号，作者自定（建议 semver）。</td></tr>
+<tr><td><code class="k">author</code></td><td>string</td><td>➖</td><td>作者名。</td></tr>
+<tr><td><code class="k">description</code></td><td>string</td><td>➖</td><td>一句话说明。</td></tr>
+<tr><td><code class="k">apiVersion</code></td><td>int</td><td>✅</td>
+<td>要求的契约版本。<b>必须等于 <code class="inline">PluginApi.Version</code>（当前 1）</b>，否则拒装。</td></tr>
+<tr><td><code class="k">entry</code></td><td>string</td><td>➖</td>
+<td>入口类型全名（含命名空间）。不写就在 dll 里自动找唯一实现 IPlugin 的公开类；
+实现类有多个、或不想被自动扫描时才需要写。</td></tr>
+<tr><td><code class="k">assembly</code></td><td>string</td><td>➖</td>
+<td>主 dll 文件名（相对插件目录）。不写就取目录里第一个非契约程序集的 dll。</td></tr>
+<tr><td><code class="k">capabilities</code></td><td>string[]</td><td>建议写</td>
+<td>这个插件<b>会做什么</b>（读日志/联网/操作窗口/轮询键盘……）。
+安装确认框展示给用户看，是「知情同意」用的——如实写，别含糊。</td></tr>
+</table></div>
+
+<h3>数据放哪</h3>
+<div class="scrollx"><table>
+<tr><th>位置</th><th>路径</th><th>用途</th></tr>
+<tr><td>安装目录</td><td><code class="inline">%APPDATA%\MinecraftChatOverlay\plugins\&lt;id&gt;\</code></td>
+<td>宿主释放 zip 的地方。插件只读这里（别往回写）。</td></tr>
+<tr><td>数据目录</td><td><code class="inline">%APPDATA%\MinecraftChatOverlay\plugin-data\&lt;id&gt;\</code></td>
+<td><b>插件自己的可写目录</b>（即 <code class="inline">host.PluginDirectory</code>）。
+配置、图片、日志都放这。<b>卸载插件时整个目录会被删掉</b>——别放用户可能想留下的东西。</td></tr>
+</table></div>
+</section>
+
+<!-- ================================================================ -->
+<!-- 3. 生命周期 -->
+<!-- ================================================================ -->
+<section id="s3">
+<h2><span class="no">03</span>生命周期</h2>
+<p>一个插件从生到死经过这些节点：</p>
+<div class="card">
+<pre style="font-family:Consolas,monospace;font-size:13px;line-height:2;color:var(--text2);overflow-x:auto">
+安装 zip ──▶ 解压校验 ──▶ <b style="color:var(--primary)">Initialize(host)</b> ──▶ 运行中 ──┬─▶ <b style="color:var(--danger)">Shutdown()</b> ─▶ 禁用（dll 还在）
+   （ApiVersion 必须相等）   │  注册页面/订阅事件/读配置/开窗口          │
+                            └─▶ 页面被打开时才调 <b style="color:var(--primary)">ContentFactory</b>      ├─▶ <b style="color:var(--danger)">Shutdown()</b> ─▶ 卸载（删数据目录）
+                                                                    └─▶ <b style="color:var(--danger)">Shutdown()</b> ─▶ 程序退出</pre>
+</div>
+
+<h3><span class="no">3.1</span>Initialize 里适合做什么</h3>
+<ul>
+  <li><b>读配置</b>（<code class="inline">PluginSettingsFile.Load</code>，见第 7 章）；</li>
+  <li><b>注册页面</b>（一个插件只能注册一个，重复调用以最后一次为准）；</li>
+  <li><b>订阅事件</b>（ChatLineReceived 等）；</li>
+  <li><b>开常驻资源</b>：定时器、悬浮窗（按需：也可以等开关打开再开）；</li>
+  <li><b>页面预检</b>（自绘页面推荐，见 11.2——XAML 是运行期解析的，编译过 ≠ 能解析）。</li>
+</ul>
+<p>Initialize 抛异常会被宿主吞掉，插件标记为「加载失败」并展示异常信息，主程序不受影响。
+所以插件自己要<b>做好防御</b>：IO、网络、反射都 try/catch，失败要 <code class="inline">host.Log</code> 说明。</p>
+
+<h3><span class="no">3.2</span>Shutdown 必须幂等</h3>
+<div class="codeblock"><div class="bar"><span class="lang">C#</span><button class="copy">复制</button></div><pre><span class="k">private bool</span> _shutdown;
+
+<span class="k">public void</span> Shutdown()
+{
+    <span class="k">if</span> (_shutdown) <span class="k">return</span>;          <span class="c">// 幂等闸门：可能被调多次</span>
+    _shutdown = <span class="k">true</span>;
+
+    _cycleTimer?.Stop();               <span class="c">// 停定时器</span>
+    _overlay?.Close();                 <span class="c">// 关自己的窗口（Close 幂等，重复调无害）</span>
+    <span class="k">if</span> (_host <span class="k">is not null</span>)
+    {
+        _host.ChatLineReceived -= OnChatLine;   <span class="c">// 退订事件</span>
+    }
+}</pre></div>
+</section>
+
+<!-- ================================================================ -->
+<!-- 4. 契约参考 -->
+<!-- ================================================================ -->
+<section id="s4">
+<h2><span class="no">04</span>契约参考</h2>
+<p>契约全部内容 = <code class="inline">Plugins/Abstractions/PluginApi.cs</code>。以下是速查表。</p>
+
+<h3><span class="no">4.1</span>IPlugin（你要实现的）</h3>
+<div class="scrollx"><table>
+<tr><th style="width:150px">成员</th><th>说明</th></tr>
+<tr><td><code class="k">string Id</code></td><td>稳定唯一 id，与 plugin.json 的 id 一致。</td></tr>
+<tr><td><code class="k">string DisplayName</code></td><td>界面显示名。</td></tr>
+<tr><td><code class="k">void Initialize(IPluginHost)</code></td><td>装载时调用一次。异常会被吞并标记加载失败。</td></tr>
+<tr><td><code class="k">void Shutdown()</code></td><td>禁用/卸载/退出时调用，可能多次。必须幂等，必须收干净。</td></tr>
+</table></div>
+
+<h3><span class="no">4.2</span>IPluginHost（宿主给你的全部能力）</h3>
+<div class="scrollx"><table>
+<tr><th style="width:220px">成员</th><th>说明</th></tr>
+<tr><td><code class="k">int ApiVersion</code></td><td>宿主的契约版本，正常等于 PluginApi.Version。</td></tr>
+<tr><td><code class="k">string PluginDirectory</code></td><td>插件自己的可写目录（plugin-data\&lt;id&gt;）。卸载时整个删除。</td></tr>
+<tr><td><code class="k">string PluginsRootDirectory</code></td><td>所有插件的根目录。一般用不到，除非做插件间共享。</td></tr>
+<tr><td><code class="k">void RegisterPage(PluginPage)</code></td><td>注册导航页。一个插件一个，重复注册以最后为准。</td></tr>
+<tr><td><code class="k">void Log(string)</code></td><td>写一行到宿主调试后台页（用户开了「启用后端日志」才显示）。</td></tr>
+<tr><td><code class="k">void SendToOverlay(string)</code></td><td>往宿主的聊天悬浮窗发一条消息（插件输出、播报结果走这里）。</td></tr>
+<tr><td><code class="k">void ReassertOverlayTopmost()</code></td><td>把聊天悬浮窗重新抬到最前（不抢焦点）。<b>你动了别的窗口层级之后调一下</b>——比如你做的「窗口全屏」把游戏窗口铺满后，别让宿主悬浮窗被压下去。悬浮窗没开时调用是安全的。</td></tr>
+<tr><td><code class="k">void ShowToast(string)</code></td><td>右下角弹一条提示。</td></tr>
+<tr><td><code class="k">event Action&lt;ChatLine&gt; ChatLineReceived</code></td><td>收到聊天消息。<b>宿主 UI 线程触发</b>，别做耗时操作。</td></tr>
+<tr><td><code class="k">IReadOnlyList&lt;ChatLine&gt; RecentChatLines</code></td><td>最近 200 条聊天，初始化时回填状态用。</td></tr>
+<tr><td><code class="k">IReadOnlyList&lt;GameWindowInfo&gt; GetGameWindows()</code></td><td>当前可见的游戏类窗口（宿主已过滤工具窗、无标题窗、本程序自己）。做「选目标窗口」下拉框用。</td></tr>
+</table></div>
+
+<h3><span class="no">4.3</span>数据类型</h3>
+<div class="codeblock"><div class="bar"><span class="lang">C#</span><button class="copy">复制</button></div><pre><span class="c">/// 一条聊天消息。Raw 已按日志编码解码、已去掉时间戳和日志前缀。</span>
+<span class="k">public sealed record</span> ChatLine(<span class="k">string</span> Raw, DateTime Time);
+
+<span class="c">/// 一个候选游戏窗口。ToString() 直接给下拉框显示用。</span>
+<span class="k">public sealed record</span> GameWindowInfo(IntPtr Handle, <span class="k">int</span> ProcessId,
+    <span class="k">string</span> ProcessName, <span class="k">string</span> Title, <span class="k">int</span> Width, <span class="k">int</span> Height);</pre></div>
+
+<h3><span class="no">4.4</span>页面数据模型（表单式用，详见第 5 章）</h3>
+<div class="scrollx"><table>
+<tr><th style="width:180px">类型</th><th>要点</th></tr>
+<tr><td><code class="k">PluginPage</code></td>
+<td>Title（导航文字，必填）/ Description（页头说明）/ Fields（字段列表）/
+Actions（按钮列表）/ ContentFactory（自绘页面，可选）/ StatusText（页头状态行，可选，宿主每秒问一次）。</td></tr>
+<tr><td><code class="k">PluginField</code></td>
+<td>Key（内部键）+ Label + Kind（Toggle / Slider / Select / Text / ReadOnly）+ Hint（字段下小字）。
+值存在 Bool / Number / Text / SelectedKey 上；Slider 配 Minimum / Maximum / Step / Suffix / NumberFormat；
+Select 配 OptionsProvider（渲染时 + 每 OptionsRefreshSeconds 秒取一次）。
+值变化回调 <b>Changed</b>；可用性 <b>Enabled</b>（宿主每秒刷一次）。</td></tr>
+<tr><td><code class="k">PluginOption</code></td><td>Select 的候选项：record PluginOption(string Key, string Text)。</td></tr>
+<tr><td><code class="k">PluginAction</code></td>
+<td>Label + Primary（是否高亮主按钮）+ Invoke（点击回调；返回非空字符串就弹提示；
+抛异常会被宿主拦住并提示失败原因）+ Enabled（每秒刷新）。</td></tr>
+</table></div>
+
+<h3><span class="no">4.5</span>PluginSettingsFile（配置小工具）</h3>
+<div class="codeblock"><div class="bar"><span class="lang">C#</span><button class="copy">复制</button></div><pre><span class="c">// 读：文件不存在或坏了 → 返回默认值（new T()），不抛异常</span>
+<span class="k">var</span> settings = PluginSettingsFile.Load&lt;MySettings&gt;(host.PluginDirectory);
+
+<span class="c">// 写：写失败不抛异常（配置丢了不该让插件崩）。缩进 JSON。</span>
+PluginSettingsFile.Save(host.PluginDirectory, settings);
+
+<span class="c">// 默认文件名 settings.json，可以换：</span>
+PluginSettingsFile.Save(host.PluginDirectory, settings, <span class="s">"layouts.json"</span>);</pre></div>
+<p>约束：<code class="inline">where T : new()</code>，即配置类必须有公开无参构造。
+新版本加字段时老配置文件里没有 → 反序列化用默认值兜底，天然平滑升级。</p>
+</section>
+
+<!-- ================================================================ -->
+<!-- 5. 页面系统 -->
+<!-- ================================================================ -->
+<section id="s5">
+<h2><span class="no">05</span>页面系统</h2>
+<p>插件页面有两种做法：<b>表单式</b>（交数据，宿主画——零 XAML，天生和宿主长一个样）和
+<b>自绘式</b>（ContentFactory 返回一个 WPF 控件，想怎么画怎么画）。先表单式，表达不了再自绘。</p>
+
+<h3><span class="no">5.1</span>表单式：字段 + 按钮</h3>
+<div class="codeblock"><div class="bar"><span class="lang">C#</span><button class="copy">复制</button></div><pre>host.RegisterPage(<span class="k">new</span> PluginPage
+{
+    Title = <span class="s">"我的插件"</span>,
+    Description = <span class="s">"这页是干什么的，一句话。"</span>,
+    StatusText = () =&gt; _running ? <span class="s">$"运行中 · 已处理 {_count} 条消息"</span> : <span class="k">null</span>,
+    Fields =
+    {
+        <span class="k">new</span> PluginField { Key=<span class="s">"enabled"</span>, Label=<span class="s">"启用"</span>, Kind=PluginFieldKind.Toggle,
+            Bool=<span class="k">true</span>, Hint=<span class="s">"关掉后停止处理消息"</span>,
+            Changed = f =&gt; { _running = f.Bool; SaveSettings(); } },
+
+        <span class="k">new</span> PluginField { Key=<span class="s">"interval"</span>, Label=<span class="s">"刷新间隔"</span>, Kind=PluginFieldKind.Slider,
+            Number=<span class="n">40</span>, Minimum=<span class="n">10</span>, Maximum=<span class="n">500</span>, Step=<span class="n">10</span>, Suffix=<span class="s">" ms"</span>,
+            Changed = f =&gt; { _timer.Interval = TimeSpan.FromMilliseconds(f.Number); } },
+
+        <span class="k">new</span> PluginField { Key=<span class="s">"target"</span>, Label=<span class="s">"目标窗口"</span>, Kind=PluginFieldKind.Select,
+            OptionsProvider = () =&gt; host.GetGameWindows()
+                .Select(w =&gt; <span class="k">new</span> PluginOption(w.Handle.ToString(), w.Title)).ToList(),
+            OptionsRefreshSeconds = <span class="n">5</span>,
+            Changed = f =&gt; SelectWindow(f.SelectedKey) },
+
+        <span class="k">new</span> PluginField { Key=<span class="s">"note"</span>, Label=<span class="s">"备注"</span>, Kind=PluginFieldKind.Text,
+            Text=<span class="s">""</span> },
+
+        <span class="k">new</span> PluginField { Key=<span class="s">"info"</span>, Kind=PluginFieldKind.ReadOnly,
+            Text=<span class="s">"当前版本 1.0.0，作者 yourname。"</span> },
+    },
+    Actions =
+    {
+        <span class="k">new</span> PluginAction { Label=<span class="s">"立即刷新"</span>, Primary=<span class="k">true</span>,
+            Invoke = () =&gt; { DoRefresh(); <span class="k">return</span> <span class="s">"已刷新"</span>; } },
+        <span class="k">new</span> PluginAction { Label=<span class="s">"重置统计"</span>,
+            Invoke = () =&gt; { _count = <span class="n">0</span>; <span class="k">return</span> <span class="k">null</span>; } },
+    },
+});</pre></div>
+<p>要点：</p>
+<ul>
+  <li><b>值变化即回调 Changed，插件自己负责存盘</b>（配第 7 章的防抖保存）；</li>
+  <li>字段的 <code class="inline">Enabled</code> 和 <code class="inline">StatusText</code> 宿主<b>每秒刷新一次</b>——
+  做成「读当前状态的委托」而不是设一次就完；</li>
+  <li>Select 的候选用 <code class="inline">OptionsProvider</code>，配 <code class="inline">OptionsRefreshSeconds</code> 可定时重取
+  （比如目标窗口列表会变）。</li>
+</ul>
+
+<h3><span class="no">5.2</span>自绘式：ContentFactory</h3>
+<p>表单表达不了的（规则列表、拖拽、实时预览、自由排版），用 ContentFactory 返回自己的控件：</p>
+<div class="codeblock"><div class="bar"><span class="lang">C#</span><button class="copy">复制</button></div><pre>host.RegisterPage(<span class="k">new</span> PluginPage
+{
+    Title = <span class="s">"我的插件"</span>,
+    ContentFactory = () =&gt; <span class="k">new</span> MyPage(<span class="k">this</span>),   <span class="c">// 返回 FrameworkElement</span>
+    StatusText = BuildStatus,
+});</pre></div>
+<ul>
+  <li>返回的控件<b>跑在宿主 UI 线程</b>上，抛异常会被宿主拦住、页面显示出错信息——和 Initialize 一样要做好防御；</li>
+  <li>页面类通常是 <code class="inline">UserControl</code>（.xaml + .xaml.cs）；</li>
+  <li><b>ContentFactory 每次打开页面都会调用</b>——页面里持有的引用（_page 字段）要记得跟随更新，别抱着旧实例；</li>
+  <li>想要和宿主一样的观感，用 <b>DynamicResource</b> 引用宿主主题资源——这正是下一章的全部内容。</li>
+</ul>
+<div class="notice warn"><span class="ic">⚠️</span><div>
+<b>预检习惯：</b>页面 XAML 是<b>运行期解析</b>的，编译通过不代表能解析。在 Initialize 里
+<code class="inline">try { _ = new MyPage(this); host.Log("页面预检通过"); } catch (Exception ex) { host.Log("预检失败：" + ex); }</code>，
+问题在装载时就暴露，不用等用户点开页面看白屏。（见 11.2）
+</div></div>
+</section>
+
+<!-- ================================================================ -->
+<!-- 6. 控件样式大全 -->
+<!-- ================================================================ -->
+<section id="s6">
+<h2><span class="no">06</span>控件样式大全 <span style="font-size:12px;color:var(--text3);font-weight:600">让插件页面和宿主长一个样</span></h2>
+
+<p>宿主的全部外观定义在主程序的 <code class="inline">ModernControls.xaml</code> 里，它挂在主窗口资源上——
+插件的页面被放进宿主视觉树时<b>自动继承</b>。这一章给你每个控件的可用模板。</p>
+
+<h3 id="s6-1"><span class="no">6.1</span>总原则（先读这个）</h3>
+
+<h4>原则一：隐式样式白拿，直接用</h4>
+<p>这些控件<b>不写任何 Style 属性</b>，放进页面自动就是宿主外观：</p>
+<div class="sample">
+  <div class="lbl">自动继承宿主样式的控件</div>
+  <span class="tok">Button</span><span class="tok">TextBox</span><span class="tok">ComboBox</span><span class="tok">Slider</span><span class="tok">CheckBox<span style="color:var(--text3);font-weight:400">（默认小方框）</span></span><span class="tok">ListBox</span><span class="tok">ListBoxItem</span><span class="tok">ScrollBar</span>
+</div>
+<div class="codeblock"><div class="bar"><span class="lang">XAML</span><button class="copy">复制</button></div><pre><span class="c">&lt;!-- 这样写出来就是宿主样式：圆角输入框、紫聚焦光晕、卡片式列表…… --&gt;</span>
+&lt;<span class="a">TextBox</span> Text=<span class="s">"直接用"</span>/&gt;
+&lt;<span class="a">ComboBox</span> Width=<span class="s">"200"</span>/&gt;
+&lt;<span class="a">Slider</span> Minimum=<span class="s">"0"</span> Maximum=<span class="s">"100"</span>/&gt;</pre></div>
+
+<h4>原则二：带名字的样式 / 颜色，用 DynamicResource 引用</h4>
+<div class="notice danger"><span class="ic">⛔</span><div>
+<b>铁律三：一律 DynamicResource，禁止 StaticResource。</b>
+插件页面是运行期才挂进宿主视觉树的，<code class="inline">StaticResource</code> 在控件挂树<b>之前</b>解析，
+取不到宿主资源会直接抛异常 → 整页白屏。<code class="inline">DynamicResource</code> 是挂树后再解析，永远安全。
+（KeyDisplay 开发期真实踩过：一页 StaticResource 全炸。）
+</div></div>
+<div class="codeblock"><div class="bar"><span class="lang">XAML</span><button class="copy">复制</button></div><pre><span class="c">&lt;!-- 正确 ✅ --&gt;</span>
+&lt;<span class="a">Border</span> Style=<span class="s">"{DynamicResource CardStyle}"</span>/&gt;
+&lt;<span class="a">TextBlock</span> Style=<span class="s">"{DynamicResource CardTitleStyle}"</span>/&gt;
+&lt;<span class="a">TextBlock</span> Foreground=<span class="s">"{DynamicResource TextSecondaryBrush}"</span>/&gt;
+
+<span class="c">&lt;!-- 错误 ❌ 白屏 --&gt;</span>
+&lt;<span class="a">Border</span> Style=<span class="s">"{StaticResource CardStyle}"</span>/&gt;</pre></div>
+
+<h4>原则三：颜色不写死，用宿主的 Brush 键</h4>
+<p>这样宿主以后改主题，插件跟着变。常用 token 全表：</p>
+<div class="scrollx"><table>
+<tr><th style="width:210px">键</th><th style="width:110px">色值</th><th>用途</th></tr>
+<tr><th colspan="3" style="letter-spacing:.5px">表面 / 结构</th></tr>
+<tr><td><code class="k">WindowBgBrush</code></td><td><span class="tok"><span class="dot" style="background:#EDEDF1"></span><span class="hex">#EDEDF1</span></span></td><td>窗口底色</td></tr>
+<tr><td><code class="k">SurfaceBrush</code></td><td><span class="tok"><span class="dot" style="background:#FFFFFF"></span><span class="hex">#FFFFFF</span></span></td><td>表面（卡片/悬停亮的输入框）</td></tr>
+<tr><td><code class="k">Surface2Brush</code></td><td><span class="tok"><span class="dot" style="background:#F4F4F7"></span><span class="hex">#F4F4F7</span></span></td><td>表面2（输入框底、次级卡片）</td></tr>
+<tr><td><code class="k">Surface3Brush</code></td><td><span class="tok"><span class="dot" style="background:#EAEAEF"></span><span class="hex">#EAEAEF</span></span></td><td>表面3（按下态、滚动条轨道）</td></tr>
+<tr><td><code class="k">CardBgBrush</code></td><td><span class="tok"><span class="dot" style="background:#FFFFFF"></span><span class="hex">#FFFFFF</span></span></td><td>卡片底</td></tr>
+<tr><td><code class="k">BorderBrush</code></td><td><span class="tok"><span class="dot" style="background:#E7E7EC"></span><span class="hex">#E7E7EC</span></span></td><td>普通描边</td></tr>
+<tr><td><code class="k">BorderStrongBrush</code></td><td><span class="tok"><span class="dot" style="background:#D4D4DB"></span><span class="hex">#D4D4DB</span></span></td><td>悬停加重的描边</td></tr>
+<tr><td><code class="k">TrackBrush</code></td><td><span class="tok"><span class="dot" style="background:#E4E4EA"></span><span class="hex">#E4E4EA</span></span></td><td>开关/滑条轨道</td></tr>
+<tr><th colspan="3">文字</th></tr>
+<tr><td><code class="k">TextPrimaryBrush</code></td><td><span class="tok"><span class="dot" style="background:#2A2A31"></span><span class="hex">#2A2A31</span></span></td><td>主文字</td></tr>
+<tr><td><code class="k">TextSecondaryBrush</code></td><td><span class="tok"><span class="dot" style="background:#6E6E7A"></span><span class="hex">#6E6E7A</span></span></td><td>次文字（说明、描述）</td></tr>
+<tr><td><code class="k">TextTertiaryBrush</code></td><td><span class="tok"><span class="dot" style="background:#9B9BA7"></span><span class="hex">#9B9BA7</span></span></td><td>三级文字（提示、弱信息）</td></tr>
+<tr><td><code class="k">TextOnPrimaryBrush</code></td><td><span class="tok"><span class="dot" style="background:#FFFFFF"></span><span class="hex">#FFFFFF</span></span></td><td>紫底上的文字</td></tr>
+<tr><th colspan="3">主题紫（Primary）</th></tr>
+<tr><td><code class="k">PrimaryBrush</code></td><td><span class="tok"><span class="dot" style="background:#7C6CF0"></span><span class="hex">#7C6CF0</span></span></td><td>主题色（选中、聚焦、主按钮）</td></tr>
+<tr><td><code class="k">PrimaryHoverBrush</code></td><td><span class="tok"><span class="dot" style="background:#A18CFF"></span><span class="hex">#A18CFF</span></span></td><td>主按钮悬停</td></tr>
+<tr><td><code class="k">PrimarySoftBrush</code></td><td><span class="tok"><span class="dot" style="background:rgba(124,108,240,.19)"></span><span class="hex">12% 紫</span></span></td><td>软紫底（选中项、徽标底）</td></tr>
+<tr><td><code class="k">PrimarySofterBrush</code></td><td><span class="tok"><span class="dot" style="background:rgba(124,108,240,.12)"></span><span class="hex">7% 紫</span></span></td><td>更软的紫底（导航选中）</td></tr>
+<tr><th colspan="3">点缀色（各有 Soft 变体）</th></tr>
+<tr><td><code class="k">AccentBrush</code></td><td><span class="tok"><span class="dot" style="background:#FF8FBE"></span><span class="hex">#FF8FBE</span></span></td><td>粉，强调点缀（另有 AccentSoftBrush）</td></tr>
+<tr><td><code class="k">MintBrush</code></td><td><span class="tok"><span class="dot" style="background:#3FCFA9"></span><span class="hex">#3FCFA9</span></span></td><td>薄荷绿，成功/实测（另有 MintSoftBrush）</td></tr>
+<tr><td><code class="k">DangerBrush</code></td><td><span class="tok"><span class="dot" style="background:#FF6B81"></span><span class="hex">#FF6B81</span></span></td><td>危险红，删除/关闭（另有 DangerSoftBrush）</td></tr>
+<tr><td><code class="k">AmberBrush</code></td><td><span class="tok"><span class="dot" style="background:#FFB547"></span><span class="hex">#FFB547</span></span></td><td>琥珀，警告</td></tr>
+<tr><td><code class="k">SkyBrush</code></td><td><span class="tok"><span class="dot" style="background:#57C5F2"></span><span class="hex">#57C5F2</span></span></td><td>天蓝，信息</td></tr>
+<tr><th colspan="3">阴影效果（Effect 用）</th></tr>
+<tr><td><code class="k">CardShadow</code></td><td colspan="2">卡片静置阴影（弱）</td></tr>
+<tr><td><code class="k">CardHoverShadow</code></td><td colspan="2">卡片悬停阴影（深一点）</td></tr>
+<tr><td><code class="k">HoverShadow</code></td><td colspan="2">小控件悬停阴影</td></tr>
+<tr><td><code class="k">GlowShadow</code></td><td colspan="2">紫色光晕（聚焦/选中发光）</td></tr>
+</table></div>
+
+<h4>布局约定</h4>
+<p>宿主页面的节奏感来自统一间距，照抄不会错：</p>
+<ul>
+  <li>页面最外层：<code class="inline">StackPanel</code>，纵向排卡片；</li>
+  <li>卡片之间：第二张起 <code class="inline">Margin="0,14,0,0"</code>（CardStyle 自带 16 底距，可按需覆盖）；</li>
+  <li>卡内：标题 → 描述 → <code class="inline">Margin="0,14,0,0"</code> → 内容；</li>
+  <li>一行设置：标签（固定宽）+ 控件（固定宽）+ 提示文字，详见 6.12。</li>
+</ul>
+</section>
+
+<!-- 6.2 卡片 -->
+<section id="s6-2">
+<h3><span class="no">6.2</span>卡片</h3>
+<div class="scrollx"><table>
+<tr><th style="width:190px">样式键</th><th>适用</th><th>说明</th></tr>
+<tr><td><code class="k">CardStyle</code></td><td>Border</td>
+<td>标准大卡片：白底、圆角 18、内边距 20、弱阴影。<b>自带悬停行为</b>（阴影加深+描边提亮+上浮 2px，快进缓出）。</td></tr>
+<tr><td><code class="k">PluginCardStyle</code></td><td>Border</td>
+<td>紧凑卡片：Surface2 底、圆角 12、内边距 16,14。适合两列网格里的小卡片。悬停行为与大卡片一致。</td></tr>
+<tr><td><code class="k">LockedCardStyle</code></td><td>Border</td>
+<td>CardStyle + <b>锁定态</b>：把总开关的反值绑到 <code class="inline">Tag</code>（true = 锁定），整卡降饱和压暗（Opacity 0.62、去阴影），
+明确告诉用户「现在不生效」。<b>不要用 IsEnabled=false 禁整卡</b>——总开关在卡里，禁了就永远打不开了。</td></tr>
+</table></div>
+<div class="codeblock"><div class="bar"><span class="lang">XAML · 标准卡片骨架</span><button class="copy">复制</button></div><pre>&lt;<span class="a">StackPanel</span>&gt;
+    &lt;<span class="a">Border</span> Style=<span class="s">"{DynamicResource CardStyle}"</span>&gt;
+        &lt;<span class="a">StackPanel</span>&gt;
+            &lt;<span class="a">TextBlock</span> Text=<span class="s">"1. 开关与刷新"</span> Style=<span class="s">"{DynamicResource CardTitleStyle}"</span>/&gt;
+            &lt;<span class="a">TextBlock</span> Style=<span class="s">"{DynamicResource CardDescStyle}"</span> TextWrapping=<span class="s">"Wrap"</span>
+                       Margin=<span class="s">"0,3,0,14"</span> Text=<span class="s">"这张卡管什么，一两句话。"</span>/&gt;
+            <span class="c">&lt;!-- 内容放这里 --&gt;</span>
+        &lt;/<span class="a">StackPanel</span>&gt;
+    &lt;/<span class="a">Border</span>&gt;
+
+    &lt;<span class="a">Border</span> Style=<span class="s">"{DynamicResource CardStyle}"</span> Margin=<span class="s">"0,14,0,0"</span>&gt;
+        <span class="c">&lt;!-- 第二张卡起加 Margin="0,14,0,0" --&gt;</span>
+    &lt;/<span class="a">Border</span>&gt;
+&lt;/<span class="a">StackPanel</span>&gt;</pre></div>
+<div class="codeblock"><div class="bar"><span class="lang">XAML · 锁定态卡片（总开关关掉时整卡变灰）</span><button class="copy">复制</button></div><pre>&lt;<span class="a">Border</span> Style=<span class="s">"{DynamicResource LockedCardStyle}"</span>
+        Tag=<span class="s">"{Binding ElementName=EnabledCheckBox, Path=IsChecked, Converter={StaticResource InverseBool}}"</span>&gt;
+    <span class="c">&lt;!-- Tag=true → 锁定（降饱和压暗）。InverseBool 是自写转换器；
+         或者简单点：在开关的 Checked/Unchecked 事件里直接设 Tag。 --&gt;</span>
+&lt;/<span class="a">Border</span>&gt;</pre></div>
+</section>
+
+<!-- 6.3 文本 -->
+<section id="s6-3">
+<h3><span class="no">6.3</span>文本</h3>
+<div class="scrollx"><table>
+<tr><th style="width:190px">样式键</th><th style="width:90px">字号</th><th>用途</th></tr>
+<tr><td><code class="k">PanelTitleStyle</code></td><td>21 · 特粗</td><td>页面大标题（自绘页面顶上那行）</td></tr>
+<tr><td><code class="k">PanelDescStyle</code></td><td>12.5 · 次色</td><td>页面大标题下面那句说明</td></tr>
+<tr><td><code class="k">CardTitleStyle</code></td><td>15 · 特粗</td><td>卡片标题（「1. 开关与刷新」这种）</td></tr>
+<tr><td><code class="k">CardDescStyle</code></td><td>12 · 次色</td><td>卡片标题下的描述</td></tr>
+<tr><td><code class="k">BodyTextStyle</code></td><td>13.5 · 主色</td><td>正文（读起来是「内容」不是「副标题」）</td></tr>
+<tr><td><code class="k">FieldLabelStyle</code></td><td>12.5 · 粗 · 次色</td><td><b>字段标签</b>（一行设置的最左边）。自带下边距 7，独立成行时用</td></tr>
+<tr><td><code class="k">HintStyle</code></td><td>12 · 三级色</td><td>提示小字（行内说明、数值显示）。行内用要加 VerticalAlignment="Center"</td></tr>
+</table></div>
+<div class="codeblock"><div class="bar"><span class="lang">XAML</span><button class="copy">复制</button></div><pre>&lt;<span class="a">TextBlock</span> Text=<span class="s">"外观"</span> Style=<span class="s">"{DynamicResource CardTitleStyle}"</span>/&gt;
+&lt;<span class="a">TextBlock</span> Style=<span class="s">"{DynamicResource CardDescStyle}"</span> TextWrapping=<span class="s">"Wrap"</span>
+           Text=<span class="s">"调整悬浮窗的文字、背景和阴影。"</span>/&gt;
+&lt;<span class="a">TextBlock</span> Text=<span class="s">"刷新间隔"</span> Style=<span class="s">"{DynamicResource FieldLabelStyle}"</span>/&gt;
+&lt;<span class="a">TextBlock</span> x:Name=<span class="s">"StatusHint"</span> Style=<span class="s">"{DynamicResource HintStyle}"</span>
+           TextWrapping=<span class="s">"Wrap"</span> Text=<span class="s">"提示文字可以换行。"</span>/&gt;</pre></div>
+<p>字号小于等于标题级的都建议配 <code class="inline">TextOptions.TextFormattingMode="Display"</code>（PanelTitleStyle 已带），
+灰阶更干净。等宽字体（数值、路径）用 <code class="inline">Consolas, Cascadia Mono</code>。</p>
+</section>
+
+<!-- 6.4 开关 -->
+<section id="s6-4">
+<h3><span class="no">6.4</span>开关</h3>
+<p>宿主有三种「勾选」形态，用途严格区分：</p>
+<div class="scrollx"><table>
+<tr><th style="width:210px">样式键</th><th style="width:100px">控件</th><th>形态 / 何时用</th></tr>
+<tr><td><code class="k">ToggleSwitchStyle</code></td><td>CheckBox</td>
+<td><b>滑轨开关，44×25，卡片式</b>（自带底、描边、内边距，看起来像一颗可点的胶囊卡）。
+「启用本功能」这类<b>总开关</b>用它。滑块带轻微过冲回弹，轨道填充比滑块晚 40ms 跟上。</td></tr>
+<tr><td><code class="k">InlineToggleStyle</code></td><td>CheckBox</td>
+<td><b>行内小开关，34×20</b>，无底板。嵌在一行设置中间、或列表项里时用它，别拿大开关压排版。</td></tr>
+<tr><td>（不写 Style）</td><td>CheckBox</td>
+<td><b>17×17 圆角小方框</b> + Path 对勾。多选清单（「这几条参与随机」）用它。</td></tr>
+</table></div>
+<div class="codeblock"><div class="bar"><span class="lang">XAML · 总开关（大）</span><button class="copy">复制</button></div><pre>&lt;<span class="a">CheckBox</span> x:Name=<span class="s">"EnabledCheckBox"</span>
+          Style=<span class="s">"{DynamicResource ToggleSwitchStyle}"</span>
+          Checked=<span class="s">"EnabledCheckBox_Changed"</span> Unchecked=<span class="s">"EnabledCheckBox_Changed"</span>&gt;
+    &lt;<span class="a">StackPanel</span>&gt;
+        &lt;<span class="a">TextBlock</span> Text=<span class="s">"启用按键显示"</span> FontWeight=<span class="s">"Bold"</span>/&gt;
+        &lt;<span class="a">TextBlock</span> Style=<span class="s">"{DynamicResource HintStyle}"</span>
+                   Text=<span class="s">"关掉后悬浮窗隐藏，配置保留"</span>/&gt;
+    &lt;/<span class="a">StackPanel</span>&gt;
+&lt;/<span class="a">CheckBox</span>&gt;</pre></div>
+<div class="codeblock"><div class="bar"><span class="lang">XAML · 行内小开关 + 复选框</span><button class="copy">复制</button></div><pre><span class="c">&lt;!-- 行内小开关：嵌在一行里 --&gt;</span>
+&lt;<span class="a">CheckBox</span> x:Name=<span class="s">"BorderCycleCheckBox"</span> Content=<span class="s">"彩色循环"</span>
+          Style=<span class="s">"{DynamicResource InlineToggleStyle}"</span>
+          VerticalAlignment=<span class="s">"Center"</span> Margin=<span class="s">"16,0,0,0"</span>/&gt;
+
+<span class="c">&lt;!-- 复选小方框：多选清单（不写 Style，隐式样式就是它） --&gt;</span>
+&lt;<span class="a">CheckBox</span> IsChecked=<span class="s">"{Binding IsPicked, Mode=TwoWay}"</span>
+          ToolTip=<span class="s">"勾上 = 参与随机抽取"</span>/&gt;</pre></div>
+<div class="notice info"><span class="ic">💡</span><div>
+开关的 Content 默认会垂直居中在滑轨旁边；要「标题+副标题」两行就自己放 StackPanel（见上）。
+禁用态样式已内置（压暗 0.55），不用管。
+</div></div>
+</section>
+
+<!-- 6.5 按钮 -->
+<section id="s6-5">
+<h3><span class="no">6.5</span>按钮</h3>
+<div class="scrollx"><table>
+<tr><th style="width:240px">样式键</th><th style="width:80px">尺寸</th><th>何时用</th></tr>
+<tr><td><code class="k">SmallButtonStyle</code></td><td>34 高</td><td>普通操作（页面里绝大多数按钮）</td></tr>
+<tr><td><code class="k">SmallPrimaryButtonStyle</code></td><td>34 高 · 紫底白字</td><td>一行里最重要那个动作（「添加」「开始」）</td></tr>
+<tr><td><code class="k">SmallDangerButtonStyle</code></td><td>34 高 · 红底白字</td><td>破坏性操作（「清空」「删除全部」）</td></tr>
+<tr><td><code class="k">SmallGhostButtonStyle</code></td><td>34 高 · 无底</td><td>次要动作（「恢复默认」「取消选择」），弱化存在感</td></tr>
+<tr><td><code class="k">PrimaryButtonStyle</code> 等</td><td>40 高</td><td>大号四兄弟（Primary/Danger/Ghost/默认），整页级唯一动作才用</td></tr>
+<tr><td><code class="k">SmallPrimaryToggleButtonStyle</code></td><td>34 高 · 可驻留</td><td><b>ToggleButton 专用</b>：「拖动定位」这类开关式按钮，选中变红提示「正在拖」</td></tr>
+<tr><td><code class="k">SwatchButtonStyle</code></td><td>26×26</td><td>小色块/小图标按钮（清空颜色 ✕、恢复默认 ↺）</td></tr>
+<tr><td><code class="k">IconButtonStyle</code></td><td>30×30</td><td>删除图标按钮，悬停变红</td></tr>
+</table></div>
+<div class="codeblock"><div class="bar"><span class="lang">XAML</span><button class="copy">复制</button></div><pre>&lt;<span class="a">StackPanel</span> Orientation=<span class="s">"Horizontal"</span>&gt;
+    &lt;<span class="a">Button</span> Content=<span class="s">"添加按键"</span> Style=<span class="s">"{DynamicResource SmallPrimaryButtonStyle}"</span>
+            Click=<span class="s">"AddKey_Click"</span>/&gt;
+    &lt;<span class="a">Button</span> Content=<span class="s">"清空"</span> Style=<span class="s">"{DynamicResource SmallDangerButtonStyle}"</span>
+            Margin=<span class="s">"8,0,0,0"</span> Click=<span class="s">"Clear_Click"</span>/&gt;
+    &lt;<span class="a">Button</span> Content=<span class="s">"恢复默认"</span> Style=<span class="s">"{DynamicResource SmallGhostButtonStyle}"</span>
+            Margin=<span class="s">"8,0,0,0"</span> Click=<span class="s">"Reset_Click"</span>/&gt;
+    &lt;<span class="a">Button</span> Content=<span class="s">"✕"</span> Style=<span class="s">"{DynamicResource SwatchButtonStyle}"</span>
+            FontSize=<span class="s">"10"</span> ToolTip=<span class="s">"清除这个覆盖"</span> Margin=<span class="s">"8,0,0,0"</span>/&gt;
+&lt;/<span class="a">StackPanel</span>&gt;
+
+<span class="c">&lt;!-- 开关式按钮（拖动定位）——注意 TargetType 是 ToggleButton --&gt;</span>
+&lt;<span class="a">ToggleButton</span> x:Name=<span class="s">"DragToggle"</span> Content=<span class="s">"拖动定位"</span>
+             Style=<span class="s">"{DynamicResource SmallPrimaryToggleButtonStyle}"</span>/&gt;</pre></div>
+<div class="notice danger"><span class="ic">⛔</span><div>
+<b>TargetType 陷阱：</b>样式是强类型的——<code class="inline">SmallButtonStyle</code> 的 TargetType 是 Button，
+套到 <code class="inline">ToggleButton</code> 上会被 WPF <b>静默忽略</b>（不报错，直接长成默认样子）。
+ToggleButton 只能用 <code class="inline">SmallPrimaryToggleButtonStyle</code>，或者自己写。
+</div></div>
+</section>
+
+<!-- 6.6 滑动条 -->
+<section id="s6-6">
+<h3><span class="no">6.6</span>滑动条</h3>
+<p><code class="inline">Slider</code> 是隐式样式：8px 圆角轨道 + 18px 白圆拇指紫描边，悬停有光晕，<b>直接用</b>。
+宿主的搭配习惯是「标签 + 滑条 + 实时数值」三件套：</p>
+<div class="codeblock"><div class="bar"><span class="lang">XAML · 滑条行</span><button class="copy">复制</button></div><pre>&lt;<span class="a">StackPanel</span> Orientation=<span class="s">"Horizontal"</span> Margin=<span class="s">"0,8,0,0"</span>&gt;
+    &lt;<span class="a">TextBlock</span> Text=<span class="s">"字号"</span> Style=<span class="s">"{DynamicResource FieldLabelStyle}"</span>
+               Width=<span class="s">"72"</span> VerticalAlignment=<span class="s">"Center"</span>/&gt;
+    &lt;<span class="a">Slider</span> x:Name=<span class="s">"FontSizeSlider"</span> Width=<span class="s">"300"</span>
+            Minimum=<span class="s">"8"</span> Maximum=<span class="s">"72"</span> TickFrequency=<span class="s">"1"</span>
+            IsSnapToTickEnabled=<span class="s">"True"</span>
+            ValueChanged=<span class="s">"FontSizeSlider_Changed"</span>/&gt;
+    &lt;<span class="a">TextBlock</span> x:Name=<span class="s">"FontSizeText"</span> Style=<span class="s">"{DynamicResource HintStyle}"</span>
+               Width=<span class="s">"48"</span> VerticalAlignment=<span class="s">"Center"</span> Margin=<span class="s">"12,0,0,0"</span>/&gt;
+&lt;/<span class="a">StackPanel</span>&gt;</pre></div>
+<div class="codeblock"><div class="bar"><span class="lang">C# · 数值联动 + 防回环</span><button class="copy">复制</button></div><pre><span class="k">private void</span> FontSizeSlider_Changed(<span class="k">object</span> sender, RoutedPropertyChangedEventArgs&lt;<span class="k">double</span>&gt; e)
+{
+    <span class="c">// _loading=true 表示是程序回填触发的，跳过处理（详见第 7 章）</span>
+    <span class="k">if</span> (_loading) <span class="k">return</span>;
+
+    <span class="k">int</span> value = (<span class="k">int</span>)Math.Round(e.NewValue);
+    FontSizeText.Text = value.ToString();      <span class="c">// 数值实时跟</span>
+    _settings.FontSize = value;
+    ScheduleSave();                             <span class="c">// 防抖存盘，见 7.2</span>
+    ApplyAppearance();                          <span class="c">// 让悬浮窗立刻生效</span>
+}
+
+<span class="c">// 程序回填（打开页面/切换选中项时）：</span>
+<span class="k">private void</span> PushSettingsToUi()
+{
+    _loading = <span class="k">true</span>;
+    <span class="k">try</span>
+    {
+        FontSizeSlider.Value = _settings.FontSize;   <span class="c">// 这会触发 ValueChanged，被闸门挡住</span>
+        FontSizeText.Text = _settings.FontSize.ToString();
+    }
+    <span class="k">finally</span> { _loading = <span class="k">false</span>; }
+}</pre></div>
+<p>常用参数：<code class="inline">IsSnapToTickEnabled="True"</code> + <code class="inline">TickFrequency</code> 取整步进；
+小数值步进（透明度 0~1 步进 0.05）可以不吸附，显示时 <code class="inline">ToString("0.00")</code>。</p>
+</section>
+
+<!-- 6.7 下拉框 -->
+<section id="s6-7">
+<h3><span class="no">6.7</span>下拉框</h3>
+<p><code class="inline">ComboBox</code> 也是隐式样式：Surface2 底、圆角 12、聚焦紫色描边+光晕、
+弹出层圆角 12 带淡入。<b>直接用</b>，宿主页面里一般压到 Height=32：</p>
+<div class="codeblock"><div class="bar"><span class="lang">XAML · 下拉框行</span><button class="copy">复制</button></div><pre>&lt;<span class="a">StackPanel</span> Orientation=<span class="s">"Horizontal"</span> Margin=<span class="s">"0,8,0,0"</span>&gt;
+    &lt;<span class="a">TextBlock</span> Text=<span class="s">"字体"</span> Style=<span class="s">"{DynamicResource FieldLabelStyle}"</span>
+               Width=<span class="s">"72"</span> VerticalAlignment=<span class="s">"Center"</span>/&gt;
+    &lt;<span class="a">ComboBox</span> x:Name=<span class="s">"FontComboBox"</span> Width=<span class="s">"300"</span> Height=<span class="s">"32"</span>
+             SelectionChanged=<span class="s">"FontComboBox_Changed"</span>/&gt;
+&lt;/<span class="a">StackPanel</span>&gt;</pre></div>
+<div class="codeblock"><div class="bar"><span class="lang">C# · 填充候选项（防回环）</span><button class="copy">复制</button></div><pre><span class="k">private void</span> FillFontComboBox()
+{
+    _loading = <span class="k">true</span>;
+    <span class="k">try</span>
+    {
+        FontComboBox.Items.Clear();
+        <span class="k">foreach</span> (<span class="k">var</span> font <span class="k">in</span> <span class="k">new</span>[] { <span class="s">"Consolas"</span>, <span class="s">"Microsoft YaHei UI"</span>, <span class="s">"Segoe UI"</span> })
+        {
+            FontComboBox.Items.Add(font);
+        }
+        FontComboBox.SelectedItem = _settings.FontFamily;   <span class="c">// 触发 SelectionChanged，被闸门挡住</span>
+    }
+    <span class="k">finally</span> { _loading = <span class="k">false</span>; }
+}
+
+<span class="k">private void</span> FontComboBox_Changed(<span class="k">object</span> sender, SelectionChangedEventArgs e)
+{
+    <span class="k">if</span> (_loading || FontComboBox.SelectedItem <span class="k">is not string</span> font) <span class="k">return</span>;
+    _settings.FontFamily = font;
+    ScheduleSave();
+}</pre></div>
+<p>进阶：候选项不是纯字符串时，套 <code class="inline">ComboBoxItemStyle</code> 的行为已内置（选中项紫底、悬停灰底），
+自定义项模板可以参考宿主的玩法——列表项里放「徽标 + 名称 + 路径」三段：</p>
+<div class="codeblock"><div class="bar"><span class="lang">XAML · 带徽标的候选项模板</span><button class="copy">复制</button></div><pre>&lt;<span class="a">ComboBox</span> x:Name=<span class="s">"FieldComboBox"</span> Width=<span class="s">"320"</span> Height=<span class="s">"32"</span>&gt;
+    &lt;<span class="a">ComboBox.ItemTemplate</span>&gt;
+        &lt;<span class="a">DataTemplate</span>&gt;
+            &lt;<span class="a">StackPanel</span> Orientation=<span class="s">"Horizontal"</span> Margin=<span class="s">"0,2"</span>&gt;
+                &lt;<span class="a">Border</span> Padding=<span class="s">"5,0"</span> Margin=<span class="s">"0,0,9,0"</span> CornerRadius=<span class="s">"4"</span>
+                        Background=<span class="s">"{DynamicResource PrimarySoftBrush}"</span>&gt;
+                    &lt;<span class="a">TextBlock</span> Text=<span class="s">"推荐"</span> FontSize=<span class="s">"10"</span>
+                               Foreground=<span class="s">"{DynamicResource PrimaryBrush}"</span>/&gt;
+                &lt;/<span class="a">Border</span>&gt;
+                &lt;<span class="a">TextBlock</span> Text=<span class="s">"{Binding Label}"</span> FontSize=<span class="s">"12.5"</span> FontWeight=<span class="s">"SemiBold"</span>/&gt;
+                &lt;<span class="a">TextBlock</span> Text=<span class="s">"{Binding Path}"</span> FontSize=<span class="s">"11"</span> Margin=<span class="s">"10,0,0,0"</span>
+                           FontFamily=<span class="s">"Consolas"</span>
+                           Foreground=<span class="s">"{DynamicResource TextTertiaryBrush}"</span>/&gt;
+            &lt;/<span class="a">StackPanel</span>&gt;
+        &lt;/<span class="a">DataTemplate</span>&gt;
+    &lt;/<span class="a">ComboBox.ItemTemplate</span>&gt;
+&lt;/<span class="a">ComboBox</span>&gt;</pre></div>
+<div class="notice info"><span class="ic">💡</span><div>
+两个实战细节：① 候选项需要可输入过滤时给 ComboBox 设 <code class="inline">IsEditable="True"</code>，
+宿主模板已处理可编辑态；② 长列表下拉注意 <code class="inline">MaxDropDownHeight</code>（默认 160 左右），
+候选项多时显式设大一点，弹出方向不够会自动翻转。
+</div></div>
+</section>
+
+<!-- 6.8 文本框 -->
+<section id="s6-8">
+<h3><span class="no">6.8</span>文本框</h3>
+<div class="scrollx"><table>
+<tr><th style="width:220px">样式键</th><th>形态 / 何时用</th></tr>
+<tr><td>（不写 Style）</td><td>标准输入框：Surface2 底、圆角 12、MinHeight 40、聚焦紫框+光晕。<b>直接用</b>。</td></tr>
+<tr><td><code class="k">BareTextBoxStyle</code></td><td>透明无边框裸框。嵌进自定义形状里（比如色块旁边手输 hex）用。</td></tr>
+<tr><td><code class="k">ModernPasswordBoxStyle</code></td><td>PasswordBox <b>必须显式套</b>（PasswordBox 没有隐式样式）。</td></tr>
+<tr><td><code class="k">EffectPercentTextBoxStyle</code></td><td>30 高紧凑小输入框，数字右对齐。紧凑列表行里嵌数字输入用。</td></tr>
+</table></div>
+<div class="codeblock"><div class="bar"><span class="lang">XAML</span><button class="copy">复制</button></div><pre><span class="c">&lt;!-- 标准输入框（隐式） --&gt;</span>
+&lt;<span class="a">TextBox</span> x:Name=<span class="s">"NameBox"</span> Width=<span class="s">"300"</span> TextChanged=<span class="s">"NameBox_Changed"</span>/&gt;
+
+<span class="c">&lt;!-- 密码框（必须显式套样式） --&gt;</span>
+&lt;<span class="a">PasswordBox</span> x:Name=<span class="s">"TokenBox"</span> Width=<span class="s">"300"</span>
+            Style=<span class="s">"{DynamicResource ModernPasswordBoxStyle}"</span>/&gt;
+
+<span class="c">&lt;!-- 行内小数字框 --&gt;</span>
+&lt;<span class="a">TextBox</span> Width=<span class="s">"64"</span> Style=<span class="s">"{DynamicResource EffectPercentTextBoxStyle}"</span>/&gt;</pre></div>
+<div class="notice warn"><span class="ic">⚠️</span><div>
+<b>TextChanged 是最容易被忽视的回环源</b>：程序里 <code class="inline">box.Text = ...</code> 也会触发它。
+凡是「值变即存盘」的 TextChanged / ValueChanged / SelectionChanged / Checked，一律配
+<code class="inline">_loading</code> 闸门（见 7.3），否则打开页面的瞬间就把配置覆盖了。
+</div></div>
+</section>
+
+<!-- 6.9 调色板 -->
+<section id="s6-9">
+<h3><span class="no">6.9</span>调色板（颜色选择）</h3>
+<p>宿主没有现成的「取色控件」，但有成熟的<b>组合模式</b>（KeyDisplay 实战验证过）：
+页面上一行 = <b>色块（点击打开取色窗）+ hex 只读文本 + 透明度滑条</b>（+ 可选的清除按钮、循环开关）。</p>
+
+<h4>页内组合模板</h4>
+<div class="codeblock"><div class="bar"><span class="lang">XAML · 颜色行：色块 + hex + 透明度</span><button class="copy">复制</button></div><pre>&lt;<span class="a">StackPanel</span> Orientation=<span class="s">"Horizontal"</span> Margin=<span class="s">"0,8,0,0"</span>&gt;
+    &lt;<span class="a">TextBlock</span> Text=<span class="s">"没按下 · 文字"</span> Style=<span class="s">"{DynamicResource FieldLabelStyle}"</span>
+               Width=<span class="s">"112"</span> VerticalAlignment=<span class="s">"Center"</span>/&gt;
+
+    <span class="c">&lt;!-- 色块：Border 而不是 Button，自由度更高（尺寸/圆角/描边随你） --&gt;</span>
+    &lt;<span class="a">Border</span> x:Name=<span class="s">"IdleTextSwatch"</span> Width=<span class="s">"30"</span> Height=<span class="s">"30"</span>
+            CornerRadius=<span class="s">"8"</span> BorderThickness=<span class="s">"1.5"</span>
+            BorderBrush=<span class="s">"{DynamicResource BorderStrongBrush}"</span>
+            Background=<span class="s" >"White"</span>
+            Cursor=<span class="s">"Hand"</span> ToolTip=<span class="s">"点击修改颜色"</span>
+            MouseLeftButtonDown=<span class="s">"IdleTextSwatch_Click"</span>/&gt;
+
+    <span class="c">&lt;!-- hex 只读回显（等宽字体，一眼能核对） --&gt;</span>
+    &lt;<span class="a">TextBlock</span> x:Name=<span class="s">"IdleTextColorHexText"</span> Style=<span class="s">"{DynamicResource HintStyle}"</span>
+               Width=<span class="s">"88"</span> FontFamily=<span class="s">"Consolas"</span> Margin=<span class="s">"10,0,0,0"</span>
+               VerticalAlignment=<span class="s">"Center"</span>/&gt;
+
+    <span class="c">&lt;!-- 清除覆盖（恢复默认色） --&gt;</span>
+    &lt;<span class="a">Button</span> Content=<span class="s">"✕"</span> Style=<span class="s">"{DynamicResource SwatchButtonStyle}"</span>
+            FontSize=<span class="s">"10"</span> ToolTip=<span class="s">"清除这个覆盖"</span> Click=<span class="s">"ClearIdleText_Click"</span>/&gt;
+
+    <span class="c">&lt;!-- 透明度独立滑条（颜色存 #RRGGBB，透明度单独存 0~100） --&gt;</span>
+    &lt;<span class="a">TextBlock</span> Text=<span class="s">"透明度"</span> Style=<span class="s">"{DynamicResource HintStyle}"</span>
+               Margin=<span class="s">"12,0,8,0"</span> VerticalAlignment=<span class="s">"Center"</span>/&gt;
+    &lt;<span class="a">Slider</span> x:Name=<span class="s">"IdleTextAlphaSlider"</span> Width=<span class="s">"140"</span>
+            Minimum=<span class="s">"0"</span> Maximum=<span class="s">"100"</span> TickFrequency=<span class="s">"1"</span>
+            IsSnapToTickEnabled=<span class="s">"True"</span> ValueChanged=<span class="s">"IdleTextAlpha_Changed"</span>/&gt;
+    &lt;<span class="a">TextBlock</span> x:Name=<span class="s">"IdleTextAlphaText"</span> Style=<span class="s">"{DynamicResource HintStyle}"</span>
+               Width=<span class="s">"52"</span> VerticalAlignment=<span class="s">"Center"</span> Margin=<span class="s">"6,0,0,0"</span>/&gt;
+&lt;/<span class="a">StackPanel</span>&gt;</pre></div>
+<div class="codeblock"><div class="bar"><span class="lang">C# · 色块点击 → 打开取色窗 → 回填</span><button class="copy">复制</button></div><pre><span class="k">private void</span> IdleTextSwatch_Click(<span class="k">object</span> sender, MouseButtonEventArgs e)
+{
+    <span class="k">var</span> initial = ParseColor(_settings.IdleTextHex, Colors.White);
+    <span class="k">var</span> picker = <span class="k">new</span> ColorPickerWindow(initial);   <span class="c">// 模板见下文</span>
+    picker.Owner = Window.GetWindow(<span class="k">this</span>);          <span class="c">// 模态挂在宿主窗口上</span>
+    <span class="k">if</span> (picker.ShowDialog() == <span class="k">true</span> &amp;&amp; picker.ResultHex <span class="k">is not null</span>)
+    {
+        _settings.IdleTextHex = picker.ResultHex;
+        RefreshSwatch();                            <span class="c">// 色块/hex 文本/滑条全部回填</span>
+        ScheduleSave();
+    }
+}
+
+<span class="c">// hex → Color 的宽容解析（配置可能被手改坏，永远给兜底）</span>
+<span class="k">private static</span> Color ParseColor(<span class="k">string</span>? text, Color fallback)
+{
+    <span class="k">if</span> (!<span class="k">string</span>.IsNullOrWhiteSpace(text))
+    {
+        <span class="k">try</span> { 
+            <span class="k">var</span> c = (Color)ColorConverter.ConvertFromString(text.Trim());
+            <span class="k">return</span> Color.FromArgb(<span class="n">255</span>, c.R, c.G, c.B);   <span class="c">// 透明度单独管理，这里吃掉 A</span>
+        }
+        <span class="k">catch</span> { }
+    }
+    <span class="k">return</span> fallback;
+}</pre></div>
+
+<h4>取色窗：不要指望系统 ColorDialog</h4>
+<div class="notice warn"><span class="ic">⚠️</span><div>
+WinForms 的 <code class="inline">System.Windows.Forms.ColorDialog</code> 在插件上下文里<b>可能调不起来</b>
+（KeyDisplay 实测过：装载时用探针先试一次，失败就永远用自绘窗）。而且开 WinForms 会引入
+System.Drawing / System.Windows.Forms 的隐式 using，跟 WPF 的 Brush / Point / MouseEventArgs
+<b>全部撞名</b>（CS0104 编译错）。<b>建议直接自绘取色窗</b>，样式还能和宿主统一。
+</div></div>
+<p>自绘取色窗的最小实现：预览条 + 常用色快选 + RGBA 四滑条 + 确定取消。</p>
+<div class="codeblock"><div class="bar"><span class="lang">XAML · ColorPickerWindow.xaml（自绘取色窗）</span><button class="copy">复制</button></div><pre>&lt;<span class="a">Window</span> x:Class=<span class="s">"MyPlugin.ColorPickerWindow"</span>
+        xmlns=<span class="s">"http://schemas.microsoft.com/winfx/2006/xaml/presentation"</span>
+        xmlns:x=<span class="s">"http://schemas.microsoft.com/winfx/2006/xaml"</span>
+        Title=<span class="s">"选择颜色"</span> Width=<span class="s">"420"</span> SizeToContent=<span class="s">"Height"</span>
+        WindowStartupLocation=<span class="s">"CenterOwner"</span> Topmost=<span class="s">"True"</span>
+        ResizeMode=<span class="s">"NoResize"</span> ShowInTaskbar=<span class="s">"False"</span>&gt;
+    &lt;<span class="a">StackPanel</span> Margin=<span class="s">"16"</span>&gt;
+        &lt;<span class="a">Border</span> x:Name=<span class="s">"Preview"</span> Height=<span class="s">"46"</span> CornerRadius=<span class="s">"10"</span>
+                BorderBrush=<span class="s">"{DynamicResource BorderStrongBrush}"</span>
+                BorderThickness=<span class="s">"1"</span> Background=<span class="s">"White"</span>/&gt;
+        &lt;<span class="a">TextBlock</span> x:Name=<span class="s">"HexText"</span> Margin=<span class="s">"0,8,0,0"</span> FontFamily=<span class="s">"Consolas"</span>
+                   FontSize=<span class="s">"13"</span> TextAlignment=<span class="s">"Center"</span>/&gt;
+
+        &lt;<span class="a">TextBlock</span> Text=<span class="s">"常用颜色（点一下直接选）"</span> Margin=<span class="s">"0,12,0,6"</span> FontSize=<span class="s">"12"/&gt;</span>
+        &lt;<span class="a">WrapPanel</span> x:Name=<span class="s">"SwatchPanel"</span>/&gt;
+
+        <span class="c">&lt;!-- R / G / B / A 四行滑条，同一结构复制四遍（略，见下文说明） --&gt;</span>
+
+        &lt;<span class="a">StackPanel</span> Orientation=<span class="s">"Horizontal"</span> HorizontalAlignment=<span class="s">"Right"</span> Margin=<span class="s">"0,14,0,0"</span>&gt;
+            &lt;<span class="a">Button</span> Content=<span class="s">"恢复白色"</span> Click=<span class="s">"White_Click"</span> Width=<span class="s">"90"</span>/&gt;
+            &lt;<span class="a">Button</span> Content=<span class="s">"确定"</span> Click=<span class="s">"Ok_Click"</span> Width=<span class="s">"80"</span> Margin=<span class="s">"8,0,0,0"</span> IsDefault=<span class="s">"True"</span>/&gt;
+            &lt;<span class="a">Button</span> Content=<span class="s">"取消"</span> Click=<span class="s">"Cancel_Click"</span> Width=<span class="s">"80"</span> Margin=<span class="s">"8,0,0,0"</span> IsCancel=<span class="s">"True"</span>/&gt;
+        &lt;/<span class="a">StackPanel</span>&gt;
+    &lt;/<span class="a">StackPanel</span>&gt;
+&lt;/<span class="a">Window</span>&gt;</pre></div>
+<p>RGBA 滑条行结构（四行同构，x:Name 分别 R/G/B/A）：</p>
+<div class="codeblock"><div class="bar"><span class="lang">XAML · 一条通道滑条</span><button class="copy">复制</button></div><pre>&lt;<span class="a">Grid</span> Margin=<span class="s">"0,10,0,0"</span>&gt;
+    &lt;<span class="a">Grid.ColumnDefinitions</span>&gt;
+        &lt;<span class="a">ColumnDefinition</span> Width=<span class="s">"24"</span>/&gt;&lt;<span class="a">ColumnDefinition</span> Width=<span class="s">"*"</span>/&gt;&lt;<span class="a">ColumnDefinition</span> Width=<span class="s">"46"</span>/&gt;
+    &lt;/<span class="a">Grid.ColumnDefinitions</span>&gt;
+    &lt;<span class="a">TextBlock</span> Text=<span class="s">"R"</span> VerticalAlignment=<span class="s">"Center"</span>/&gt;
+    &lt;<span class="a">Slider</span> x:Name=<span class="s">"RSlider"</span> Grid.Column=<span class="s">"1"</span> Minimum=<span class="s">"0"</span> Maximum=<span class="s">"255"</span>
+            TickFrequency=<span class="s">"1"</span> IsSnapToTickEnabled=<span class="s">"True"</span> ValueChanged=<span class="s">"Slider_Changed"</span>/&gt;
+    &lt;<span class="a">TextBlock</span> x:Name=<span class="s">"RText"</span> Grid.Column=<span class="s">"2"</span> VerticalAlignment=<span class="s">"Center"</span> TextAlignment=<span class="s">"Right"</span>/&gt;
+&lt;/<span class="a">Grid</span>&gt;</pre></div>
+<div class="codeblock"><div class="bar"><span class="lang">C# · 取色窗骨架</span><button class="copy">复制</button></div><pre><span class="k">public partial class</span> ColorPickerWindow : Window
+{
+    <span class="k">public string</span>? ResultHex { <span class="k">get; private set</span>; }
+    <span class="k">private readonly</span> Color _initial;
+
+    <span class="k">private static readonly</span> (<span class="k">string</span> Hex, <span class="k">string</span> Name)[] CommonColors =
+    {
+        (<span class="s">"#FFFFFF"</span>, <span class="s">"白"</span>), (<span class="s">"#000000"</span>, <span class="s">"黑"</span>), (<span class="s">"#FF5252"</span>, <span class="s">"红"</span>), (<span class="s">"#FFB547"</span>, <span class="s">"橙"</span>),
+        (<span class="s">"#FFE066"</span>, <span class="s">"黄"</span>), (<span class="s">"#3FCFA9"</span>, <span class="s">"绿"</span>), (<span class="s">"#57C5F2"</span>, <span class="s">"蓝"</span>), (<span class="s">"#7C6CF0"</span>, <span class="s">"紫"</span>),
+        (<span class="s">"#FF8FBE"</span>, <span class="s">"粉"</span>), (<span class="s">"#9BE7C4"</span>, <span class="s">"薄荷"</span>),
+    };
+
+    <span class="k">public</span> ColorPickerWindow(Color initial)
+    {
+        InitializeComponent();
+        _initial = initial;
+
+        <span class="c">// 常用色块</span>
+        <span class="k">foreach</span> (<span class="k">var</span> (hex, name) <span class="k">in</span> CommonColors)
+        {
+            <span class="k">var</span> swatch = <span class="k">new</span> Border
+            {
+                Width = <span class="n">30</span>, Height = <span class="n">30</span>, Margin = <span class="k">new</span> Thickness(<span class="n">0</span>, <span class="n">0</span>, <span class="n">8</span>, <span class="n">8</span>),
+                CornerRadius = <span class="k">new</span> CornerRadius(<span class="n">8</span>), Cursor = Cursors.Hand,
+                Background = <span class="k">new</span> SolidColorBrush(ParseColor(hex, Colors.White)),
+                ToolTip = <span class="s">$"{name} {hex}"</span>,
+            };
+            swatch.MouseLeftButtonDown += (_, _) => ApplyColor(hex);
+            SwatchPanel.Children.Add(swatch);
+        }
+
+        PushToSliders(initial);
+    }
+
+    <span class="k">private void</span> Slider_Changed(<span class="k">object</span> sender, RoutedPropertyChangedEventArgs&lt;<span class="k">double</span>&gt; e)
+    {
+        <span class="k">var</span> color = Color.FromArgb((<span class="k">byte</span>)ASlider.Value, (<span class="k">byte</span>)RSlider.Value,
+                                        (<span class="k">byte</span>)GSlider.Value, (<span class="k">byte</span>)BSlider.Value);
+        Preview.Background = <span class="k">new</span> SolidColorBrush(color);
+        HexText.Text = <span class="s">$"#{color.R:X2}{color.G:X2}{color.B:X2}"</span>;
+        RText.Text = ((<span class="k">int</span>)RSlider.Value).ToString();
+        <span class="c">// GText/BText/AText 同理</span>
+    }
+
+    <span class="k">private void</span> ApplyColor(<span class="k">string</span> hex) =&gt; PushToSliders(ParseColor(hex, Colors.White));
+    <span class="k">private void</span> PushToSliders(Color c) { RSlider.Value = c.R; GSlider.Value = c.G; BSlider.Value = c.B; ASlider.Value = c.A; }
+
+    <span class="k">private void</span> Ok_Click(<span class="k">object</span> sender, RoutedEventArgs e)
+    {
+        <span class="k">var</span> c = ((SolidColorBrush)Preview.Background).Color;
+        ResultHex = <span class="s">$"#{c.R:X2}{c.G:X2}{c.B:X2}"</span>;      <span class="c">// 只回写 RGB，透明度走独立滑条</span>
+        DialogResult = <span class="k">true</span>;
+    }
+
+    <span class="k">private void</span> Cancel_Click(<span class="k">object</span> sender, RoutedEventArgs e) =&gt; DialogResult = <span class="k">false</span>;
+    <span class="k">private void</span> White_Click(<span class="k">object</span> sender, RoutedEventArgs e) =&gt; ApplyColor(<span class="s">"#FFFFFF"</span>);
+}</pre></div>
+<div class="notice info"><span class="ic">💡</span><div>
+设计取舍（KeyDisplay 验证过的）：<b>颜色存 #RRGGBB、透明度单独存 0~100</b>。
+好处是「白底 60% 透明」这种配置一眼能读懂，hex 也能直接粘到别处用；
+A 通道只在最终合成 Brush 时乘进去。
+</div></div>
+</section>
+
+<!-- 6.10 芯片 -->
+<section id="s6-10">
+<h3><span class="no">6.10</span>芯片与徽标</h3>
+<p>小圆角标签，标状态用。三种底色：</p>
+<div class="sample">
+  <div class="lbl">效果（用宿主同款参数模拟）</div>
+  <span class="chip-demo" style="background:var(--surface3);color:var(--text2)">普通（Surface3 底）</span>
+  <span class="chip-demo" style="background:var(--primary-soft);color:var(--primary)">推荐 / 正则（PrimarySoft 底）</span>
+  <span class="chip-demo" style="background:var(--mint-soft);color:#2AA98A">实测 / 玩家内容（MintSoft 底）</span>
+</div>
+<div class="codeblock"><div class="bar"><span class="lang">XAML</span><button class="copy">复制</button></div><pre>&lt;<span class="a">Border</span> Style=<span class="s">"{DynamicResource ChipBorderStyle}"</span> VerticalAlignment=<span class="s">"Center"</span>&gt;
+    &lt;<span class="a">TextBlock</span> Text=<span class="s">"普通"</span> FontSize=<span class="s">"11.5"</span> FontWeight=<span class="s">"Bold"</span>
+               Foreground=<span class="s">"{DynamicResource TextSecondaryBrush}"</span>/&gt;
+&lt;/<span class="a">Border</span>&gt;
+
+&lt;<span class="a">Border</span> Style=<span class="s">"{DynamicResource ChipPrimaryBorderStyle}"</span> VerticalAlignment=<span class="s">"Center"</span>&gt;
+    &lt;<span class="a">TextBlock</span> Text=<span class="s">"正则"</span> FontSize=<span class="s">"11.5"</span> FontWeight=<span class="s">"Bold"</span>
+               Foreground=<span class="s">"{DynamicResource PrimaryBrush}"</span>/&gt;
+&lt;/<span class="a">Border</span>&gt;
+
+&lt;<span class="a">Border</span> Style=<span class="s">"{DynamicResource ChipMintBorderStyle}"</span> VerticalAlignment=<span class="s">"Center"</span>&gt;
+    &lt;<span class="a">TextBlock</span> Text=<span class="s">"实测"</span> FontSize=<span class="s">"11.5"</span> FontWeight=<span class="s">"Bold"</span>
+               Foreground=<span class="s">"{DynamicResource MintBrush}"</span>/&gt;
+&lt;/<span class="a">Border</span>&gt;</pre></div>
+<p>条件显隐（比如「是正则才亮正则芯片」）用 DataTemplate.Triggers 或直接代码里 <code class="inline">Visibility</code> 切换。</p>
+</section>
+
+<!-- 6.11 列表 -->
+<section id="s6-11">
+<h3><span class="no">6.11</span>列表</h3>
+<p><code class="inline">ListBox</code> / <code class="inline">ListBoxItem</code> 都是隐式样式：透明底、圆角 12 条目、
+悬停右移 4px、选中紫框+光晕。<b>直接用</b>。宿主特意把默认模板里的系统白底（Aero2 的 Border#Bd）
+干掉了，所以列表放在任何底色上都不会「白一块」。</p>
+<div class="codeblock"><div class="bar"><span class="lang">XAML · 规则列表</span><button class="copy">复制</button></div><pre>&lt;<span class="a">ListBox</span> x:Name=<span class="s">"RuleList"</span> SelectionChanged=<span class="s">"RuleList_SelectionChanged"</span>&gt;
+    &lt;<span class="a">ListBox.ItemTemplate</span>&gt;
+        &lt;<span class="a">DataTemplate</span>&gt;
+            &lt;<span class="a">Grid</span>&gt;
+                &lt;<span class="a">Grid.ColumnDefinitions</span>&gt;
+                    &lt;<span class="a">ColumnDefinition</span> Width=<span class="s">"Auto"</span>/&gt;
+                    &lt;<span class="a">ColumnDefinition</span> Width=<span class="s">"*"</span>/&gt;
+                    &lt;<span class="a">ColumnDefinition</span> Width=<span class="s">"Auto"</span>/&gt;
+                &lt;/<span class="a">Grid.ColumnDefinitions</span>&gt;
+                &lt;<span class="a">Border</span> Width=<span class="s">"15"</span> Height=<span class="s">"15"</span> CornerRadius=<span class="s">"5"</span> VerticalAlignment=<span class="s">"Center"</span>
+                        Background=<span class="s">"{Binding Color}"</span>/&gt;
+                &lt;<span class="a">TextBlock</span> Grid.Column=<span class="s">"1"</span> Text=<span class="s">"{Binding Text}"</span> Margin=<span class="s">"10,0,8,0"</span>
+                           FontSize=<span class="s">"13"</span> FontWeight=<span class="s">"Bold"</span> TextTrimming=<span class="s">"CharacterEllipsis"</span>
+                           VerticalAlignment=<span class="s">"Center"</span>/&gt;
+                &lt;<span class="a">Border</span> Grid.Column=<span class="s">"2"</span> Style=<span class="s">"{DynamicResource ChipPrimaryBorderStyle}"</span>&gt;
+                    &lt;<span class="a">TextBlock</span> Text=<span class="s">"正则"</span> FontSize=<span class="s">"11.5"</span> FontWeight=<span class="s">"Bold"</span>
+                               Foreground=<span class="s">"{DynamicResource PrimaryBrush}"</span>/&gt;
+                &lt;/<span class="a">Border</span>&gt;
+            &lt;/<span class="a">Grid</span>&gt;
+        &lt;/<span class="a">DataTemplate</span>&gt;
+    &lt;/<span class="a">ListBox.ItemTemplate</span>&gt;
+&lt;/<span class="a">ListBox</span>&gt;</pre></div>
+<div class="notice warn"><span class="ic">⚠️</span><div>
+<b>嵌套滚动：</b>插件页面本身在宿主的 ScrollViewer 里。你自己的 ListBox / ScrollViewer 高度不设限的话，
+内层会把滚轮事件吃掉（外层滚不动），或者内层被撑到无限高。两种解法：
+① 给内层设 <code class="inline">MaxHeight</code>，让它自己出滚动条；② 短列表（&lt;10 项）直接让它自然展开，别嵌套滚动。
+</div></div>
+</section>
+
+<!-- 6.12 组装 -->
+<section id="s6-12">
+<h3><span class="no">6.12</span>一行设置 · 组装模板</h3>
+<p>把前面的积木拼起来。宿主页面的每一行设置都是这个节奏——<b>固定宽标签 + 固定宽控件 + 行内提示</b>：</p>
+<div class="codeblock"><div class="bar"><span class="lang">XAML · 一张卡的完整骨架（抄这个就够了）</span><button class="copy">复制</button></div><pre>&lt;<span class="a">Border</span> Style=<span class="s">"{DynamicResource CardStyle}"</span>&gt;
+    &lt;<span class="a">StackPanel</span>&gt;
+        &lt;<span class="a">TextBlock</span> Text=<span class="s">"1. 开关与刷新"</span> Style=<span class="s">"{DynamicResource CardTitleStyle}"</span>/&gt;
+        &lt;<span class="a">TextBlock</span> Style=<span class="s">"{DynamicResource CardDescStyle}"</span> TextWrapping=<span class="s">"Wrap"</span>
+                   Margin=<span class="s">"0,3,0,14"</span> Text=<span class="s">"总开关、刷新节奏和目标窗口。"</span>/&gt;
+
+        <span class="c">&lt;!-- 总开关（ToggleSwitchStyle 自带卡片感，独占一行） --&gt;</span>
+        &lt;<span class="a">CheckBox</span> x:Name=<span class="s">"EnabledCheckBox"</span> Style=<span class="s">"{DynamicResource ToggleSwitchStyle}"</span>&gt;
+            &lt;<span class="a">TextBlock</span> Text=<span class="s">"启用本功能"</span> FontWeight=<span class="s">"Bold"</span>/&gt;
+        &lt;/<span class="a">CheckBox</span>&gt;
+
+        <span class="c">&lt;!-- 滑条行 --&gt;</span>
+        &lt;<span class="a">StackPanel</span> Orientation=<span class="s">"Horizontal"</span> Margin=<span class="s">"0,14,0,0"</span>&gt;
+            &lt;<span class="a">TextBlock</span> Text=<span class="s">"刷新间隔"</span> Style=<span class="s">"{DynamicResource FieldLabelStyle}"</span>
+                       Width=<span class="s">"72"</span> VerticalAlignment=<span class="s">"Center"</span>/&gt;
+            &lt;<span class="a">Slider</span> x:Name=<span class="s">"RefreshSlider"</span> Width=<span class="s">"300"</span> Minimum=<span class="s">"10"</span> Maximum=<span class="s">"500"</span>/&gt;
+            &lt;<span class="a">TextBlock</span> x:Name=<span class="s">"RefreshText"</span> Style=<span class="s">"{DynamicResource HintStyle}"</span>
+                       Width=<span class="s">"48"</span> VerticalAlignment=<span class="s">"Center"</span> Margin=<span class="s">"12,0,0,0"</span>/&gt;
+        &lt;/<span class="a">StackPanel</span>&gt;
+        &lt;<span class="a">TextBlock</span> Style=<span class="s">"{DynamicResource HintStyle}"</span> Margin=<span class="s">"84,4,0,0"</span>
+                   Text=<span class="s">"太快会占 CPU，40ms 足够流畅。"</span>/&gt;
+
+        <span class="c">&lt;!-- 下拉行 --&gt;</span>
+        &lt;<span class="a">StackPanel</span> Orientation=<span class="s">"Horizontal"</span> Margin=<span class="s">"0,14,0,0"</span>&gt;
+            &lt;<span class="a">TextBlock</span> Text=<span class="s">"目标窗口"</span> Style=<span class="s">"{DynamicResource FieldLabelStyle}"</span>
+                       Width=<span class="s">"72"</span> VerticalAlignment=<span class="s">"Center"</span>/&gt;
+            &lt;<span class="a">ComboBox</span> x:Name=<span class="s">"TargetComboBox"</span> Width=<span class="s">"300"</span> Height=<span class="s">"32"</span>/&gt;
+            &lt;<span class="a">Button</span> Content=<span class="s">"刷新列表"</span> Style=<span class="s">"{DynamicResource SmallGhostButtonStyle}"</span>
+                    Margin=<span class="s">"8,0,0,0"</span>/&gt;
+        &lt;/<span class="a">StackPanel</span>&gt;
+
+        <span class="c">&lt;!-- 操作按钮行 --&gt;</span>
+        &lt;<span class="a">StackPanel</span> Orientation=<span class="s">"Horizontal"</span> Margin=<span class="s">"0,18,0,0"</span>&gt;
+            &lt;<span class="a">Button</span> Content=<span class="s">"立即刷新"</span> Style=<span class="s">"{DynamicResource SmallPrimaryButtonStyle}"</span>/&gt;
+            &lt;<span class="a">Button</span> Content=<span class="s">"恢复默认"</span> Style=<span class="s">"{DynamicResource SmallGhostButtonStyle}"</span>
+                    Margin=<span class="s">"8,0,0,0"</span>/&gt;
+        &lt;/<span class="a">StackPanel</span>&gt;
+    &lt;/<span class="a">StackPanel</span>&gt;
+&lt;/<span class="a">Border</span>&gt;</pre></div>
+<p>几个尺寸约定：<b>标签列宽 72</b>（两字）或 <b>112</b>（四~五字）；<b>控件宽 300</b>（大件）/ 140~170（次要）；
+行距 14（块间）/ 8（紧凑）；提示行缩进 84 与控件左缘对齐。</p>
+</section>
+
+<!-- ================================================================ -->
+<!-- 7. 配置持久化 -->
+<!-- ================================================================ -->
+<section id="s7">
+<h2><span class="no">07</span>配置持久化</h2>
+
+<h3><span class="no">7.1</span>配置类与读写</h3>
+<div class="codeblock"><div class="bar"><span class="lang">C# · 配置类 + 读 + 写</span><button class="copy">复制</button></div><pre><span class="k">public class</span> KeyDisplaySettings
+{
+    <span class="k">public bool</span> Enabled { <span class="k">get; set</span>; } = <span class="k">true</span>;
+    <span class="k">public double</span> OverallScale { <span class="k">get; set</span>; } = <span class="n">1.0</span>;      <span class="c">// 显示缩放，不改原始数据</span>
+    <span class="k">public string</span> IdleTextHex { <span class="k">get; set</span>; } = <span class="s">"#FFFFFF"</span>;
+    <span class="k">public int</span> IdleTextAlpha { <span class="k">get; set</span>; } = <span class="n">100</span>;         <span class="c">// 0~100，与颜色分开存</span>
+    <span class="k">public</span> List&lt;<span class="k">string</span>&gt; Keys { <span class="k">get; set</span>; } = <span class="k">new</span>();
+}
+
+<span class="c">// Initialize 里：</span>
+Settings = PluginSettingsFile.Load&lt;KeyDisplaySettings&gt;(host.PluginDirectory);
+
+<span class="c">// 保存：</span>
+PluginSettingsFile.Save(host.PluginDirectory, Settings);</pre></div>
+<p>Load 的容错：文件不存在 / JSON 坏了 / 新字段缺失 → 都用默认值兜底，不抛异常。
+所以<b>配置类的默认值就是首次体验</b>——认真设。</p>
+
+<h3><span class="no">7.2</span>防抖保存（别每拖一格滑条写一次盘）</h3>
+<div class="codeblock"><div class="bar"><span class="lang">C# · ScheduleSave 模式</span><button class="copy">复制</button></div><pre><span class="k">private</span> System.Windows.Threading.DispatcherTimer? _saveTimer;
+
+<span class="c">/// 值变了先标记，500ms 内没有新变化才落盘。滑条狂拖时不会每格写一次盘。</span>
+<span class="k">private void</span> ScheduleSave()
+{
+    <span class="k">if</span> (_saveTimer <span class="k">is null</span>)
+    {
+        _saveTimer = <span class="k">new</span> System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(<span class="n">500</span>),
+        };
+        _saveTimer.Tick += (_, _) =&gt; { _saveTimer.Stop(); SaveSettings(); };
+    }
+    _saveTimer.Stop();
+    _saveTimer.Start();      <span class="c">// 重新计时：合并这 500ms 内的所有变化</span>
+}
+
+<span class="k">public void</span> SaveSettings()
+{
+    <span class="k">try</span> { PluginSettingsFile.Save(_host!.PluginDirectory, Settings); }
+    <span class="k">catch</span> { }
+}</pre></div>
+
+<h3><span class="no">7.3</span>_loading 闸门（「变化即保存」的生死线）</h3>
+<div class="notice danger"><span class="ic">⛔</span><div>
+<b>铁律四：</b>「值变化即保存」的页面，<b>必须</b>配 <code class="inline">_loading</code> 闸门。
+程序回填 UI（打开页面、切换选中项、撤销操作）也会触发 TextChanged / ValueChanged / SelectionChanged——
+没有闸门，回填瞬间就会拿 UI 的旧值/空值<b>覆盖配置</b>，或者触发「保存→刷新→保存」死循环。
+</div></div>
+<div class="codeblock"><div class="bar"><span class="lang">C#</span><button class="copy">复制</button></div><pre><span class="k">private bool</span> _loading;
+
+<span class="c">// ① 回填时：拉闸 → 写 UI → 落闸（try/finally 保证异常也能落闸）</span>
+<span class="k">private void</span> PushSettingsToUi()
+{
+    _loading = <span class="k">true</span>;
+    <span class="k">try</span>
+    {
+        EnabledCheckBox.IsChecked = Settings.Enabled;
+        FontSizeSlider.Value = Settings.FontSize;
+        TargetComboBox.SelectedItem = Settings.Target;
+    }
+    <span class="k">finally</span> { _loading = <span class="k">false</span>; }
+}
+
+<span class="c">// ② 所有变化回调第一行：检查闸门</span>
+<span class="k">private void</span> FontSizeSlider_Changed(<span class="k">object</span> sender, RoutedPropertyChangedEventArgs&lt;<span class="k">double</span>&gt; e)
+{
+    <span class="k">if</span> (_loading) <span class="k">return</span>;
+    <span class="c">/* …保存与应用… */</span>
+}</pre></div>
+
+<h3><span class="no">7.4</span>自检/探针不得污染用户配置（血泪教训）</h3>
+<p>如果插件内置自检（推荐，见 11.3），自检会改配置去验证行为。<b>必须三件套防护</b>，
+否则用户配置会被探针值刷掉——真实事故：反复跑自检后，用户的「整体大小」被永久改成 50%。</p>
+<div class="codeblock"><div class="bar"><span class="lang">C# · 自检防污染三件套</span><button class="copy">复制</button></div><pre><span class="k">private bool</span> _suppressSave;
+
+<span class="c">// ① 写盘总闸：自检期间任何路径的保存都被吞掉</span>
+<span class="k">public void</span> SaveSettings()
+{
+    <span class="k">if</span> (_suppressSave) <span class="k">return</span>;
+    <span class="k">try</span> { PluginSettingsFile.Save(_host!.PluginDirectory, Settings); }
+    <span class="k">catch</span> { }
+}
+
+<span class="k">private void</span> RunSelfTestIfRequested()
+{
+    _suppressSave = <span class="k">true</span>;                          <span class="c">// ② 总闸拉起</span>
+    <span class="k">try</span> { RunSelfTestBody(); }                        <span class="c">//    自检主体：改配置→验证→try/finally 内还原</span>
+    <span class="k">finally</span>
+    {
+        _suppressSave = <span class="k">false</span>;
+        <span class="c">// ③ 结束后从磁盘重载（不是保存！）——自检中途炸掉时内存里残留探针值，</span>
+        <span class="c">//    此时保存反而落盘脏值；重载则无条件回到用户真实的配置。</span>
+        <span class="k">try</span> { Settings = PluginSettingsFile.Load&lt;KeyDisplaySettings&gt;(_host!.PluginDirectory); }
+        <span class="k">catch</span> { }
+    }
+}</pre></div>
+<p>自检主体里改配置同样要 try/finally 还原——总闸是最后防线，不是免还原的理由。</p>
+</section>
+
+<!-- ================================================================ -->
+<!-- 8. 悬浮窗 -->
+<!-- ================================================================ -->
+<section id="s8">
+<h2><span class="no">08</span>自己开窗口（悬浮窗类插件必读）</h2>
+<p>悬浮窗 = 一个「飘在游戏上面、不抢焦点、不进任务栏」的 WPF Window。
+WPF 自带的属性只能解决一半，另一半必须 Win32。先给完整模板，再逐条解释为什么。</p>
+
+<h3><span class="no">8.1</span>窗口 XAML 模板</h3>
+<div class="codeblock"><div class="bar"><span class="lang">XAML · OverlayWindow.xaml</span><button class="copy">复制</button></div><pre>&lt;<span class="a">Window</span> x:Class=<span class="s">"MyPlugin.OverlayWindow"</span>
+        xmlns=<span class="s">"http://schemas.microsoft.com/winfx/2006/xaml/presentation"</span>
+        xmlns:x=<span class="s">"http://schemas.microsoft.com/winfx/2006/xaml"</span>
+        Title=<span class="s">"我的悬浮窗"</span>
+        WindowStyle=<span class="s">"None"</span>               <span class="c">&lt;!-- 无边框 --&gt;</span>
+        AllowsTransparency=<span class="s">"True"</span>          <span class="c">&lt;!-- 真透明（圆角/阴影需要） --&gt;</span>
+        Background=<span class="s">"Transparent"</span>
+        Topmost=<span class="s">"True"</span>                  <span class="c">&lt;!-- 置顶（对全屏游戏未必够，见 8.5） --&gt;</span>
+        ShowInTaskbar=<span class="s">"False"</span>
+        ShowActivated=<span class="s">"False"</span>            <span class="c">&lt;!-- 第一道防抢焦点（还不够，见 8.3） --&gt;</span>
+        ResizeMode=<span class="s">"NoResize"</span>
+        UseLayoutRounding=<span class="s">"True"</span>
+        SnapsToDevicePixels=<span class="s">"True"</span>&gt;
+
+    <span class="c">&lt;!-- 内容外加 Margin 留白：DropShadowEffect 会被窗口边缘切掉，
+         留白 = 阴影半径 + 一点余量。窗口大小 = 内容 + 留白。 --&gt;</span>
+    &lt;<span class="a">Canvas</span> x:Name=<span class="s">"RootCanvas"</span> Background=<span class="s">"Transparent"</span> Margin=<span class="s">"24"</span>&gt;
+        <span class="c">&lt;!-- 内容 --&gt;</span>
+    &lt;/<span class="a">Canvas</span>&gt;
+&lt;/<span class="a">Window</span>&gt;</pre></div>
+
+<h3><span class="no">8.2</span>Win32 常量与声明（照抄）</h3>
+<div class="codeblock"><div class="bar"><span class="lang">C#</span><button class="copy">复制</button></div><pre><span class="k">using</span> System.Runtime.InteropServices;
+<span class="k">using</span> System.Windows.Interop;
+
+<span class="k">public partial class</span> OverlayWindow : Window
+{
+    <span class="k">private const int</span> GWL_EXSTYLE = -<span class="n">20</span>;
+    <span class="k">private const int</span> GWLP_HWNDPARENT = -<span class="n">8</span>;
+    <span class="k">private const int</span> WS_EX_NOACTIVATE  = <span class="n">0x08000000</span>;   <span class="c">// 永不激活</span>
+    <span class="k">private const int</span> WS_EX_TRANSPARENT = <span class="n">0x00000020</span>;   <span class="c">// 鼠标穿透</span>
+    <span class="k">private const int</span> WS_EX_TOOLWINDOW = <span class="n">0x00000080</span>;   <span class="c">// 不进任务栏/Alt+Tab</span>
+
+    [DllImport(<span class="s">"user32.dll"</span>)] <span class="k">private static extern int</span> GetWindowLong(IntPtr hWnd, <span class="k">int</span> nIndex);
+    [DllImport(<span class="s">"user32.dll"</span>)] <span class="k">private static extern int</span> SetWindowLong(IntPtr hWnd, <span class="k">int</span> nIndex, <span class="k">int</span> dwNewLong);
+    [DllImport(<span class="s">"user32.dll"</span>)] <span class="k">private static extern bool</span> IsWindowVisible(IntPtr hWnd);
+}</pre></div>
+
+<h3><span class="no">8.3</span>不抢焦点（最重要的一条）</h3>
+<p>悬浮窗一旦抢焦点，Minecraft 立刻失焦弹 ESC 菜单——用户视角就是「游戏莫名其妙暂停了」。</p>
+<div class="codeblock"><div class="bar"><span class="lang">C#</span><button class="copy">复制</button></div><pre><span class="k">private</span> IntPtr _handle;
+<span class="k">private bool</span> _clickThrough = <span class="k">true</span>;
+
+<span class="k">protected override void</span> OnSourceInitialized(EventArgs e)
+{
+    <span class="k">base</span>.OnSourceInitialized(e);
+    _handle = <span class="k">new</span> WindowInteropHelper(<span class="k">this</span>).Handle;
+    ApplyExtendedStyles();
+    DetachFromOwner();
+}
+
+<span class="k">private void</span> ApplyExtendedStyles()
+{
+    <span class="k">if</span> (_handle == IntPtr.Zero) <span class="k">return</span>;
+
+    <span class="k">var</span> current = GetWindowLong(_handle, GWL_EXSTYLE);
+    <span class="k">var</span> wanted = current | WS_EX_NOACTIVATE;        <span class="c">// ← 核心：Win32 层永不激活</span>
+
+    <span class="k">if</span> (_clickThrough)
+        wanted |= WS_EX_TRANSPARENT;                 <span class="c">// 穿透开关</span>
+    <span class="k">else</span>
+        wanted &amp;= ~WS_EX_TRANSPARENT;
+
+    <span class="k">if</span> (wanted != current)
+        SetWindowLong(_handle, GWL_EXSTYLE, wanted);
+}</pre></div>
+<div class="notice warn"><span class="ic">⚠️</span><div>
+<b>为什么 XAML 上的 ShowActivated="False" 不够：</b>它只在窗口<b>第一次显示</b>时可靠；
+复用型窗口（隐藏再显示）、或某些交互路径下，WPF 仍可能激活它。
+<code class="inline">WS_EX_NOACTIVATE</code> 是 Win32 层的保证——点了也永远不成为前台窗口。两个都设。
+</div></div>
+
+<h3><span class="no">8.4</span>真鼠标穿透</h3>
+<p><code class="inline">IsHitTestVisible="False"</code> 只管 WPF 层的命中测试——窗口在<b>系统</b>眼里依然可点，
+全屏游戏里光标照样现形。真穿透必须 <code class="inline">WS_EX_TRANSPARENT</code>（上节代码已含开关）。
+注意：穿透模式下窗口收不到鼠标 → 拖不动。所以宿主的惯例是——</p>
+<ul>
+  <li>位置以<b>设置</b>为准（穿透时不能拖，天经地义）；</li>
+  <li>页面里给一个「拖动定位」<code class="inline">ToggleButton</code>（<code class="inline">SmallPrimaryToggleButtonStyle</code>），
+  开着时<b>关掉穿透</b>允许拖动（OnMouseLeftButtonDown → DragMove），关掉恢复穿透并记下位置。</li>
+</ul>
+<div class="codeblock"><div class="bar"><span class="lang">C# · 拖动</span><button class="copy">复制</button></div><pre><span class="k">protected override void</span> OnMouseLeftButtonDown(MouseButtonEventArgs e)
+{
+    <span class="k">base</span>.OnMouseLeftButtonDown(e);
+    <span class="k">if</span> (!_clickThrough)
+    {
+        <span class="k">try</span> { DragMove(); } <span class="k">catch</span> { }   <span class="c">// 拖完落点由外面 RememberCurrentPosition 记回设置</span>
+    }
+}</pre></div>
+
+<h3><span class="no">8.5</span>置顶的残酷真相与任务栏</h3>
+<ul>
+  <li><b>Topmost 不是万能</b>：游戏真全屏（独占）模式下任何窗口都压不住；无边框窗口模式下 Topmost 通常有效。
+  你动了别的窗口层级之后，记得调 <code class="inline">host.ReassertOverlayTopmost()</code>，别让宿主的聊天悬浮窗被压下去。</li>
+  <li><b>不进任务栏/Alt+Tab 用 <code class="inline">WS_EX_TOOLWINDOW</code></b>。不能只靠 <code class="inline">ShowInTaskbar="False"</code>——
+  那个的 WPF 实现是「给窗口挂一个隐藏的所有者」，而悬浮窗恰恰要清所有者（见下），两个需求打架，Win32 说了算：</li>
+</ul>
+<div class="codeblock"><div class="bar"><span class="lang">C# · 清所有者 + 工具窗</span><button class="copy">复制</button></div><pre><span class="c">/// 清所有者：宿主主窗口最小化时，「被拥有的窗口」会跟着不可见——悬浮窗不能有主人。</span>
+<span class="k">public void</span> DetachFromOwner()
+{
+    <span class="k">try</span>
+    {
+        Owner = <span class="k">null</span>;
+        <span class="k">if</span> (_handle == IntPtr.Zero) <span class="k">return</span>;
+
+        <span class="c">// GWLP_HWNDPARENT 清 Win32 层所有者</span>
+        <span class="k">if</span> (IntPtr.Size == <span class="n">8</span>)
+            SetWindowLongPtr64(_handle, GWLP_HWNDPARENT, IntPtr.Zero);
+        <span class="k">else</span>
+            SetWindowLongPtr32(_handle, GWLP_HWNDPARENT, IntPtr.Zero);
+
+        <span class="c">// WS_EX_TOOLWINDOW：不占任务栏、不进 Alt+Tab</span>
+        <span class="k">var</span> style = GetWindowLong(_handle, GWL_EXSTYLE);
+        <span class="k">if</span> ((style &amp; WS_EX_TOOLWINDOW) == <span class="n">0</span>)
+            SetWindowLong(_handle, GWL_EXSTYLE, style | WS_EX_TOOLWINDOW);
+    }
+    <span class="k">catch</span> { }
+}
+
+<span class="c">// SetWindowLongPtr 的 64/32 位包装：</span>
+[DllImport(<span class="s">"user32.dll"</span>, EntryPoint = <span class="s">"SetWindowLongPtr"</span>)]
+<span class="k">private static extern IntPtr</span> SetWindowLongPtr64(IntPtr hWnd, <span class="k">int</span> nIndex, IntPtr dwNewLong);
+[DllImport(<span class="s">"user32.dll"</span>, EntryPoint = <span class="s">"SetWindowLong"</span>)]
+<span class="k">private static extern int</span> SetWindowLongPtr32(IntPtr hWnd, <span class="k">int</span> nIndex, <span class="k">int</span> dwNewLong);</pre></div>
+
+<h3><span class="no">8.6</span>显示/隐藏：常驻窗口，别反复 Show/Hide</h3>
+<div class="codeblock"><div class="bar"><span class="lang">C#</span><button class="copy">复制</button></div><pre><span class="c">/// 隐藏 = 透明度归零 + 强制穿透。反复 Hide()/Show() 会重排 z-order、扰动游戏。</span>
+<span class="k">public void</span> ShowOverlay()
+{
+    <span class="k">if</span> (!IsVisible) Show();
+    Opacity = <span class="n">1</span>;
+    SetClickThrough(_clickThrough);
+}
+
+<span class="k">public void</span> HideOverlay()
+{
+    Opacity = <span class="n">0</span>;              <span class="c">// 看不见但窗口还在，z-order 不动</span>
+    SetClickThrough(<span class="k">true</span>);     <span class="c">// 透明窗口不能挡游戏点击！</span>
+}
+
+<span class="k">public void</span> SetClickThrough(<span class="k">bool</span> enabled)
+{
+    _clickThrough = enabled;
+    ApplyExtendedStyles();
+}</pre></div>
+<p>常驻 + 透明度切换的另一个好处：窗口尺寸/位置/句柄都稳定，配合 8.8 的「内容左上角对齐」不会闪。</p>
+
+<h3><span class="no">8.7</span>尺寸与阴影留白</h3>
+<p><code class="inline">DropShadowEffect</code> 超出内容的部分会被窗口边缘切掉，所以窗口 = 内容 + 留白（Canvas Margin）。
+而留白大小<b>会随阴影参数变化</b>——如果窗口 Left/Top 不动、只有留白变了，内容在屏幕上会漂
+（「改个阴影大小，按键就移位」）。解法：<b>位置一律按内容左上角记</b>，留白变了反向补：</p>
+<div class="codeblock"><div class="bar"><span class="lang">C# · 内容左上角对齐</span><button class="copy">复制</button></div><pre><span class="c">// 摆位：存的 WindowLeft/Top 是「内容左上角」，窗口位置减掉当前留白</span>
+<span class="k">public void</span> ApplyPosition(MySettings settings, <span class="k">bool</span> force = <span class="k">false</span>)
+{
+    <span class="k">if</span> (_positioned &amp;&amp; !force) <span class="k">return</span>;
+    Left = settings.WindowLeft - _shadowPadding;
+    Top  = settings.WindowTop  - _shadowPadding;
+    _positioned = <span class="k">true</span>;
+}
+
+<span class="c">// 用户拖完：把窗口位置换算回「内容左上角」记进设置</span>
+<span class="k">public void</span> RememberCurrentPosition(MySettings settings)
+{
+    settings.WindowLeft = Left + _shadowPadding;
+    settings.WindowTop  = Top  + _shadowPadding;
+}
+
+<span class="c">// 阴影参数变了之后：重新对齐，内容纹丝不动</span>
+<span class="k">public void</span> SyncPositionToContent(MySettings settings)
+{
+    <span class="k">if</span> (<span class="k">double</span>.IsNaN(Left) || <span class="k">double</span>.IsNaN(Top)) <span class="k">return</span>;
+    Left = settings.WindowLeft - _shadowPadding;
+    Top  = settings.WindowTop  - _shadowPadding;
+}</pre></div>
+
+<h3><span class="no">8.8</span>DPI 与屏幕边界</h3>
+<p>保存的坐标在不同 DPI 的屏幕上可能直接跑出可见区。摆位后用工作区夹取：</p>
+<div class="codeblock"><div class="bar"><span class="lang">C#</span><button class="copy">复制</button></div><pre><span class="k">public void</span> ApplyPosition(MySettings settings, <span class="k">bool</span> force = <span class="k">false</span>)
+{
+    <span class="k">if</span> (_positioned &amp;&amp; !force) <span class="k">return</span>;
+
+    <span class="k">var</span> work = SystemParameters.WorkArea;      <span class="c">// 主屏工作区（不含任务栏）</span>
+    <span class="k">double</span> left = Math.Clamp(settings.WindowLeft, work.Left, work.Right - ActualWidth);
+    <span class="k">double</span> top  = Math.Clamp(settings.WindowTop,  work.Top,  work.Bottom - <span class="n">40</span>);
+
+    Left = left - _shadowPadding;
+    Top  = top  - _shadowPadding;
+    _positioned = <span class="k">true</span>;
+}</pre></div>
+
+<h3><span class="no">8.9</span>收尾（Shutdown 必做）</h3>
+<div class="codeblock"><div class="bar"><span class="lang">C#</span><button class="copy">复制</button></div><pre><span class="k">public void</span> Shutdown()
+{
+    <span class="k">if</span> (_shutdown) <span class="k">return</span>;
+    _shutdown = <span class="k">true</span>;
+
+    _refreshTimer?.Stop();       <span class="c">// 定时器</span>
+    _overlay?.Close();           <span class="c">// 悬浮窗（Close 幂等）</span>
+    _overlay = <span class="k">null</span>;
+    <span class="k">if</span> (_host <span class="k">is not null</span>)
+        _host.ChatLineReceived -= OnChatLine;   <span class="c">// 事件</span>
+}</pre></div>
+<div class="notice info"><span class="ic">💡</span><div>
+最小可用参考：仓库里 <code class="inline">Plugins/FpsOverlay/FpsOverlayWindow.xaml.cs</code> 就是本节模板的完整实现
+（不到三百行，注释齐全），写悬浮窗前先读它。
+</div></div>
+</section>
+
+<!-- ================================================================ -->
+<!-- 9. 能力与红线 -->
+<!-- ================================================================ -->
+<section id="s9">
+<h2><span class="no">09</span>能力与红线</h2>
+
+<h3><span class="no">9.1</span>Capabilities：如实声明</h3>
+<p>plugin.json 的 <code class="inline">capabilities</code> 数组在安装确认框里展示给用户。它是知情同意的凭据，
+写「读聊天消息」就真的只读聊天消息。同类事情有别的做法时，选侵入性最低的：</p>
+
+<h3><span class="no">9.2</span>输入捕获：轮询可以，钩子不碰</h3>
+<div class="notice danger"><span class="ic">⛔</span><div>
+<b>红线：</b>不要装全局键盘/鼠标钩子（SetWindowsHookEx）。要看按键状态用
+<code class="inline">GetAsyncKeyState</code> 轮询——只问「现在按着吗」，不拦截、不记录别处按键，系统层面零侵入。
+KeyDisplay 就是这样做的，并在 capabilities 里写明「GetAsyncKeyState 轮询（未安装任何键盘钩子）」。
+</div></div>
+<div class="codeblock"><div class="bar"><span class="lang">C# · 按键轮询</span><button class="copy">复制</button></div><pre>[DllImport(<span class="s">"user32.dll"</span>)]
+<span class="k">private static extern short</span> GetAsyncKeyState(<span class="k">int</span> vKey);
+
+<span class="c">// DispatcherTimer 里每 40ms 问一遍（只问状态，不拦截）：</span>
+<span class="k">private static bool</span> IsDown(<span class="k">int</span> vk) =&gt; (GetAsyncKeyState(vk) &amp; <span class="n">0x8000</span>) != <span class="n">0</span>;</pre></div>
+
+<h3><span class="no">9.3</span>游戏交互：只做「读」和「飘窗」</h3>
+<ul>
+  <li><b>读</b>：游戏日志（宿主已读好并解码，走 ChatLineReceived）、按键状态（轮询）、窗口列表（GetGameWindows）；</li>
+  <li><b>飘窗</b>：自己的悬浮窗爱怎么画怎么画；</li>
+  <li><b>不注入</b>：不往游戏进程写内存、不加载 mod、不 hook 游戏函数——这类能力本插件系统就不提供，
+  也不要自己用 P/Invoke 搞；</li>
+  <li>改游戏画面只走「悬浮窗叠加」这一条路。</li>
+</ul>
+
+<h3><span class="no">9.4</span>性能红线</h3>
+<ul>
+  <li><code class="inline">ChatLineReceived</code> 在<b>宿主 UI 线程</b>触发——耗时操作（网络、文件、大量计算）会卡整个宿主界面。
+  要做就丢给 Task.Run，回 UI 再 Dispatcher.Invoke；</li>
+  <li>40ms 级刷新定时器里别做重量级事（整树 Rebuild、大量分配）；高频路径只刷值不重建结构
+  （KeyDisplay 的教训：Rebuild 建树 / ApplyAppearance 轻刷新 / 每帧刷色，三条路径分开）；</li>
+  <li>动画定时器停掉再改参数，别叠跑多个 DispatcherTimer 干同一件事。</li>
+</ul>
+
+<h3><span class="no">9.5</span>网络与隐私</h3>
+<ul>
+  <li>联网的插件在 capabilities 里写清楚「联网做什么、数据去哪」；</li>
+  <li>不上传任何含用户身份的信息（路径、用户名、聊天内容）除非功能明确需要且用户知道；</li>
+  <li>不静默下载可执行内容。</li>
+</ul>
+</section>
+
+<!-- ================================================================ -->
+<!-- 10. 打包与分发 -->
+<!-- ================================================================ -->
+<section id="s10">
+<h2><span class="no">10</span>打包与分发</h2>
+
+<h3><span class="no">10.1</span>zip 结构</h3>
+<div class="codeblock"><div class="bar"><span class="lang">TEXT</span><button class="copy">复制</button></div><pre>MyPlugin-v1.2.0.zip
+├── plugin.json              ← 必须在根目录（嵌套在文件夹里会被拒装）
+├── MyPlugin.dll             ← 主程序集
+├── SomeDependency.dll       ← NuGet 依赖要一并带上（自包含，宿主不帮你装）
+└── native/xxx.dll           ← native 库放子目录也行</pre></div>
+<p>宿主安装时做了 <b>zip slip 防护</b>：条目路径里不允许 <code class="inline">..</code> 和绝对路径，
+解压一律限制在插件目录内。你自己不用管，但别把文件压出绝对路径（正常的 zip 工具不会）。</p>
+
+<h3><span class="no">10.2</span>native 库</h3>
+<p>插件带 native dll（C/C++ 库）时，不要指望 dll 解析——<b>显式加载</b>：</p>
+<div class="codeblock"><div class="bar"><span class="lang">C#</span><button class="copy">复制</button></div><pre><span class="k">using</span> System.Runtime.InteropServices;
+
+<span class="k">var</span> nativePath = Path.Combine(host.PluginDirectory, <span class="s">"native"</span>, <span class="s">"mynative.dll"</span>);
+<span class="k">if</span> (NativeLibrary.TryLoad(nativePath, <span class="k">out var</span> lib))
+{
+    <span class="c">// 用 lib 的句柄解析函数入口</span>
+}
+<span class="k">else</span>
+{
+    host.Log(<span class="s">"[MyPlugin] native 库加载失败："</span> + nativePath);
+}</pre></div>
+
+<h3><span class="no">10.3</span>版本与升级</h3>
+<ul>
+  <li><b>id 不变，version 递增</b>。安装同 id 的 zip = 升级（覆盖安装目录，数据目录不动）；</li>
+  <li>配置向前兼容靠 PluginSettingsFile 的默认值兜底——加字段随意，<b>删字段/改类型</b>等于丢用户配置，慎重；</li>
+  <li>发布前把 <code class="inline">plugin.json</code> 的 version 和 csproj 里的版本对齐（别学某些插件 1.0.0 用三年）。</li>
+</ul>
+
+<h3><span class="no">10.4</span>开发期热部署的现实</h3>
+<div class="notice warn"><span class="ic">⚠️</span><div>
+宿主运行中会<b>锁住已加载的 dll</b>——编译后想覆盖 <code class="inline">%APPDATA%\...\plugins\&lt;id&gt;\MyPlugin.dll</code> 会报
+「文件正在使用」。流程是：<b>先关宿主 → 拷贝 → 再开宿主</b>。AssemblyLoadContext 是隔离加载，
+但当前实现不支持运行中卸载换新。
+</div></div>
+</section>
+
+<!-- ================================================================ -->
+<!-- 11. 调试手册 -->
+<!-- ================================================================ -->
+<section id="s11">
+<h2><span class="no">11</span>调试手册</h2>
+<p>插件没有断点环境（跑在宿主进程里），一切调试靠「让插件自己说话」。以下手法全部经过实战。</p>
+
+<h3><span class="no">11.1</span>host.Log：第一手段</h3>
+<div class="codeblock"><div class="bar"><span class="lang">C#</span><button class="copy">复制</button></div><pre>host.Log(<span class="s">"[MyPlugin] 已装载，配置项数="</span> + Settings.Items.Count);
+host.Log(<span class="s">$"[MyPlugin] 目标窗口句柄={handle}, 可见={IsWindowVisible(handle)}"</span>);</pre></div>
+<p>带 <code class="inline">[插件名]</code> 前缀方便在后台页里过滤。宿主的「调试」后台页要开「启用后端日志」才显示。</p>
+
+<h3><span class="no">11.2</span>页面预检：白屏扼杀在装载时</h3>
+<div class="codeblock"><div class="bar"><span class="lang">C#</span><button class="copy">复制</button></div><pre><span class="c">// Initialize 末尾：</span>
+<span class="k">try</span>
+{
+    _ = <span class="k">new</span> MyPage(<span class="k">this</span>);          <span class="c">// new 会解析 XAML（BAML 实际上是编译进去的，运行期构造仍会暴露绑定/资源问题）</span>
+    host.Log(<span class="s">"页面预检通过：XAML 解析正常。"</span>);
+}
+<span class="k">catch</span> (Exception ex)
+{
+    host.Log(<span class="s">"页面预检失败（打开插件页会白屏）：</span>" + ex);
+}</pre></div>
+
+<h3><span class="no">11.3</span>自检（self-test）：常驻回归</h3>
+<p>给插件加一个<b>环境变量开关</b>的自检：装载时把核心行为自动跑一遍，结果写日志。
+用户报告问题时，让他设环境变量重启宿主就能拿到诊断输出：</p>
+<div class="codeblock"><div class="bar"><span class="lang">C# · 自检骨架</span><button class="copy">复制</button></div><pre><span class="k">private void</span> RunSelfTestIfRequested()
+{
+    <span class="k">if</span> (Environment.GetEnvironmentVariable(<span class="s">"MYPLUGIN_SELFTEST"</span>) != <span class="s">"1"</span>)
+        <span class="k">return</span>;
+
+    _suppressSave = <span class="k">true</span>;                        <span class="c">// 防污染三件套，见 7.4</span>
+    <span class="k">try</span> { RunSelfTestBody(); }
+    <span class="k">finally</span>
+    {
+        _suppressSave = <span class="k">false</span>;
+        <span class="k">try</span> { Settings = PluginSettingsFile.Load&lt;MySettings&gt;(_host!.PluginDirectory); }
+        <span class="k">catch</span> { }
+    }
+}
+
+<span class="k">private void</span> RunSelfTestBody()
+{
+    <span class="k">var</span> results = <span class="k">new</span> List&lt;<span class="k">string</span>&gt;();
+
+    <span class="c">// 例：改颜色 → 读回悬浮窗实际渲出来的颜色 → 必须一致</span>
+    Settings.IdleTextHex = <span class="s">"#FF0000"</span>;
+    ApplySettings();
+    <span class="k">var</span> seen = _overlay?.TextColorAt(<span class="n">0</span>);
+    results.Add(seen == <span class="s">"#FF0000"</span> ? <span class="s">"✓ 文字色生效"</span> : <span class="s">$"✗ 文字色：期望 #FF0000，实际 {seen}"</span>);
+
+    <span class="c">// 例：改大小 → 量悬浮窗实际尺寸</span>
+    <span class="c">// …更多用例…</span>
+
+    <span class="k">foreach</span> (<span class="k">var</span> line <span class="k">in</span> results) _host!.Log(<span class="s">"[自检] "</span> + line);
+    _host!.Log(<span class="s">$"[自检] {results.Count(r =&gt; r.StartsWith("✓"))}/{results.Count} 项通过"</span>);
+}</pre></div>
+<p>要点：<b>只推进度/改参数，不重建结构</b>；每个用例「改 → 读实际效果 → 断言」；
+读不到实际效果的断言没有意义（「设置写进去了」不算验证，<b>「悬浮窗真的变红」才算</b>）。</p>
+
+<h3><span class="no">11.4</span>诊断钩子：「路径死了」的判别法</h3>
+<p>怀疑某条代码路径不被调用时（例如彩色循环不变色）：加<b>调用计数</b> + 环境变量开关，跑一会儿看数字——</p>
+<div class="codeblock"><div class="bar"><span class="lang">C#</span><button class="copy">复制</button></div><pre><span class="k">private static int</span> _diagApplyCalls;      <span class="c">// 诊断钩子（验证完删除）</span>
+<span class="k">private static bool</span> DiagEnabled =&gt;
+    Environment.GetEnvironmentVariable(<span class="s">"MYPLUGIN_DIAG"</span>) == <span class="s">"1"</span>;
+
+<span class="k">private void</span> ApplyColors()
+{
+    <span class="k">if</span> (DiagEnabled) _diagApplyCalls++;
+    <span class="c">// …原逻辑…</span>
+}</pre></div>
+<div class="notice info"><span class="ic">💡</span><div>
+<b>口诀：计数冻结不涨 = 这条路径死了。</b>KeyDisplay 的「彩色循环固定色」bug 就是这样定位的——
+高频刷新路径里边框刷色函数的调用数停在 7（建树时的格子数），再不增长，说明循环期间根本没人调它。
+<b>验证完把钩子删干净</b>，别留在正式版里。
+</div></div>
+
+<h3><span class="no">11.5</span>UI 快照：离屏渲染页面成 PNG</h3>
+<p>排版问题（控件挤、边框吃内容）光看 XAML 看不出来。设环境变量把配置页渲成 PNG 存到插件目录，
+自己打开看：</p>
+<div class="codeblock"><div class="bar"><span class="lang">C# · 核心：把宿主主题字典并进来再渲</span><button class="copy">复制</button></div><pre><span class="k">private void</span> RunUiSnapshotIfRequested()
+{
+    <span class="k">if</span> (Environment.GetEnvironmentVariable(<span class="s">"MYPLUGIN_UI_SNAPSHOT"</span>) != <span class="s">"1"</span>) <span class="k">return</span>;
+
+    <span class="k">var</span> page = <span class="k">new</span> MyPage(<span class="k">this</span>);
+
+    <span class="c">// 关键：宿主主题字典挂在主窗口的 Resources 上，离屏渲染的页面取不到，
+    // 不并进来渲出来就是一堆没样式的裸控件。</span>
+    <span class="k">var</span> main = Application.Current?.MainWindow;
+    <span class="k">if</span> (main <span class="k">is not null</span>)
+        <span class="k">foreach</span> (<span class="k">var</span> dict <span class="k">in</span> main.Resources.MergedDictionaries)
+            page.Resources.MergedDictionaries.Add(dict);
+
+    <span class="c">// 背景也取宿主的（取不到再兜底白色）</span>
+    Brush background = Brushes.White;
+    <span class="k">try</span> { <span class="k">if</span> (main?.TryFindResource(<span class="s">"WindowBgBrush"</span>) <span class="k">is</span> Brush found) background = found; }
+    <span class="k">catch</span> { }
+
+    <span class="k">var</span> frame = <span class="k">new</span> Border
+    {
+        Background = background,
+        Padding = <span class="k">new</span> Thickness(<span class="n">24</span>, <span class="n">20</span>, <span class="n">24</span>, <span class="n">20</span>),
+        Child = page,
+    };
+
+    <span class="k">const double</span> width = <span class="n">960</span>;
+    frame.Measure(<span class="k">new</span> Size(width, <span class="k">double</span>.PositiveInfinity));
+    frame.Arrange(<span class="k">new</span> Rect(<span class="n">0</span>, <span class="n">0</span>, width, frame.DesiredSize.Height));
+    frame.UpdateLayout();
+
+    <span class="c">// 渲 PNG 存到插件目录，自己打开目视核对排版</span>
+    <span class="k">var</span> w = (<span class="k">int</span>)width;
+    <span class="k">var</span> h = (<span class="k">int</span>)Math.Max(<span class="n">1</span>, frame.DesiredSize.Height);
+    <span class="k">var</span> rtb = <span class="k">new</span> RenderTargetBitmap(w, h, <span class="n">96</span>, <span class="n">96</span>, PixelFormats.Pbgra32);
+    rtb.Render(frame);
+    <span class="k">var</span> encoder = <span class="k">new</span> PngBitmapEncoder();
+    encoder.Frames.Add(BitmapFrame.Create(rtb));
+    <span class="k">using var</span> fs = File.Create(Path.Combine(_host!.PluginDirectory, <span class="s">"page-snapshot.png"</span>));
+    encoder.Save(fs);
+    _host.Log(<span class="s">"[快照] 已渲染 page-snapshot.png"</span>);
+}</pre></div>
+<div class="notice warn"><span class="ic">⚠️</span><div>
+离屏渲染<b>不会触发 Loaded</b>——依赖 Loaded 的初始化（量尺寸、订阅）要手动补调一次，
+否则快照上看到的是兜底状态，跟真实 bug 长得一样，没法区分。
+</div></div>
+
+<h3><span class="no">11.6</span>样式预检</h3>
+<p>用到的每个宿主样式键都探一遍，缺了立刻报（宿主改样式名时你的页面不会无声退化）：</p>
+<div class="codeblock"><div class="bar"><span class="lang">C#</span><button class="copy">复制</button></div><pre><span class="k">private void</span> PreflightHostStyles()
+{
+    <span class="k">string</span>[] keys = { <span class="s">"CardStyle"</span>, <span class="s">"CardTitleStyle"</span>, <span class="s">"CardDescStyle"</span>,
+                       <span class="s">"FieldLabelStyle"</span>, <span class="s">"HintStyle"</span>, <span class="s">"ToggleSwitchStyle"</span>,
+                       <span class="s">"SmallButtonStyle"</span>, <span class="s">"SwatchButtonStyle"</span>, <span class="s">"TextSecondaryBrush"</span> };
+    <span class="k">var</span> missing = keys.Where(k =&gt; TryFindResource(k) <span class="k">is null</span>).ToList();
+    <span class="k">if</span> (missing.Count &gt; <span class="n">0</span>)
+        _host!.Log(<span class="s">"[预检] 缺失宿主样式键："</span> + <span class="k">string</span>.Join(<span class="s">", "</span>, missing));
+    <span class="k">else</span>
+        _host!.Log(<span class="s">"[预检] 宿主样式键全部就绪"</span>);
+}</pre></div>
+
+<h3><span class="no">11.7</span>宿主侧现象速查</h3>
+<div class="scrollx"><table>
+<tr><th style="width:280px">现象</th><th>第一怀疑对象</th></tr>
+<tr><td>插件装上后页面白屏 / 一片空白</td><td>ContentFactory 抛异常（看宿主页面上给出的异常信息）；或 StaticResource 解析失败（改 DynamicResource）</td></tr>
+<tr><td>插件显示「加载失败」</td><td>Initialize 抛异常 / 找不到入口类（Entry 没写且实现类不唯一）/ ApiVersion 不匹配</td></tr>
+<tr><td>禁用后悬浮窗还在</td><td>Shutdown 没关窗口 / 不幂等（第二次调用被状态位挡住）</td></tr>
+<tr><td>改了配置不生效</td><td>事件没接上 / _loading 闸门写反了 / ScheduleSave 只 Start 没 Tick 就被覆盖</td></tr>
+<tr><td>配置莫名回到默认</td><td>自检污染（7.4 三件套）/ Load 失败静默返回 new T()（看文件是不是 JSON 手改坏了）</td></tr>
+<tr><td>悬浮窗一出现游戏就弹 ESC</td><td>抢焦点——WS_EX_NOACTIVATE 没打上（8.3）</td></tr>
+<tr><td>宿主最小化，悬浮窗跟着消失</td><td>所有者没清（8.5 DetachFromOwner）</td></tr>
+<tr><td>改阴影大小，悬浮窗内容移位</td><td>留白补偿没做（8.7 SyncPositionToContent）</td></tr>
+<tr><td>换了个高分屏，悬浮窗找不到了</td><td>坐标没做工作区夹取（8.8）</td></tr>
+</table></div>
+</section>
+
+<!-- ================================================================ -->
+<!-- 12. 常见坑速查 -->
+<!-- ================================================================ -->
+<section id="s12">
+<h2><span class="no">12</span>常见坑速查（实战版）</h2>
+<p>每一条都有出处。写插件前扫一遍，能省一半调试时间。</p>
+
+<div class="scrollx"><table>
+<tr><th style="width:46px">#</th><th style="width:250px">坑</th><th>症状 / 解法</th></tr>
+
+<tr><td>1</td><td><b>StaticResource 引宿主资源</b></td>
+<td>页面白屏、装载即异常。插件页面运行期才挂进宿主树，StaticResource 提前解析必炸。
+<b>全部换 DynamicResource</b>（铁律三）。</td></tr>
+
+<tr><td>2</td><td><b>变化回调没配 _loading 闸门</b></td>
+<td>打开页面瞬间配置被 UI 旧值覆盖；或「保存→回填→保存」死循环。所有
+TextChanged / ValueChanged / SelectionChanged / Checked 第一行 <code class="inline">if (_loading) return;</code>（7.3）。</td></tr>
+
+<tr><td>3</td><td><b>自检污染用户配置</b></td>
+<td>反复跑自检后用户的缩放/颜色被探针值刷掉。三件套：_suppressSave 总闸 + try/finally 还原 +
+结束后<b>从磁盘重载</b>（不是保存——中途炸掉时保存反而落盘脏值）（7.4）。</td></tr>
+
+<tr><td>4</td><td><b>Button 样式套到 ToggleButton</b></td>
+<td>静默失效长成默认样子，不报错。样式强类型，ToggleButton 用
+<code class="inline">SmallPrimaryToggleButtonStyle</code> 或自写（6.5）。</td></tr>
+
+<tr><td>5</td><td><b>PasswordBox / ListBox 不套样式</b></td>
+<td>PasswordBox 没有隐式样式，必须显式 <code class="inline">ModernPasswordBoxStyle</code>；
+ListBox/TextBox/ComboBox/Slider/CheckBox 有隐式样式，不写 Style 直接用（6.1）。</td></tr>
+
+<tr><td>6</td><td><b>ContextMenu / Popup 弹出层没颜色</b></td>
+<td>弹出层不在页面资源树里，DynamicResource 取不到宿主键 → 白底黑字或透明。
+弹出层内部<b>显式给颜色</b>（Background="#FFFFFF" 这类写死，或代码里 TryFindResource 取到手再赋）。</td></tr>
+
+<tr><td>7</td><td><b>嵌套滚动抢滚轮</b></td>
+<td>插件页面在宿主 ScrollViewer 里，自己的 ListBox 不设 MaxHeight 会被撑无限高/吃滚轮。
+短列表自然展开，长列表设 MaxHeight（6.11）。</td></tr>
+
+<tr><td>8</td><td><b>ShowActivated="False" 就以为不抢焦点</b></td>
+<td>只在第一次显示可靠。必须 SourceInitialized 里打 <code class="inline">WS_EX_NOACTIVATE</code>（8.3）。</td></tr>
+
+<tr><td>9</td><td><b>IsHitTestVisible=False 就以为穿透</b></td>
+<td>只管 WPF 命中测试，系统层面窗口仍可点，全屏游戏光标现形。真穿透
+<code class="inline">WS_EX_TRANSPARENT</code>（8.4）。</td></tr>
+
+<tr><td>10</td><td><b>宿主最小化悬浮窗跟着没了</b></td>
+<td>WPF 的 ShowInTaskbar=False 靠隐藏所有者实现，而悬浮窗恰恰要无主。清 GWLP_HWNDPARENT +
+WS_EX_TOOLWINDOW（8.5）。</td></tr>
+
+<tr><td>11</td><td><b>改阴影参数内容漂移</b></td>
+<td>窗口=内容+留白，留白随阴影变。位置按内容左上角记，留白反向补（8.7）。</td></tr>
+
+<tr><td>12</td><td><b>高 DPI 屏悬浮窗跑出屏幕</b></td>
+<td>保存的裸坐标在新 DPI 下越界。摆位后 SystemParameters.WorkArea 夹取（8.8）。</td></tr>
+
+<tr><td>13</td><td><b>频繁 Hide()/Show() 悬浮窗</b></td>
+<td>z-order 重排扰动游戏。窗口常驻，隐藏用 Opacity=0 + 强制穿透（8.6）。</td></tr>
+
+<tr><td>14</td><td><b>ColorDialog 调不起来</b></td>
+<td>WinForms ColorDialog 在插件上下文可能弹不出（还带来 CS0104 撞名）。自绘取色窗（6.9）。</td></tr>
+
+<tr><td>15</td><td><b>UseWindowsForms 开了之后一堆 CS0104</b></td>
+<td>System.Drawing / System.Windows.Forms 隐式 using 与 WPF 的 Brush/Point/MouseEventArgs 撞名。
+csproj 里 <code class="inline">&lt;Using Remove="System.Drawing"/&gt;&lt;Using Remove="System.Windows.Forms"/&gt;</code>，
+用时写完全限定名（1.2）。</td></tr>
+
+<tr><td>16</td><td><b>编译过了以为 XAML 没问题</b></td>
+<td>页面是运行期构造的，绑定/资源问题编译期不暴露。Initialize 里 new 一遍做预检（11.2）。</td></tr>
+
+<tr><td>17</td><td><b>宿主运行中覆盖 dll 失败</b></td>
+<td>「文件正在使用」。先关宿主再拷贝再开（10.4）。</td></tr>
+
+<tr><td>18</td><td><b>ChatLineReceived 里做重活</b></td>
+<td>宿主 UI 线程触发，卡整个程序。重活 Task.Run，回来 Dispatcher.Invoke（9.4）。</td></tr>
+
+<tr><td>19</td><td><b>每帧整树 Rebuild</b></td>
+<td>40ms 定时器里重建视觉树 → 卡顿。分层：结构变化才 Rebuild，参数变化走轻刷新，
+连续动画只改颜色（9.4，KeyDisplay 的 Rebuild / ApplyAppearance / SetCycleProgress 三层）。</td></tr>
+
+<tr><td>20</td><td><b>Shutdown 不幂等 / 不收尾</b></td>
+<td>禁用后定时器还在跑、悬浮窗还在飘。_shutdown 闸门 + 全量收尾（3.2 / 8.9）。</td></tr>
+
+<tr><td>21</td><td><b>多个 DispatcherTimer 刷新节奏打架</b></td>
+<td>两个定时器干同一件事，节奏错峰导致视觉抖动。一个时间轴一个 timer，
+开关/改速<b>绝不重置</b>它的基准（KeyDisplay 的 _cycleStart 教训）。</td></tr>
+
+<tr><td>22</td><td><b>动画共享画刷被污染</b></td>
+<td>对 DynamicResource 解析出的共享 Brush 做 ColorAnimation，会污染所有用到它的控件。
+给要动画的元素套<b>独立图层</b>（Opacity 动画一个覆盖 Border），别动共享画刷本身。</td></tr>
+
+<tr><td>23</td><td><b>设置默认值随便给</b></td>
+<td>Load 的默认值就是用户首体验。0.5 缩放、0 号字这类默认值等于开箱即坏（7.1）。</td></tr>
+
+<tr><td>24</td><td><b>Capabilities 含糊</b></td>
+<td>安装确认框是知情同意。写「读取聊天消息」「GetAsyncKeyState 轮询（无键盘钩子）」这种用户能懂的话（9.1）。</td></tr>
+</table></div>
+</section>
+
+<!-- ================================================================ -->
+<!-- 13. 参考实现 -->
+<!-- ================================================================ -->
+<section id="s13">
+<h2><span class="no">13</span>本仓库的参考实现</h2>
+<p>最好的学习材料是能跑的代码。按需求挑着读：</p>
+<div class="scrollx"><table>
+<tr><th style="width:170px">插件</th><th style="width:120px">看什么</th><th>说明</th></tr>
+<tr><td><code class="k">Plugins/FpsOverlay</code></td><td>最小悬浮窗</td>
+<td>本档第 8 章模板的出处。WS_EX 三件套、常驻窗口、穿透切换、拖动定位，全都有，代码量最小。<b>写悬浮窗先读它</b>。</td></tr>
+<tr><td><code class="k">Plugins/KeyDisplay</code></td><td>全家桶</td>
+<td>最复杂的实战插件：自绘页面（卡片+开关+滑条+下拉+调色板组合）、悬浮窗自由布局、彩色循环动画、
+CPS 统计、18 项常驻自检、UI 快照。第 6 章的调色板模板就是它的页面。</td></tr>
+<tr><td><code class="k">Plugins/RegionMagnifier</code></td><td>区域放大</td>
+<td>选游戏窗口、截图、放大的完整流程；窗口选择下拉的用法。</td></tr>
+<tr><td><code class="k">Plugins/NeteaseLyrics</code></td><td>歌词窗</td>
+<td>另一个悬浮窗形态：不加 WS_EX_NOACTIVATE（要点它的窗）、TOOLWINDOW 的取舍，看注释能理解每个标志位的适用场景。</td></tr>
+<tr><td><code class="k">ModernControls.xaml</code></td><td>样式源头</td>
+<td>宿主全部样式定义（1700+ 行，注释详尽）。本文档第 6 章的所有键都能在这里找到实现。
+样式行为有疑问时，读它。</td></tr>
+<tr><td><code class="k">Plugins/Abstractions/PluginApi.cs</code></td><td>契约源头</td>
+<td>第 4 章速查表的原文，带完整注释。三百行，五分钟读完。</td></tr>
+</table></div>
+</section>
+
+<!-- ================================================================ -->
+<!-- 14. AI 检查清单 -->
+<!-- ================================================================ -->
+<section id="s14">
+<h2><span class="no">14</span>AI 开发检查清单</h2>
+<p>辅助编程的智能体（AI）在写完 MCO 插件后，交付前逐条自查。真人类作者也可以拿它当 code review 表。</p>
+
+<div class="card">
+<h4>架构与引用</h4>
+<ul class="checklist">
+<li>csproj 只引用 Abstractions（ProjectReference 或 Compile Include），<b>没有引用主程序 exe</b></li>
+<li>plugin.json 的 apiVersion = 1，id 形如「作者名.插件名」且与 IPlugin.Id 一致</li>
+<li>实现类 public、非抽象、有公开无参构造</li>
+<li>TargetFramework = net8.0-windows；用 WPF 才开 UseWPF；没开 UseWindowsForms（开了的话查 CS0104 处理）</li>
+</ul>
+
+<h4>生命周期</h4>
+<ul class="checklist">
+<li>Shutdown 幂等（_shutdown 闸门），关窗口、停定时器、退订事件全覆盖</li>
+<li>Initialize 里所有 IO/网络/反射都有 try/catch + host.Log，失败不静默</li>
+<li>自绘页面做了 new 预检（11.2）</li>
+</ul>
+
+<h4>界面</h4>
+<ul class="checklist">
+<li>样式引用全部 DynamicResource，<b>零 StaticResource</b> 指向宿主键</li>
+<li>TextBox/ComboBox/Slider/CheckBox/ListBox 直接裸用（隐式样式）；带键样式从第 6 章抄，没自造视觉</li>
+<li>ToggleButton 没有套 Button 样式（TargetType 陷阱）</li>
+<li>ContextMenu / Popup 内部显式给色</li>
+<li>每个变化回调（TextChanged/ValueChanged/SelectionChanged/Checked）第一行有 <code class="inline">if (_loading) return;</code></li>
+<li>程序回填 UI 用 try/finally 落闸（7.3）</li>
+</ul>
+
+<h4>悬浮窗（如有）</h4>
+<ul class="checklist">
+<li>SourceInitialized 里打了 WS_EX_NOACTIVATE（XAML 的 ShowActivated=False 只是第一道）</li>
+<li>穿透用 WS_EX_TRANSPARENT；「拖动定位」开关负责临时关穿透</li>
+<li>清了所有者（GWLP_HWNDPARENT）+ WS_EX_TOOLWINDOW 不进任务栏</li>
+<li>窗口常驻，隐藏用 Opacity=0 + 强制穿透，没有反复 Hide/Show</li>
+<li>位置存「内容左上角」，阴影留白有补偿；摆位做 WorkArea 夹取</li>
+<li>动了其他窗口层级后调用 host.ReassertOverlayTopmost()</li>
+</ul>
+
+<h4>配置</h4>
+<ul class="checklist">
+<li>配置类默认值 = 合理首体验（不是 0/空）</li>
+<li>保存走防抖（ScheduleSave），没有每事件立即写盘</li>
+<li>自检/探针有防污染三件套（_suppressSave + try/finally + 磁盘重载）</li>
+</ul>
+
+<h4>行为与红线</h4>
+<ul class="checklist">
+<li>没有键盘/鼠标钩子（按键读取用 GetAsyncKeyState 轮询）</li>
+<li>没有注入游戏进程、没有 mod/Forge 类侵入</li>
+<li>ChatLineReceived 处理器里没有耗时操作（有就 Task.Run）</li>
+<li>Capabilities 如实描述了读什么、联什么网</li>
+<li>定时器只有一个时间轴，开关/改速不重置基准</li>
+</ul>
+
+<h4>交付</h4>
+<ul class="checklist">
+<li>zip 根目录有 plugin.json + dll（依赖齐全），version 与 csproj 对齐</li>
+<li>调试钩子（Diag 前缀字段/方法/环境变量开关以外的遗留）已删干净，编译 0 警告 0 错误</li>
+<li>告知用户：宿主运行中会锁 dll，升级要先关宿主</li>
+<li class="warnitem">每一处改动可独立验证——用户会逐项实测，别把两个行为改动捆在一起交付</li>
+</ul>
+</div>
+
+<div class="notice ok"><span class="ic">✅</span><div>
+清单全绿再交付。用户实测反馈时，先怀疑自己的预期，再怀疑代码；自己引入的问题主动说，别等发现。
+</div></div>
+</section>
+
+<footer>
+  MCO 插件开发文档 · 综合 SDK 文档版与在线开发文档重制 · apiVersion 1 ·
+  契约源码：<code class="inline">Plugins/Abstractions/PluginApi.cs</code> ·
+  样式源码：<code class="inline">ModernControls.xaml</code>
+</footer>
+</main>
+</div>
+
+<button id="backtop" title="返回顶部">↑</button>
+
+<script>
+// 复制按钮
+document.querySelectorAll('.codeblock .copy').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    var pre = btn.closest('.codeblock').querySelector('pre');
+    var text = pre.innerText;
+    function done(ok){
+      btn.textContent = ok ? '已复制' : '复制失败';
+      setTimeout(function(){ btn.textContent = '复制'; }, 1400);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(function(){done(true)}, function(){done(false)});
+    } else {
+      var ta = document.createElement('textarea');
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); done(true); } catch(e){ done(false); }
+      document.body.removeChild(ta);
+    }
+  });
+});
+
+// 返回顶部
+var backtop = document.getElementById('backtop');
+window.addEventListener('scroll', function(){
+  backtop.style.display = window.scrollY > 600 ? 'block' : 'none';
+});
+backtop.addEventListener('click', function(){ window.scrollTo({top:0, behavior:'smooth'}); });
+
+// 导航高亮
+var links = Array.prototype.slice.call(document.querySelectorAll('nav.toc a.tlink'));
+var sections = links.map(function(a){ return document.getElementById(a.getAttribute('href').slice(1)); })
+                    .filter(function(s){ return s; });
+function highlight(){
+  var best = null, bestTop = -1e9;
+  sections.forEach(function(s, i){
+    var top = s.getBoundingClientRect().top;
+    if (top < 140 && top > bestTop){ bestTop = top; best = i; }
+  });
+  links.forEach(function(a, i){ a.classList.toggle('active', i === best); });
+}
+window.addEventListener('scroll', highlight);
+highlight();
+</script>
+</body>
+</html>
