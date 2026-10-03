@@ -1,10 +1,10 @@
 {
     "schemaVersion": 1,
-    "id": "2026-10-2-1735",
-    "updatedAt": "2026-10-02T17:35:07+08:00",
+    "id": "2026-10-3-1100",
+    "updatedAt": "2026-10-03T11:00:55+08:00",
     "enabled": true,
-    "title": "V1.2.8更新",
-    "body": "击杀反馈匹配规则更新详细指引\n击杀反馈的击杀图标和击杀音效新增顺序播放\n优化插件页面交互逻辑\n动态模糊新增日志",
+    "title": "新插件可用,软件不用更新",
+    "body": "插件市场上新按键显示插件\n出现bug务必及时反馈",
     "link": "https://github.com/goldiamond1031/MinecraftChatOverlay/releases",
-    "linkText": "有可用更新"
+    "linkText": "无可用更新"
 }
