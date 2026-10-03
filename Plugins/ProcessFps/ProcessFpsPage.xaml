@@ -1,0 +1,304 @@
+<UserControl x:Class="MinecraftChatOverlay.Plugins.ProcessFps.ProcessFpsPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--
+        页面标题、说明、状态行都由宿主统一画（页头那一块），这里只放卡片。
+        所有样式一律走宿主的 DynamicResource 键 —— 插件控件是先 new 出来、再挂进宿主窗口的，
+        用 StaticResource 在这一刻解析不到宿主 Window 上的资源字典（会抛 XamlParseException）。
+    -->
+    <StackPanel>
+
+        <Border Style="{DynamicResource CardStyle}">
+            <StackPanel>
+                <TextBlock Text="1. 目标进程" Style="{DynamicResource CardTitleStyle}"/>
+                <TextBlock Style="{DynamicResource CardDescStyle}" TextWrapping="Wrap" Margin="0,3,0,14"
+                           Text="帧率不是插件自己去测的，而是读软件「游戏动态模糊」注入进去的那个钩子写出来的实测值（钩子每 250 毫秒数一次 SwapBuffers，和帧混合开关开不开没关系）。所以用法就一条：先去「游戏动态模糊」页对着游戏点【注入并接管】，这里才会有数字。插件本身不注入、不碰游戏。"/>
+
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <ComboBox x:Name="TargetComboBox"
+                              Height="34"
+                              Loaded="ComboBox_Loaded"
+                              SelectionChanged="TargetComboBox_SelectionChanged"
+                              ToolTip="选一个带窗口的进程（游戏一般是 javaw.exe / java.exe）"/>
+                    <Button Grid.Column="1"
+                            Content="刷新列表"
+                            Click="RefreshButton_Click"
+                            Style="{DynamicResource SmallButtonStyle}"
+                            Margin="8,0,0,0"/>
+                </Grid>
+
+                <TextBlock x:Name="LinkStatusText"
+                           Style="{DynamicResource HintStyle}"
+                           TextWrapping="Wrap"
+                           Margin="0,12,0,0"
+                           Text="正在检查…"/>
+            </StackPanel>
+        </Border>
+
+        <Border Style="{DynamicResource CardStyle}" Margin="0,14,0,0">
+            <StackPanel>
+                <TextBlock Text="2. 开关与刷新" Style="{DynamicResource CardTitleStyle}"/>
+                <TextBlock Style="{DynamicResource CardDescStyle}" TextWrapping="Wrap" Margin="0,3,0,14"
+                           Text="关掉开关只隐藏悬浮窗，插件仍然在后台读数据（下次打开不用重新注入）。"/>
+
+                <CheckBox x:Name="EnabledCheckBox"
+                          Style="{DynamicResource ToggleSwitchStyle}"
+                          Checked="Option_Changed"
+                          Unchecked="Option_Changed">
+                    <StackPanel>
+                        <TextBlock Text="显示 FPS 悬浮窗" FontSize="13" FontWeight="Bold"/>
+                        <TextBlock Text="关上就不显示；设置全部保留" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0"/>
+                    </StackPanel>
+                </CheckBox>
+
+                <Grid Margin="0,16,0,0">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="刷新间隔" Style="{DynamicResource FieldLabelStyle}" VerticalAlignment="Center"/>
+                    <ComboBox x:Name="RefreshComboBox" Grid.Column="1" Height="32" Margin="12,0" SelectionChanged="Option_Changed"/>
+                    <TextBlock Style="{DynamicResource HintStyle}" Grid.Column="2" VerticalAlignment="Center"
+                               Text="钩子本身 250 毫秒更新一次"/>
+                </Grid>
+
+                <CheckBox x:Name="HideWhenNoDataCheckBox"
+                          Style="{DynamicResource ToggleSwitchStyle}"
+                          Margin="0,14,0,0"
+                          Checked="Option_Changed"
+                          Unchecked="Option_Changed">
+                    <StackPanel>
+                        <TextBlock Text="读数不可用时隐藏悬浮窗" FontSize="13" FontWeight="Bold"/>
+                        <TextBlock Text="开着：没连上钩子时整个窗口不显示（推荐，免得桌面上挂个占位符）；关掉：显示下面那个占位文字" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0"/>
+                    </StackPanel>
+                </CheckBox>
+
+                <Grid Margin="0,16,0,0">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="占位文字" Style="{DynamicResource FieldLabelStyle}" VerticalAlignment="Center"/>
+                    <TextBox x:Name="NoDataBox" Grid.Column="1" Margin="12,0" TextChanged="Option_Changed"/>
+                    <TextBlock Style="{DynamicResource HintStyle}" Grid.Column="2" VerticalAlignment="Center"
+                               Text="读不到帧率时显示这个"/>
+                </Grid>
+            </StackPanel>
+        </Border>
+
+        <Border Style="{DynamicResource CardStyle}" Margin="0,14,0,0">
+            <StackPanel>
+                <TextBlock Text="3. 文字内容" Style="{DynamicResource CardTitleStyle}"/>
+                <TextBlock Style="{DynamicResource CardDescStyle}" TextWrapping="Wrap" Margin="0,3,0,14"
+                           Text="最终显示 = 前缀 + 帧率数字 + 后缀。比如前缀填「FPS 」后缀留空就是「FPS 128」。"/>
+
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="前缀" Style="{DynamicResource FieldLabelStyle}" VerticalAlignment="Center"/>
+                    <TextBox x:Name="PrefixBox" Grid.Column="1" Margin="12,0,0,0" TextChanged="Option_Changed"/>
+                    <TextBlock Text="后缀" Style="{DynamicResource FieldLabelStyle}" Grid.Column="2" VerticalAlignment="Center" Margin="24,0,0,0"/>
+                    <TextBox x:Name="SuffixBox" Grid.Column="3" Margin="12,0,0,0" TextChanged="Option_Changed"/>
+                </Grid>
+
+                <Grid Margin="0,12,0,0">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="小数位" Style="{DynamicResource FieldLabelStyle}" VerticalAlignment="Center"/>
+                    <Slider x:Name="DecimalsSlider" Grid.Column="1" Minimum="0" Maximum="2" TickFrequency="1"
+                            IsSnapToTickEnabled="True" Margin="12,0" ValueChanged="Option_Changed"/>
+                    <TextBlock x:Name="DecimalsText" Style="{DynamicResource HintStyle}" Grid.Column="2" VerticalAlignment="Center" MinWidth="52"/>
+                </Grid>
+            </StackPanel>
+        </Border>
+
+        <Border Style="{DynamicResource CardStyle}" Margin="0,14,0,0">
+            <StackPanel>
+                <TextBlock Text="4. 字体与颜色" Style="{DynamicResource CardTitleStyle}"/>
+                <TextBlock Style="{DynamicResource CardDescStyle}" TextWrapping="Wrap" Margin="0,3,0,14"
+                           Text="字体下拉是常用字体，也可以直接手打字体名（比如「微软雅黑」「思源黑体」）。"/>
+
+                <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="字体" Style="{DynamicResource FieldLabelStyle}" VerticalAlignment="Center"/>
+                    <ComboBox x:Name="FontComboBox" Grid.Column="1" Height="32" Margin="12,0"
+                              IsEditable="True" SelectionChanged="Option_Changed" LostFocus="FontComboBox_LostFocus"/>
+                    <TextBlock Style="{DynamicResource HintStyle}" Grid.Column="2" VerticalAlignment="Center" Text="可手打"/>
+                </Grid>
+
+                <Grid Margin="0,12,0,0">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="字号" Style="{DynamicResource FieldLabelStyle}" VerticalAlignment="Center"/>
+                    <Slider x:Name="FontSizeSlider" Grid.Column="1" Minimum="8" Maximum="120" TickFrequency="1"
+                            IsSnapToTickEnabled="True" Margin="12,0" ValueChanged="Option_Changed"/>
+                    <TextBlock x:Name="FontSizeText" Style="{DynamicResource HintStyle}" Grid.Column="2" VerticalAlignment="Center" MinWidth="52"/>
+                </Grid>
+
+                <Grid Margin="0,12,0,0">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="文字颜色" Style="{DynamicResource FieldLabelStyle}" VerticalAlignment="Center"/>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="12,0">
+                        <Border x:Name="TextColorPreview" Width="40" Height="40" CornerRadius="12"
+                                BorderBrush="{DynamicResource BorderStrongBrush}" BorderThickness="2"
+                                Background="#FFFFFFFF"/>
+                        <TextBlock x:Name="TextColorHexText" Text="#FFFFFFFF" Margin="10,0,10,0"
+                                   FontFamily="Consolas" FontSize="11.5" FontWeight="Bold"
+                                   Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                        <Button Content="选择" Click="TextColorButton_Click" Style="{DynamicResource SmallGhostButtonStyle}"/>
+                        <Button x:Name="BoldButton" Content="粗体" Width="60" Margin="10,0,0,0"
+                                Click="BoldButton_Click" Style="{DynamicResource SmallButtonStyle}"/>
+                    </StackPanel>
+                    <TextBlock Style="{DynamicResource HintStyle}" Grid.Column="2" VerticalAlignment="Center"/>
+                </Grid>
+            </StackPanel>
+        </Border>
+
+        <Border Style="{DynamicResource CardStyle}" Margin="0,14,0,0">
+            <StackPanel>
+                <TextBlock Text="5. 阴影" Style="{DynamicResource CardTitleStyle}"/>
+                <TextBlock Style="{DynamicResource CardDescStyle}" TextWrapping="Wrap" Margin="0,3,0,14"
+                           Text="给数字描一圈模糊阴影，压在亮色游戏画面上更清楚。"/>
+
+                <CheckBox x:Name="ShadowEnabledCheckBox"
+                          Style="{DynamicResource ToggleSwitchStyle}"
+                          Checked="Option_Changed"
+                          Unchecked="Option_Changed">
+                    <StackPanel>
+                        <TextBlock Text="启用阴影" FontSize="13" FontWeight="Bold"/>
+                        <TextBlock Text="关掉后数字是「贴」在画面上的，没有描边" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0"/>
+                    </StackPanel>
+                </CheckBox>
+
+                <Grid Margin="0,16,0,0">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="阴影颜色" Style="{DynamicResource FieldLabelStyle}" VerticalAlignment="Center"/>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="12,0">
+                        <Border x:Name="ShadowColorPreview" Width="40" Height="40" CornerRadius="12"
+                                BorderBrush="{DynamicResource BorderStrongBrush}" BorderThickness="2"
+                                Background="#FF000000"/>
+                        <TextBlock x:Name="ShadowColorHexText" Text="#000000" Margin="10,0,10,0"
+                                   FontFamily="Consolas" FontSize="11.5" FontWeight="Bold"
+                                   Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                        <Button Content="选择" Click="ShadowColorButton_Click" Style="{DynamicResource SmallGhostButtonStyle}"/>
+                    </StackPanel>
+                    <TextBlock Style="{DynamicResource HintStyle}" Grid.Column="2" VerticalAlignment="Center"/>
+                </Grid>
+
+                <Grid Margin="0,12,0,0">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="模糊半径" Style="{DynamicResource FieldLabelStyle}" VerticalAlignment="Center"/>
+                    <Slider x:Name="ShadowBlurSlider" Grid.Column="1" Minimum="0" Maximum="30" TickFrequency="1"
+                            IsSnapToTickEnabled="True" Margin="12,0" ValueChanged="Option_Changed"/>
+                    <TextBlock x:Name="ShadowBlurText" Style="{DynamicResource HintStyle}" Grid.Column="2" VerticalAlignment="Center" MinWidth="52"/>
+                </Grid>
+
+                <Grid Margin="0,12,0,0">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="偏移" Style="{DynamicResource FieldLabelStyle}" VerticalAlignment="Center"/>
+                    <Slider x:Name="ShadowOffsetSlider" Grid.Column="1" Minimum="0" Maximum="12" TickFrequency="1"
+                            IsSnapToTickEnabled="True" Margin="12,0" ValueChanged="Option_Changed"/>
+                    <TextBlock x:Name="ShadowOffsetText" Style="{DynamicResource HintStyle}" Grid.Column="2" VerticalAlignment="Center" MinWidth="52"/>
+                </Grid>
+
+                <Grid Margin="0,12,0,0">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="阴影不透明度" Style="{DynamicResource FieldLabelStyle}" VerticalAlignment="Center"/>
+                    <Slider x:Name="ShadowOpacitySlider" Grid.Column="1" Minimum="0" Maximum="1" TickFrequency="0.05"
+                            IsSnapToTickEnabled="True" Margin="12,0" ValueChanged="Option_Changed"/>
+                    <TextBlock x:Name="ShadowOpacityText" Style="{DynamicResource HintStyle}" Grid.Column="2" VerticalAlignment="Center" MinWidth="52"/>
+                </Grid>
+
+                <Grid Margin="0,12,0,0">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="光照方向" Style="{DynamicResource FieldLabelStyle}" VerticalAlignment="Center"/>
+                    <Slider x:Name="ShadowDirectionSlider" Grid.Column="1" Minimum="0" Maximum="359" TickFrequency="1"
+                            IsSnapToTickEnabled="True" Margin="12,0" ValueChanged="Option_Changed"/>
+                    <TextBlock x:Name="ShadowDirectionText" Style="{DynamicResource HintStyle}" Grid.Column="2" VerticalAlignment="Center" MinWidth="52"/>
+                </Grid>
+            </StackPanel>
+        </Border>
+
+        <Border Style="{DynamicResource CardStyle}" Margin="0,14,0,0">
+            <StackPanel>
+                <TextBlock Text="6. 背景与位置" Style="{DynamicResource CardTitleStyle}"/>
+                <TextBlock Style="{DynamicResource CardDescStyle}" TextWrapping="Wrap" Margin="0,3,0,14"
+                           Text="拖动悬浮窗就能换位置，位置会自动记住。背景默认全透明（只有数字）。"/>
+
+                <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="背景颜色" Style="{DynamicResource FieldLabelStyle}" VerticalAlignment="Center"/>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="12,0">
+                        <Border x:Name="BackgroundColorPreview" Width="40" Height="40" CornerRadius="12"
+                                BorderBrush="{DynamicResource BorderStrongBrush}" BorderThickness="2"
+                                Background="#00000000"/>
+                        <TextBlock x:Name="BackgroundColorHexText" Text="#00000000" Margin="10,0,10,0"
+                                   FontFamily="Consolas" FontSize="11.5" FontWeight="Bold"
+                                   Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                        <Button Content="选择" Click="BackgroundColorButton_Click" Style="{DynamicResource SmallGhostButtonStyle}"/>
+                        <Button Content="透明" Click="BackgroundClearButton_Click" Style="{DynamicResource SmallButtonStyle}" Margin="10,0,0,0"/>
+                    </StackPanel>
+                    <TextBlock Style="{DynamicResource HintStyle}" Grid.Column="2" VerticalAlignment="Center" Text="A 通道 = 透明度"/>
+                </Grid>
+
+                <Grid Margin="0,12,0,0">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="圆角" Style="{DynamicResource FieldLabelStyle}" VerticalAlignment="Center"/>
+                    <Slider x:Name="CornerSlider" Grid.Column="1" Minimum="0" Maximum="40" TickFrequency="1"
+                            IsSnapToTickEnabled="True" Margin="12,0" ValueChanged="Option_Changed"/>
+                    <TextBlock x:Name="CornerText" Style="{DynamicResource HintStyle}" Grid.Column="2" VerticalAlignment="Center" MinWidth="52"/>
+                </Grid>
+
+                <Grid Margin="0,12,0,0">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="内边距 横" Style="{DynamicResource FieldLabelStyle}" VerticalAlignment="Center"/>
+                    <Slider x:Name="PaddingXSlider" Grid.Column="1" Minimum="0" Maximum="60" TickFrequency="1"
+                            IsSnapToTickEnabled="True" Margin="12,0" ValueChanged="Option_Changed"/>
+                    <TextBlock x:Name="PaddingXText" Style="{DynamicResource HintStyle}" Grid.Column="2" VerticalAlignment="Center" MinWidth="52"/>
+                </Grid>
+
+                <Grid Margin="0,12,0,0">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="内边距 纵" Style="{DynamicResource FieldLabelStyle}" VerticalAlignment="Center"/>
+                    <Slider x:Name="PaddingYSlider" Grid.Column="1" Minimum="0" Maximum="40" TickFrequency="1"
+                            IsSnapToTickEnabled="True" Margin="12,0" ValueChanged="Option_Changed"/>
+                    <TextBlock x:Name="PaddingYText" Style="{DynamicResource HintStyle}" Grid.Column="2" VerticalAlignment="Center" MinWidth="52"/>
+                </Grid>
+
+                <CheckBox x:Name="ClickThroughCheckBox"
+                          Style="{DynamicResource ToggleSwitchStyle}"
+                          Margin="0,16,0,0"
+                          Checked="Option_Changed"
+                          Unchecked="Option_Changed">
+                    <StackPanel>
+                        <TextBlock Text="鼠标穿透" FontSize="13" FontWeight="Bold"/>
+                        <TextBlock Text="开着时点不到悬浮窗（适合盖在游戏上）；想拖动它就先把这个关掉" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0"/>
+                    </StackPanel>
+                </CheckBox>
+
+                <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
+                    <Button Content="移到左上角" Click="MoveTopLeft_Click" Style="{DynamicResource SmallButtonStyle}"/>
+                    <Button Content="移到右上角" Click="MoveTopRight_Click" Style="{DynamicResource SmallButtonStyle}" Margin="8,0,0,0"/>
+                    <TextBlock x:Name="PositionText" Style="{DynamicResource HintStyle}" VerticalAlignment="Center" Margin="12,0,0,0"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <Border Style="{DynamicResource CardStyle}" Margin="0,14,0,0">
+            <StackPanel>
+                <TextBlock Text="7. 读数从哪来（排查用）" Style="{DynamicResource CardTitleStyle}"/>
+                <TextBlock Style="{DynamicResource CardDescStyle}" TextWrapping="Wrap" Margin="0,3,0,14"
+                           Text="下面是共享内存里的原始状态。数字不动、显示不出来的时候，先看这里。"/>
+
+                <TextBlock x:Name="DiagnosticsText" Style="{DynamicResource HintStyle}" TextWrapping="Wrap"/>
+
+                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                    <Button Content="刷新诊断" Click="RefreshDiagnostics_Click" Style="{DynamicResource SmallButtonStyle}"/>
+                    <Button Content="把日志写进插件目录" Click="DumpLog_Click" Style="{DynamicResource SmallGhostButtonStyle}" Margin="8,0,0,0"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+    </StackPanel>
+</UserControl>

@@ -79,6 +79,19 @@ cd C:/MinecraftChatOverlayDSUI3/native
   -lopengl32 -luser32 -lgdi32 -lole32 -lpsapi -ladvapi32
 ```
 
+**只数帧的探针（`FpsOverlay` 插件用的那份）**，编法同上但只编**一份**（插件的 csproj 直接从
+`native\dist\FpsProbeHook.dll` 带进输出目录，没有 `_v6` 那一套）：
+
+```bash
+cd C:/MinecraftChatOverlayDSUI3/native
+/c/mingw64/bin/g++.exe -shared -O2 -std=c++17 -fno-exceptions -fno-rtti \
+  -static-libgcc -static-libstdc++ -Wall -Wno-unknown-pragmas -Wno-cast-function-type \
+  -DUNICODE -D_UNICODE -DWIN32_LEAN_AND_MEAN -D_WIN32_WINNT=0x0A00 \
+  -DNTDDI_VERSION=0x0A000000 -DWINVER=0x0A00 \
+  FpsProbe/fpsprobe.cpp FpsProbe/fpsdllmain.cpp \
+  -o dist/FpsProbeHook.dll -luser32 -lgdi32 -lkernel32
+```
+
 - 2026-09-28 起原生侧**不再需要 JDK**：JNI 探针 `jmc_probe.cpp`（附着到游戏进程里的 JVM 反射读聊天类布局）
   连同调用点、`build.ps1` 里的 `jni.h` 探测段**已彻底移除**（属于废弃的「真实颜色提取」路线）。
 - ⚠ `native\build.ps1` 是 **UTF-8 无 BOM** → `powershell -File` 会按 GBK 读它，中文注释变乱码、直接语法报错。
@@ -223,7 +236,19 @@ cd C:/MinecraftChatOverlayDSUI3/native
 - **一键脚本**：`build-plugins.bat` —— 编契约 + 编所有插件 + 装到用户插件目录 + 打 zip 到
   `%APPDATA%\MinecraftChatOverlay\plugin-packages\`（可直接拖进「插件」页试装）。
 - **现有插件**（`Plugins\`）：`AutoGg`（goldiamond.autogg 自动 GG）、`NeteaseLyrics`（goldiamond.neteaselyrics）、
-  `PlayerQuery`、`RegionMagnifier`、`WindowFullscreen`、`SamplePlugin`（最小示例）。
+  `PlayerQuery`、`RegionMagnifier`、`WindowFullscreen`、`SamplePlugin`（最小示例）、**`FpsOverlay`**。
+  - **`FpsOverlay`（`goldiamond.fpsoverlay`）是目前唯一自带原生组件的插件**，2026-10-02 新加：
+    它用 `<Compile Include>` 链主工程的 `ManualMapper` / `ManualMapper.Remote` / `GameProcessInjector`
+    三个源文件（只依赖 BCL，能干净地编进插件程序集）来自己做注入，
+    把 `native\FpsProbe\FpsProbeHook.dll` 手动映射进目标进程。
+  - 那个探针**只做一件事**：把 `SwapBuffers` / `wglSwapBuffers` 的 IAT 槽位换成自己的 thunk，
+    每出一次帧给计数加一；**不读后备缓冲、不碰渲染状态、不做任何效果**（跟 `gmblur` 的区别就在这）。
+    计数写在 `Local\McoFpsProbe_<pid>`（带 pid，多进程互不干扰），插件读它算 FPS，
+    显示在自己的独立悬浮窗上（`WS_EX_NOACTIVATE + WS_EX_TRANSPARENT`，常驻只切 Opacity）。
+  - ⚠ **它刻意不复用 `gmblur` 的钩子**：两个钩子会抢同一个 IAT 槽位。插件靠"共享内存能不能打开"
+    自己查重；同理，如果用户已经用动态模糊注入了同一个游戏，插件的注入也**不会**被
+    `GameProcessInjector` 那本静态账挡住（所以它直接调 `ManualMapper.MapRemote`，绕开 `Inject()` 的查重）。
+  - **`build-plugins.bat` 里没有它**（那个脚本本来就只列了 3 个插件），要装得自己拷。
   - **网易云歌词不是"探针可行性验证"了**：源码在 `Plugins\NeteaseLyrics\`、market 里 `1.1.5`；
     中继插件 MCOBridge 装到 `C:\betterncm\plugins_dev\MCOBridge\`。数据来源仍是"窗口标题 + 中继读进度"，
     但旧笔记里"探针已删、只是验证可行性"那句**已经不对**。

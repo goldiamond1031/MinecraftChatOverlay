@@ -1,0 +1,587 @@
+<UserControl x:Class="MinecraftChatOverlay.Plugins.KeyDisplay.KeyDisplayPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--
+        页面标题/说明/状态行由宿主画。所有控件一律走宿主的 DynamicResource 样式键。
+        「自己画」的只有中间那块键位画布（自由摆放 + 拖拽 + 吸附，宿主没有对应控件），
+        但它的底色和边框仍然取宿主的画刷键。
+
+        排版约定（让每张卡片看起来是一个整体）：
+          · 同一张卡片里，标签宽度统一 72，滑块宽度统一 300，数值宽度统一 48；
+          · 颜色一律是「可点色块 + 十六进制文字」，点色块直接弹调色盘，不再有单独的「选」按钮。
+    -->
+    <StackPanel>
+
+        <!-- ==================== 1. 开关与刷新 ==================== -->
+        <Border Style="{DynamicResource CardStyle}">
+            <StackPanel>
+                <TextBlock Text="1. 开关与刷新" Style="{DynamicResource CardTitleStyle}"/>
+                <TextBlock Style="{DynamicResource CardDescStyle}" TextWrapping="Wrap" Margin="0,3,0,14"
+                           Text="这个插件只做一件事：查你指定的那几个键现在有没有按下，然后显示出来。用的是 GetAsyncKeyState 轮询 —— 不安装键盘钩子、不拦截按键、不记录、不写任何文件，对系统输入链路是零侵入的。"/>
+
+                <CheckBox x:Name="EnabledCheckBox"
+                          Style="{DynamicResource ToggleSwitchStyle}"
+                          Checked="Option_Changed"
+                          Unchecked="Option_Changed">
+                    <StackPanel>
+                        <TextBlock Text="显示键位悬浮窗" FontSize="13" FontWeight="Bold"/>
+                        <TextBlock Text="关掉只隐藏窗口，设置全部保留" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0"/>
+                    </StackPanel>
+                </CheckBox>
+
+                <CheckBox x:Name="ClickThroughCheckBox"
+                          Style="{DynamicResource ToggleSwitchStyle}"
+                          Margin="0,14,0,0"
+                          Checked="Option_Changed"
+                          Unchecked="Option_Changed">
+                    <StackPanel>
+                        <TextBlock Text="鼠标穿透" FontSize="13" FontWeight="Bold"/>
+                        <TextBlock Text="默认开着 —— 键位显示盖在游戏上，不穿透的话点不到游戏。想拖动悬浮窗换位置时，先把这里关掉。" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0"/>
+                    </StackPanel>
+                </CheckBox>
+
+                <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
+                    <TextBlock Text="刷新间隔" Style="{DynamicResource FieldLabelStyle}" Width="72" VerticalAlignment="Center"/>
+                    <ComboBox x:Name="RefreshComboBox" Width="300" Height="32" SelectionChanged="Option_Changed"/>
+                    <TextBlock Style="{DynamicResource HintStyle}" VerticalAlignment="Center" Margin="12,0,0,0"
+                               Text="越小越跟手，也越费一点 CPU"/>
+                </StackPanel>
+
+                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0"
+                        Margin="0,18,0,0" Padding="0,14,0,0">
+                    <StackPanel Orientation="Horizontal">
+                        <Button Content="恢复默认设置" Click="ResetButton_Click"
+                                Style="{DynamicResource SmallGhostButtonStyle}"/>
+                        <TextBlock Style="{DynamicResource HintStyle}" VerticalAlignment="Center" Margin="12,0,0,0"
+                                   TextWrapping="Wrap"
+                                   Text="把按键布局、外观、果冻这些全部恢复到刚装上时的样子"/>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </Border>
+
+        <!-- ==================== 2. 按键与排版 ==================== -->
+        <Border Style="{DynamicResource CardStyle}" Margin="0,14,0,0">
+            <StackPanel>
+                <TextBlock Text="2. 按键与排版" Style="{DynamicResource CardTitleStyle}"/>
+                <TextBlock Style="{DynamicResource CardDescStyle}" TextWrapping="Wrap" Margin="0,3,0,14"
+                           Text="点【添加按键】之后按一下你要显示的那个键就行（鼠标左右键也可以）。加进来之后，在下面的画布上拖动格子摆位置、拖格子右下角的小方块改大小。"/>
+
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- 加键有两条路：按一下捕获，或者从列表里挑一个。中间那句话就是分隔 -->
+                    <Button x:Name="CaptureButton" Content="添加按键（按一下）" Click="CaptureButton_Click"
+                            Style="{DynamicResource SmallPrimaryButtonStyle}"/>
+
+                    <TextBlock Grid.Column="1" Text="或者选择按键添加" Style="{DynamicResource FieldLabelStyle}"
+                               Margin="14,0" VerticalAlignment="Center"/>
+
+                    <ComboBox x:Name="CommonKeyComboBox" Grid.Column="2" Height="32" Width="170" Loaded="ComboBox_Loaded"/>
+                    <Button Grid.Column="3" Content="添加" Click="AddCommonButton_Click"
+                            Style="{DynamicResource SmallButtonStyle}" Margin="8,0,0,0"/>
+
+                    <!-- 删除放在「添加」旁边：先在画布上点选一个格子（或者直接在格子上右键），它才亮 -->
+                    <Button x:Name="DeleteCellButton" Grid.Column="4" Content="删除选中的键" Click="DeleteCellButton_Click"
+                            Style="{DynamicResource SmallGhostButtonStyle}" Margin="8,0,0,0" IsEnabled="False"
+                            ToolTip="先在下面画布上点选一个格子"/>
+
+                    <Button Grid.Column="6" Content="清空全部" Click="ClearAllButton_Click"
+                            Style="{DynamicResource SmallGhostButtonStyle}"/>
+                </Grid>
+
+                <TextBlock x:Name="CaptureHintText" Style="{DynamicResource HintStyle}" TextWrapping="Wrap" Margin="0,10,0,0"/>
+
+                <CheckBox x:Name="SnapCheckBox"
+                          Style="{DynamicResource ToggleSwitchStyle}"
+                          Margin="0,16,0,0"
+                          Checked="Option_Changed"
+                          Unchecked="Option_Changed">
+                    <StackPanel>
+                        <TextBlock Text="拖拽时吸附网格" FontSize="13" FontWeight="Bold"/>
+                        <TextBlock Text="在画布上拖格子和改大小时，对齐到下面这个网格；画布上的网格线就是它" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0"/>
+                    </StackPanel>
+                </CheckBox>
+
+                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                    <TextBlock Text="网格大小" Style="{DynamicResource FieldLabelStyle}" Width="72" VerticalAlignment="Center"/>
+                    <Slider x:Name="GridSizeSlider" Width="300" Minimum="1" Maximum="40" TickFrequency="1"
+                            IsSnapToTickEnabled="True" VerticalAlignment="Center" ValueChanged="Option_Changed"/>
+                    <TextBlock x:Name="GridSizeText" Style="{DynamicResource HintStyle}" Width="48" VerticalAlignment="Center" Margin="12,0,0,0"/>
+                </StackPanel>
+
+                <!--
+                    画布：逻辑坐标 1:1（单位就是悬浮窗里的像素）。
+                    尺寸由代码算（宽度铺满可视区、高度跟着内容长），所以正常情况下不会多出一条滚动条。
+                -->
+                <Border BorderBrush="{DynamicResource BorderStrongBrush}" BorderThickness="1" CornerRadius="8"
+                        Background="{DynamicResource Surface2Brush}" Margin="0,12,0,0"
+                        HorizontalAlignment="Stretch" Height="480">
+                    <ScrollViewer x:Name="CanvasScroll"
+                                  HorizontalScrollBarVisibility="Auto"
+                                  VerticalScrollBarVisibility="Auto"
+                                  SizeChanged="CanvasScroll_SizeChanged"
+                                  PreviewMouseWheel="CanvasScroll_PreviewMouseWheel">
+                        <!-- 网格底纹由代码按「网格大小」实时生成，见 UpdateCanvasGrid() -->
+                        <Canvas x:Name="DesignCanvas" Width="600" Height="400"
+                                MouseMove="DesignCanvas_MouseMove"
+                                MouseLeftButtonDown="DesignCanvas_MouseLeftButtonDown"
+                                MouseLeftButtonUp="DesignCanvas_MouseLeftButtonUp"
+                                MouseLeave="DesignCanvas_MouseLeave"/>
+                    </ScrollViewer>
+                </Border>
+
+                <TextBlock x:Name="CanvasHintText" Style="{DynamicResource HintStyle}" TextWrapping="Wrap" Margin="0,8,0,0"/>
+
+                <!-- ============ 选中格子的属性 ============ -->
+                <StackPanel x:Name="CellPropsPanel" Margin="0,16,0,0" Visibility="Collapsed">
+                    <TextBlock Text="选中的这个键" Style="{DynamicResource CardTitleStyle}"/>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                        <TextBlock Text="显示文字" Style="{DynamicResource FieldLabelStyle}" Width="72" VerticalAlignment="Center"/>
+                        <TextBox x:Name="CellTextBox" Width="300" TextChanged="CellProp_Changed"/>
+                        <TextBlock Style="{DynamicResource HintStyle}" VerticalAlignment="Center" Margin="12,0,0,0"
+                                   Text="留空 = 用这个键本来的名字"/>
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                        <TextBlock Text="位置 X / Y" Style="{DynamicResource FieldLabelStyle}" Width="72" VerticalAlignment="Center"/>
+                        <TextBox x:Name="CellXBox" Width="100" TextChanged="CellProp_Changed"/>
+                        <TextBox x:Name="CellYBox" Width="100" Margin="10,0,0,0" TextChanged="CellProp_Changed"/>
+                        <TextBlock Text="大小 宽 / 高" Style="{DynamicResource FieldLabelStyle}" Margin="24,0,12,0" VerticalAlignment="Center"/>
+                        <TextBox x:Name="CellWidthBox" Width="100" TextChanged="CellProp_Changed"/>
+                        <TextBox x:Name="CellHeightBox" Width="100" Margin="10,0,0,0" TextChanged="CellProp_Changed"/>
+                    </StackPanel>
+
+                    <!-- 只有鼠标左/右键才显示这个开关 -->
+                    <CheckBox x:Name="CellShowCpsCheckBox" Margin="0,14,0,0" Visibility="Collapsed"
+                              Checked="CellShowCps_Changed" Unchecked="CellShowCps_Changed">
+                        <StackPanel>
+                            <TextBlock Text="在下方显示 CPS" FontSize="13" FontWeight="Bold"/>
+                            <TextBlock Text="最近一秒点了几下鼠标。键名下面多一行数字" FontSize="11.5"
+                                       Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0"/>
+                        </StackPanel>
+                    </CheckBox>
+
+                    <TextBlock Style="{DynamicResource HintStyle}" TextWrapping="Wrap" Margin="0,16,0,8"
+                               Text="单独覆盖颜色（留空就跟随下面的全局设置；透明度同理）："/>
+
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="没按下 · 文字" Style="{DynamicResource FieldLabelStyle}" Width="112" VerticalAlignment="Center"/>
+                        <Border x:Name="CellTextColorPreview" Width="30" Height="30" CornerRadius="8"
+                                BorderBrush="{DynamicResource BorderStrongBrush}" BorderThickness="1.5"
+                                Background="Transparent" Cursor="Hand" ToolTip="点这里换颜色"
+                                MouseLeftButtonDown="ColorSwatch_Click" Tag="CellText"/>
+                        <TextBlock x:Name="CellTextColorHexText" Style="{DynamicResource HintStyle}" Width="88"
+                                   Margin="8,0,0,0" VerticalAlignment="Center"/>
+                        <Button Content="清除" Click="ColorClearButton_Click" Tag="CellText"
+                                Style="{DynamicResource SwatchButtonStyle}" ToolTip="清除这个覆盖" FontSize="10"/>
+                        <TextBlock Text="透明度" Style="{DynamicResource HintStyle}" Margin="12,0,8,0" VerticalAlignment="Center"/>
+                        <Slider x:Name="CellTextAlphaSlider" Width="160" Minimum="0" Maximum="100" TickFrequency="1"
+                                IsSnapToTickEnabled="True" VerticalAlignment="Center"
+                                ValueChanged="ColorAlpha_Changed" Tag="CellText"/>
+                        <TextBlock x:Name="CellTextAlphaText" Style="{DynamicResource HintStyle}" Width="52"
+                                   Margin="12,0,0,0" VerticalAlignment="Center"/>
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                        <TextBlock Text="没按下 · 背景" Style="{DynamicResource FieldLabelStyle}" Width="112" VerticalAlignment="Center"/>
+                        <Border x:Name="CellBgColorPreview" Width="30" Height="30" CornerRadius="8"
+                                BorderBrush="{DynamicResource BorderStrongBrush}" BorderThickness="1.5"
+                                Background="Transparent" Cursor="Hand" ToolTip="点这里换颜色"
+                                MouseLeftButtonDown="ColorSwatch_Click" Tag="CellBg"/>
+                        <TextBlock x:Name="CellBgColorHexText" Style="{DynamicResource HintStyle}" Width="88"
+                                   Margin="8,0,0,0" VerticalAlignment="Center"/>
+                        <Button Content="清除" Click="ColorClearButton_Click" Tag="CellBg"
+                                Style="{DynamicResource SwatchButtonStyle}" ToolTip="清除这个覆盖" FontSize="10"/>
+                        <TextBlock Text="透明度" Style="{DynamicResource HintStyle}" Margin="12,0,8,0" VerticalAlignment="Center"/>
+                        <Slider x:Name="CellBgAlphaSlider" Width="160" Minimum="0" Maximum="100" TickFrequency="1"
+                                IsSnapToTickEnabled="True" VerticalAlignment="Center"
+                                ValueChanged="ColorAlpha_Changed" Tag="CellBg"/>
+                        <TextBlock x:Name="CellBgAlphaText" Style="{DynamicResource HintStyle}" Width="52"
+                                   Margin="12,0,0,0" VerticalAlignment="Center"/>
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                        <TextBlock Text="按下 · 文字" Style="{DynamicResource FieldLabelStyle}" Width="112" VerticalAlignment="Center"/>
+                        <Border x:Name="CellPressedTextColorPreview" Width="30" Height="30" CornerRadius="8"
+                                BorderBrush="{DynamicResource BorderStrongBrush}" BorderThickness="1.5"
+                                Background="Transparent" Cursor="Hand" ToolTip="点这里换颜色"
+                                MouseLeftButtonDown="ColorSwatch_Click" Tag="CellPressedText"/>
+                        <TextBlock x:Name="CellPressedTextColorHexText" Style="{DynamicResource HintStyle}" Width="88"
+                                   Margin="8,0,0,0" VerticalAlignment="Center"/>
+                        <Button Content="清除" Click="ColorClearButton_Click" Tag="CellPressedText"
+                                Style="{DynamicResource SwatchButtonStyle}" ToolTip="清除这个覆盖" FontSize="10"/>
+                        <TextBlock Text="透明度" Style="{DynamicResource HintStyle}" Margin="12,0,8,0" VerticalAlignment="Center"/>
+                        <Slider x:Name="CellPressedTextAlphaSlider" Width="160" Minimum="0" Maximum="100" TickFrequency="1"
+                                IsSnapToTickEnabled="True" VerticalAlignment="Center"
+                                ValueChanged="ColorAlpha_Changed" Tag="CellPressedText"/>
+                        <TextBlock x:Name="CellPressedTextAlphaText" Style="{DynamicResource HintStyle}" Width="52"
+                                   Margin="12,0,0,0" VerticalAlignment="Center"/>
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                        <TextBlock Text="按下 · 背景" Style="{DynamicResource FieldLabelStyle}" Width="112" VerticalAlignment="Center"/>
+                        <Border x:Name="CellPressedBgColorPreview" Width="30" Height="30" CornerRadius="8"
+                                BorderBrush="{DynamicResource BorderStrongBrush}" BorderThickness="1.5"
+                                Background="Transparent" Cursor="Hand" ToolTip="点这里换颜色"
+                                MouseLeftButtonDown="ColorSwatch_Click" Tag="CellPressedBg"/>
+                        <TextBlock x:Name="CellPressedBgColorHexText" Style="{DynamicResource HintStyle}" Width="88"
+                                   Margin="8,0,0,0" VerticalAlignment="Center"/>
+                        <Button Content="清除" Click="ColorClearButton_Click" Tag="CellPressedBg"
+                                Style="{DynamicResource SwatchButtonStyle}" ToolTip="清除这个覆盖" FontSize="10"/>
+                        <TextBlock Text="透明度" Style="{DynamicResource HintStyle}" Margin="12,0,8,0" VerticalAlignment="Center"/>
+                        <Slider x:Name="CellPressedBgAlphaSlider" Width="160" Minimum="0" Maximum="100" TickFrequency="1"
+                                IsSnapToTickEnabled="True" VerticalAlignment="Center"
+                                ValueChanged="ColorAlpha_Changed" Tag="CellPressedBg"/>
+                        <TextBlock x:Name="CellPressedBgAlphaText" Style="{DynamicResource HintStyle}" Width="52"
+                                   Margin="12,0,0,0" VerticalAlignment="Center"/>
+                    </StackPanel>
+
+                    <TextBlock Style="{DynamicResource HintStyle}" TextWrapping="Wrap" Margin="0,18,0,8"
+                               Text="局部外观（只对这个键生效。拖一下滑块 / 点一下色块就算设了覆盖，点右边的「清除」恢复跟随全局）："/>
+
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="字体" Style="{DynamicResource FieldLabelStyle}" Width="112" VerticalAlignment="Center"/>
+                        <ComboBox x:Name="CellFontComboBox" Width="260" Height="32" Loaded="ComboBox_Loaded"
+                                  SelectionChanged="CellLookup_Changed" Tag="CellFont"/>
+                        <Button Content="清除" Click="CellOverrideClear_Click" Tag="CellFont"
+                                Style="{DynamicResource SwatchButtonStyle}" Margin="8,0,0,0" ToolTip="恢复跟随全局"/>
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                        <TextBlock Text="字号" Style="{DynamicResource FieldLabelStyle}" Width="112" VerticalAlignment="Center"/>
+                        <Slider x:Name="CellFontSizeSlider" Width="260" Minimum="8" Maximum="72" TickFrequency="1"
+                                IsSnapToTickEnabled="True" VerticalAlignment="Center"
+                                ValueChanged="CellNumber_Changed" Tag="CellFontSize"/>
+                        <TextBlock x:Name="CellFontSizeText" Style="{DynamicResource HintStyle}" Width="56"
+                                   VerticalAlignment="Center" Margin="10,0,0,0"/>
+                        <Button Content="清除" Click="CellOverrideClear_Click" Tag="CellFontSize"
+                                Style="{DynamicResource SwatchButtonStyle}" Margin="8,0,0,0" ToolTip="恢复跟随全局"/>
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                        <TextBlock Text="粗体" Style="{DynamicResource FieldLabelStyle}" Width="112" VerticalAlignment="Center"/>
+                        <ComboBox x:Name="CellBoldComboBox" Width="120" Height="32" Loaded="ComboBox_Loaded"
+                                  SelectionChanged="CellLookup_Changed" Tag="CellBold"/>
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                        <TextBlock Text="圆角" Style="{DynamicResource FieldLabelStyle}" Width="112" VerticalAlignment="Center"/>
+                        <Slider x:Name="CellCornerSlider" Width="260" Minimum="0" Maximum="30" TickFrequency="1"
+                                IsSnapToTickEnabled="True" VerticalAlignment="Center"
+                                ValueChanged="CellNumber_Changed" Tag="CellCorner"/>
+                        <TextBlock x:Name="CellCornerText" Style="{DynamicResource HintStyle}" Width="56"
+                                   VerticalAlignment="Center" Margin="10,0,0,0"/>
+                        <Button Content="清除" Click="CellOverrideClear_Click" Tag="CellCorner"
+                                Style="{DynamicResource SwatchButtonStyle}" Margin="8,0,0,0" ToolTip="恢复跟随全局"/>
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                        <TextBlock Text="边框粗细" Style="{DynamicResource FieldLabelStyle}" Width="112" VerticalAlignment="Center"/>
+                        <Slider x:Name="CellBorderThicknessSlider" Width="260" Minimum="0" Maximum="6" TickFrequency="0.5"
+                                IsSnapToTickEnabled="True" VerticalAlignment="Center"
+                                ValueChanged="CellNumber_Changed" Tag="CellBorderThickness"/>
+                        <TextBlock x:Name="CellBorderThicknessText" Style="{DynamicResource HintStyle}" Width="56"
+                                   VerticalAlignment="Center" Margin="10,0,0,0"/>
+                        <Button Content="清除" Click="CellOverrideClear_Click" Tag="CellBorderThickness"
+                                Style="{DynamicResource SwatchButtonStyle}" Margin="8,0,0,0" ToolTip="恢复跟随全局"/>
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                        <TextBlock Text="边框颜色" Style="{DynamicResource FieldLabelStyle}" Width="112" VerticalAlignment="Center"/>
+                        <Border x:Name="CellBorderColorPreview" Width="30" Height="30" CornerRadius="8"
+                                BorderBrush="{DynamicResource BorderStrongBrush}" BorderThickness="1.5"
+                                Background="Transparent" Cursor="Hand" ToolTip="点这里换颜色"
+                                MouseLeftButtonDown="ColorSwatch_Click" Tag="CellBorderColor"/>
+                        <TextBlock x:Name="CellBorderColorHexText" Style="{DynamicResource HintStyle}" Width="88"
+                                   Margin="8,0,0,0" VerticalAlignment="Center"/>
+                        <TextBlock Text="透明度" Style="{DynamicResource HintStyle}" Margin="8,0,8,0" VerticalAlignment="Center"/>
+                        <Slider x:Name="CellBorderAlphaSlider" Width="160" Minimum="0" Maximum="100" TickFrequency="1"
+                                IsSnapToTickEnabled="True" VerticalAlignment="Center"
+                                ValueChanged="ColorAlpha_Changed" Tag="CellBorderColor"/>
+                        <TextBlock x:Name="CellBorderAlphaText" Style="{DynamicResource HintStyle}" Width="52"
+                                   VerticalAlignment="Center" Margin="8,0,0,0"/>
+                        <Button Content="清除" Click="CellOverrideClear_Click" Tag="CellBorderColor"
+                                Style="{DynamicResource SwatchButtonStyle}" Margin="8,0,0,0" ToolTip="恢复跟随全局"/>
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                        <TextBlock Text="阴影" Style="{DynamicResource FieldLabelStyle}" Width="112" VerticalAlignment="Center"/>
+                        <ComboBox x:Name="CellShadowEnabledComboBox" Width="120" Height="32" Loaded="ComboBox_Loaded"
+                                  SelectionChanged="CellLookup_Changed" Tag="CellShadowEnabled"/>
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                        <TextBlock Text="阴影颜色" Style="{DynamicResource FieldLabelStyle}" Width="112" VerticalAlignment="Center"/>
+                        <Border x:Name="CellShadowColorPreview" Width="30" Height="30" CornerRadius="8"
+                                BorderBrush="{DynamicResource BorderStrongBrush}" BorderThickness="1.5"
+                                Background="Transparent" Cursor="Hand" ToolTip="点这里换颜色"
+                                MouseLeftButtonDown="ColorSwatch_Click" Tag="CellShadowColor"/>
+                        <TextBlock x:Name="CellShadowColorHexText" Style="{DynamicResource HintStyle}" Width="88"
+                                   Margin="8,0,0,0" VerticalAlignment="Center"/>
+                        <Button Content="清除" Click="CellOverrideClear_Click" Tag="CellShadowColor"
+                                Style="{DynamicResource SwatchButtonStyle}" Margin="8,0,0,0" ToolTip="恢复跟随全局"/>
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                        <TextBlock Text="阴影模糊" Style="{DynamicResource FieldLabelStyle}" Width="112" VerticalAlignment="Center"/>
+                        <Slider x:Name="CellShadowBlurSlider" Width="260" Minimum="0" Maximum="24" TickFrequency="1"
+                                IsSnapToTickEnabled="True" VerticalAlignment="Center"
+                                ValueChanged="CellNumber_Changed" Tag="CellShadowBlur"/>
+                        <TextBlock x:Name="CellShadowBlurText" Style="{DynamicResource HintStyle}" Width="56"
+                                   VerticalAlignment="Center" Margin="10,0,0,0"/>
+                        <Button Content="清除" Click="CellOverrideClear_Click" Tag="CellShadowBlur"
+                                Style="{DynamicResource SwatchButtonStyle}" Margin="8,0,0,0" ToolTip="恢复跟随全局"/>
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                        <TextBlock Text="阴影偏移" Style="{DynamicResource FieldLabelStyle}" Width="112" VerticalAlignment="Center"/>
+                        <Slider x:Name="CellShadowOffsetSlider" Width="260" Minimum="0" Maximum="10" TickFrequency="0.5"
+                                IsSnapToTickEnabled="True" VerticalAlignment="Center"
+                                ValueChanged="CellNumber_Changed" Tag="CellShadowOffset"/>
+                        <TextBlock x:Name="CellShadowOffsetText" Style="{DynamicResource HintStyle}" Width="56"
+                                   VerticalAlignment="Center" Margin="10,0,0,0"/>
+                        <Button Content="清除" Click="CellOverrideClear_Click" Tag="CellShadowOffset"
+                                Style="{DynamicResource SwatchButtonStyle}" Margin="8,0,0,0" ToolTip="恢复跟随全局"/>
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                        <TextBlock Text="阴影浓淡" Style="{DynamicResource FieldLabelStyle}" Width="112" VerticalAlignment="Center"/>
+                        <Slider x:Name="CellShadowOpacitySlider" Width="260" Minimum="0" Maximum="1" TickFrequency="0.05"
+                                IsSnapToTickEnabled="True" VerticalAlignment="Center"
+                                ValueChanged="CellNumber_Changed" Tag="CellShadowOpacity"/>
+                        <TextBlock x:Name="CellShadowOpacityText" Style="{DynamicResource HintStyle}" Width="56"
+                                   VerticalAlignment="Center" Margin="10,0,0,0"/>
+                        <Button Content="清除" Click="CellOverrideClear_Click" Tag="CellShadowOpacity"
+                                Style="{DynamicResource SwatchButtonStyle}" Margin="8,0,0,0" ToolTip="恢复跟随全局"/>
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                        <TextBlock Text="阴影方向" Style="{DynamicResource FieldLabelStyle}" Width="112" VerticalAlignment="Center"/>
+                        <Slider x:Name="CellShadowDirectionSlider" Width="260" Minimum="0" Maximum="359" TickFrequency="1"
+                                IsSnapToTickEnabled="True" VerticalAlignment="Center"
+                                ValueChanged="CellNumber_Changed" Tag="CellShadowDirection"/>
+                        <TextBlock x:Name="CellShadowDirectionText" Style="{DynamicResource HintStyle}" Width="56"
+                                   VerticalAlignment="Center" Margin="10,0,0,0"/>
+                        <Button Content="清除" Click="CellOverrideClear_Click" Tag="CellShadowDirection"
+                                Style="{DynamicResource SwatchButtonStyle}" Margin="8,0,0,0" ToolTip="恢复跟随全局"/>
+                    </StackPanel>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- ==================== 3. 全局外观 ==================== -->
+        <Border Style="{DynamicResource CardStyle}" Margin="0,14,0,0">
+            <StackPanel>
+                <TextBlock Text="3. 全局外观" Style="{DynamicResource CardTitleStyle}"/>
+                <TextBlock Style="{DynamicResource CardDescStyle}" TextWrapping="Wrap" Margin="0,3,0,14"
+                           Text="这里改的是所有格子的默认外观；单个键在上面覆盖过的，以覆盖为准。"/>
+
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="字体" Style="{DynamicResource FieldLabelStyle}" Width="72" VerticalAlignment="Center"/>
+                    <ComboBox x:Name="FontComboBox" Width="300" Height="32" SelectionChanged="Option_Changed"/>
+                    <Button x:Name="BoldButton" Content="粗体" Width="76" Margin="12,0,0,0"
+                            Click="BoldButton_Click" Style="{DynamicResource SmallButtonStyle}"/>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                    <TextBlock Text="字号" Style="{DynamicResource FieldLabelStyle}" Width="72" VerticalAlignment="Center"/>
+                    <Slider x:Name="FontSizeSlider" Width="300" Minimum="8" Maximum="72" TickFrequency="1"
+                            IsSnapToTickEnabled="True" VerticalAlignment="Center" ValueChanged="Option_Changed"/>
+                    <TextBlock x:Name="FontSizeText" Style="{DynamicResource HintStyle}" Width="48" VerticalAlignment="Center" Margin="12,0,0,0"/>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                    <TextBlock Text="圆角" Style="{DynamicResource FieldLabelStyle}" Width="72" VerticalAlignment="Center"/>
+                    <Slider x:Name="CornerSlider" Width="300" Minimum="0" Maximum="30" TickFrequency="1"
+                            IsSnapToTickEnabled="True" VerticalAlignment="Center" ValueChanged="Option_Changed"/>
+                    <TextBlock x:Name="CornerText" Style="{DynamicResource HintStyle}" Width="48" VerticalAlignment="Center" Margin="12,0,0,0"/>
+                </StackPanel>
+
+                <!--
+                    颜色统一是「可点色块 + hex + 透明度滑块」三件套。
+                    为什么透明度要单独一条滑块：系统调色盘（ColorDialog）**不支持 alpha**，
+                    它的 A 通道永远是 255。宿主自己做颜色设置时也是这么拆的
+                    （调色盘选色 + 独立的 OpacitySlider）—— 照它的做法来。
+                -->
+                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                    <TextBlock Text="边框粗细" Style="{DynamicResource FieldLabelStyle}" Width="112" VerticalAlignment="Center"/>
+                    <Slider x:Name="BorderThicknessSlider" Width="300" Minimum="0" Maximum="6" TickFrequency="0.5"
+                            IsSnapToTickEnabled="True" VerticalAlignment="Center" ValueChanged="Option_Changed"/>
+                    <TextBlock x:Name="BorderThicknessText" Style="{DynamicResource HintStyle}" Width="48" VerticalAlignment="Center" Margin="12,0,0,0"/>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                    <TextBlock Text="边框颜色" Style="{DynamicResource FieldLabelStyle}" Width="112" VerticalAlignment="Center"/>
+                    <Border x:Name="BorderColorPreview" Width="30" Height="30" CornerRadius="8"
+                            BorderBrush="{DynamicResource BorderStrongBrush}" BorderThickness="1.5"
+                            Background="#33FFFFFF" Cursor="Hand" ToolTip="点这里换颜色"
+                            MouseLeftButtonDown="ColorSwatch_Click" Tag="Border"/>
+                    <TextBlock x:Name="BorderColorHexText" Style="{DynamicResource HintStyle}" Width="88"
+                               Margin="8,0,0,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="透明度" Style="{DynamicResource HintStyle}" Margin="12,0,8,0" VerticalAlignment="Center"/>
+                    <Slider x:Name="BorderAlphaSlider" Width="200" Minimum="0" Maximum="100" TickFrequency="1"
+                            IsSnapToTickEnabled="True" VerticalAlignment="Center"
+                            ValueChanged="ColorAlpha_Changed" Tag="Border"/>
+                    <TextBlock x:Name="BorderAlphaText" Style="{DynamicResource HintStyle}" Width="52"
+                               Margin="12,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+                    <TextBlock Text="没按下 · 文字" Style="{DynamicResource FieldLabelStyle}" Width="112" VerticalAlignment="Center"/>
+                    <Border x:Name="IdleTextColorPreview" Width="30" Height="30" CornerRadius="8"
+                            BorderBrush="{DynamicResource BorderStrongBrush}" BorderThickness="1.5"
+                            Background="#FFFFFFFF" Cursor="Hand" ToolTip="点这里换颜色"
+                            MouseLeftButtonDown="ColorSwatch_Click" Tag="IdleText"/>
+                    <TextBlock x:Name="IdleTextColorHexText" Style="{DynamicResource HintStyle}" Width="88"
+                               Margin="8,0,0,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="透明度" Style="{DynamicResource HintStyle}" Margin="12,0,8,0" VerticalAlignment="Center"/>
+                    <Slider x:Name="IdleTextAlphaSlider" Width="200" Minimum="0" Maximum="100" TickFrequency="1"
+                            IsSnapToTickEnabled="True" VerticalAlignment="Center"
+                            ValueChanged="ColorAlpha_Changed" Tag="IdleText"/>
+                    <TextBlock x:Name="IdleTextAlphaText" Style="{DynamicResource HintStyle}" Width="52"
+                               Margin="12,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                    <TextBlock Text="没按下 · 背景" Style="{DynamicResource FieldLabelStyle}" Width="112" VerticalAlignment="Center"/>
+                    <Border x:Name="IdleBgColorPreview" Width="30" Height="30" CornerRadius="8"
+                            BorderBrush="{DynamicResource BorderStrongBrush}" BorderThickness="1.5"
+                            Background="#80000000" Cursor="Hand" ToolTip="点这里换颜色"
+                            MouseLeftButtonDown="ColorSwatch_Click" Tag="IdleBg"/>
+                    <TextBlock x:Name="IdleBgColorHexText" Style="{DynamicResource HintStyle}" Width="88"
+                               Margin="8,0,0,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="透明度" Style="{DynamicResource HintStyle}" Margin="12,0,8,0" VerticalAlignment="Center"/>
+                    <Slider x:Name="IdleBgAlphaSlider" Width="200" Minimum="0" Maximum="100" TickFrequency="1"
+                            IsSnapToTickEnabled="True" VerticalAlignment="Center"
+                            ValueChanged="ColorAlpha_Changed" Tag="IdleBg"/>
+                    <TextBlock x:Name="IdleBgAlphaText" Style="{DynamicResource HintStyle}" Width="52"
+                               Margin="12,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                    <TextBlock Text="按下 · 文字" Style="{DynamicResource FieldLabelStyle}" Width="112" VerticalAlignment="Center"/>
+                    <Border x:Name="PressedTextColorPreview" Width="30" Height="30" CornerRadius="8"
+                            BorderBrush="{DynamicResource BorderStrongBrush}" BorderThickness="1.5"
+                            Background="#FF1A1A1A" Cursor="Hand" ToolTip="点这里换颜色"
+                            MouseLeftButtonDown="ColorSwatch_Click" Tag="PressedText"/>
+                    <TextBlock x:Name="PressedTextColorHexText" Style="{DynamicResource HintStyle}" Width="88"
+                               Margin="8,0,0,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="透明度" Style="{DynamicResource HintStyle}" Margin="12,0,8,0" VerticalAlignment="Center"/>
+                    <Slider x:Name="PressedTextAlphaSlider" Width="200" Minimum="0" Maximum="100" TickFrequency="1"
+                            IsSnapToTickEnabled="True" VerticalAlignment="Center"
+                            ValueChanged="ColorAlpha_Changed" Tag="PressedText"/>
+                    <TextBlock x:Name="PressedTextAlphaText" Style="{DynamicResource HintStyle}" Width="52"
+                               Margin="12,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                    <TextBlock Text="按下 · 背景" Style="{DynamicResource FieldLabelStyle}" Width="112" VerticalAlignment="Center"/>
+                    <Border x:Name="PressedBgColorPreview" Width="30" Height="30" CornerRadius="8"
+                            BorderBrush="{DynamicResource BorderStrongBrush}" BorderThickness="1.5"
+                            Background="#FFFFFFFF" Cursor="Hand" ToolTip="点这里换颜色"
+                            MouseLeftButtonDown="ColorSwatch_Click" Tag="PressedBg"/>
+                    <TextBlock x:Name="PressedBgColorHexText" Style="{DynamicResource HintStyle}" Width="88"
+                               Margin="8,0,0,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="透明度" Style="{DynamicResource HintStyle}" Margin="12,0,8,0" VerticalAlignment="Center"/>
+                    <Slider x:Name="PressedBgAlphaSlider" Width="200" Minimum="0" Maximum="100" TickFrequency="1"
+                            IsSnapToTickEnabled="True" VerticalAlignment="Center"
+                            ValueChanged="ColorAlpha_Changed" Tag="PressedBg"/>
+                    <TextBlock x:Name="PressedBgAlphaText" Style="{DynamicResource HintStyle}" Width="52"
+                               Margin="12,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+                <!-- 果冻动感：按下时先被压扁，再带过冲地 Q 弹回来 -->
+                <CheckBox x:Name="DynamicCheckBox"
+                          Style="{DynamicResource ToggleSwitchStyle}"
+                          Margin="0,18,0,0"
+                          Checked="Option_Changed"
+                          Unchecked="Option_Changed">
+                    <StackPanel>
+                        <TextBlock Text="按下时果冻 Q 弹" FontSize="13" FontWeight="Bold"/>
+                        <TextBlock Text="按住不放时整个格子一直缩着（连着里面的字一起缩），松手才像果冻那样带着过冲弹回来、抖几下收住" FontSize="11.5"
+                                   Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0"/>
+                    </StackPanel>
+                </CheckBox>
+
+                <StackPanel x:Name="DynamicForcePanel" Orientation="Horizontal" Margin="0,12,0,0">
+                    <TextBlock Text="Q 弹力度" Style="{DynamicResource FieldLabelStyle}" Width="112" VerticalAlignment="Center"/>
+                    <Slider x:Name="DynamicScaleSlider" Width="300" Minimum="0" Maximum="100" TickFrequency="5"
+                            IsSnapToTickEnabled="True" VerticalAlignment="Center" ValueChanged="Option_Changed"/>
+                    <TextBlock x:Name="DynamicScaleText" Style="{DynamicResource HintStyle}" Width="48"
+                               VerticalAlignment="Center" Margin="12,0,0,0"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- ==================== 4. 阴影 ==================== -->
+        <Border Style="{DynamicResource CardStyle}" Margin="0,14,0,0">
+            <StackPanel>
+                <TextBlock Text="4. 阴影" Style="{DynamicResource CardTitleStyle}"/>
+                <TextBlock Style="{DynamicResource CardDescStyle}" TextWrapping="Wrap" Margin="0,3,0,14"
+                           Text="给格子描一圈模糊阴影，压在亮色游戏画面上更清楚。"/>
+
+                <CheckBox x:Name="ShadowEnabledCheckBox"
+                          Style="{DynamicResource ToggleSwitchStyle}"
+                          Checked="Option_Changed"
+                          Unchecked="Option_Changed">
+                    <StackPanel>
+                        <TextBlock Text="启用阴影" FontSize="13" FontWeight="Bold"/>
+                        <TextBlock Text="关掉后格子是「贴」在画面上的" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0"/>
+                    </StackPanel>
+                </CheckBox>
+
+                <Grid Margin="0,16,0,0">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="阴影颜色" Style="{DynamicResource FieldLabelStyle}" Width="72" VerticalAlignment="Center"/>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Border x:Name="ShadowColorPreview" Width="30" Height="30" CornerRadius="8"
+                                BorderBrush="{DynamicResource BorderStrongBrush}" BorderThickness="1.5"
+                                Background="#FF000000" Cursor="Hand" ToolTip="点这里换颜色"
+                                MouseLeftButtonDown="ColorSwatch_Click" Tag="Shadow"/>
+                        <TextBlock x:Name="ShadowColorHexText" Style="{DynamicResource HintStyle}" Width="88"
+                                   Margin="8,0,0,0" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Grid>
+
+                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                    <TextBlock Text="模糊半径" Style="{DynamicResource FieldLabelStyle}" Width="72" VerticalAlignment="Center"/>
+                    <Slider x:Name="ShadowBlurSlider" Width="300" Minimum="0" Maximum="24" TickFrequency="1"
+                            IsSnapToTickEnabled="True" VerticalAlignment="Center" ValueChanged="Option_Changed"/>
+                    <TextBlock x:Name="ShadowBlurText" Style="{DynamicResource HintStyle}" Width="48" VerticalAlignment="Center" Margin="12,0,0,0"/>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                    <TextBlock Text="偏移" Style="{DynamicResource FieldLabelStyle}" Width="72" VerticalAlignment="Center"/>
+                    <Slider x:Name="ShadowOffsetSlider" Width="300" Minimum="0" Maximum="10" TickFrequency="0.5"
+                            IsSnapToTickEnabled="True" VerticalAlignment="Center" ValueChanged="Option_Changed"/>
+                    <TextBlock x:Name="ShadowOffsetText" Style="{DynamicResource HintStyle}" Width="48" VerticalAlignment="Center" Margin="12,0,0,0"/>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                    <TextBlock Text="不透明度" Style="{DynamicResource FieldLabelStyle}" Width="72" VerticalAlignment="Center"/>
+                    <Slider x:Name="ShadowOpacitySlider" Width="300" Minimum="0" Maximum="1" TickFrequency="0.05"
+                            IsSnapToTickEnabled="True" VerticalAlignment="Center" ValueChanged="Option_Changed"/>
+                    <TextBlock x:Name="ShadowOpacityText" Style="{DynamicResource HintStyle}" Width="48" VerticalAlignment="Center" Margin="12,0,0,0"/>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                    <TextBlock Text="光照方向" Style="{DynamicResource FieldLabelStyle}" Width="72" VerticalAlignment="Center"/>
+                    <Slider x:Name="ShadowDirectionSlider" Width="300" Minimum="0" Maximum="359" TickFrequency="1"
+                            IsSnapToTickEnabled="True" VerticalAlignment="Center" ValueChanged="Option_Changed"/>
+                    <TextBlock x:Name="ShadowDirectionText" Style="{DynamicResource HintStyle}" Width="48" VerticalAlignment="Center" Margin="12,0,0,0"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+    </StackPanel>
+</UserControl>

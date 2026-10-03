@@ -1,0 +1,18 @@
+<Window x:Class="MinecraftChatOverlay.Plugins.KeyDisplay.KeyOverlayWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="按键显示"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Topmost="True"
+        ShowInTaskbar="False"
+        ShowActivated="False"
+        ResizeMode="NoResize"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True">
+
+    <!-- 尺寸不用 SizeToContent：格子是自由摆放的，窗口大小按内容包围盒算（见 ResizeToContent）。
+         Canvas 上那个 Margin 是给阴影留的余量，别删 —— 删了阴影会被窗口边缘切掉。 -->
+    <Canvas x:Name="RootCanvas" Background="Transparent"/>
+</Window>

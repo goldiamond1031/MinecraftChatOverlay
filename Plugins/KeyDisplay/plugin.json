@@ -1,0 +1,14 @@
+{
+  "id": "goldiamond.keydisplay",
+  "name": "按键显示",
+  "version": "1.0.0",
+  "author": "goldiamond",
+  "assembly": "KeyDisplayPlugin.dll",
+  "description": "把指定按键的按下状态做成一个悬浮窗显示（PVP 客户端那种键位显示）。只读不改：用 GetAsyncKeyState 轮询你配置的那几个键，不装键盘钩子、不拦截按键、不记录、不落盘。按键格子的位置和大小在配置页的拖拽画布上摆，支持网格吸附；文字、颜色、阴影、背景、圆角都能自定义。",
+  "apiVersion": 1,
+  "capabilities": [
+    "只读地查询指定虚拟键的按下状态（GetAsyncKeyState 轮询，不安装任何键盘钩子）",
+    "显示一个置顶、透明、默认鼠标穿透的键位悬浮窗",
+    "在自己目录里读写配置"
+  ]
+}

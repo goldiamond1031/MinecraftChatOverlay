@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <UseWPF>true</UseWPF>
+    <!-- 开 WinForms 只为了一件事：用宿主内置模块同款的 System.Windows.Forms.ColorDialog 调色盘
+         （宿主 MainWindow.KillFeed 选边缘颜色用的就是它）。自己画一个色域面板犯不上。 -->
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>KeyDisplayPlugin</AssemblyName>
+    <RootNamespace>MinecraftChatOverlay.Plugins.KeyDisplay</RootNamespace>
+    <EnableDefaultApplicationDefinition>false</EnableDefaultApplicationDefinition>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 开了 UseWindowsForms 之后，隐式 using 会把 System.Drawing 和 System.Windows.Forms
+         灌进来，跟 WPF 的 Brush / Point / MouseEventArgs 全都撞名（CS0104）。
+         这里把这两个去掉，只在真正需要的那一处用完全限定名写。 -->
+    <Using Remove="System.Drawing" />
+    <Using Remove="System.Windows.Forms" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Abstractions\MinecraftChatOverlay.Plugin.Abstractions.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="plugin.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

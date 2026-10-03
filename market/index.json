@@ -1,6 +1,6 @@
 {
     "schemaVersion":  1,
-    "updatedAt":  "2026-10-01T23:48:40+08:00",
+    "updatedAt":  "2026-10-03T10:53:22+08:00",
     "plugins":  [
                     {
                         "id":  "goldiamond.autogg",
@@ -17,6 +17,25 @@
                         "downloadUrl":  "packages/goldiamond.autogg-1.1.0.zip",
                         "sha256":  "5EF45BD36664F36F5EE785642524EE2358B1C703BE957AA0BE814B9AF10F5E9C",
                         "size":  10522,
+                        "tags":  [
+
+                                 ]
+                    },
+                    {
+                        "id":  "goldiamond.keydisplay",
+                        "name":  "按键显示",
+                        "version":  "1.0.0",
+                        "author":  "goldiamond",
+                        "description":  "把指定按键的按下状态做成一个悬浮窗显示（PVP 客户端那种键位显示）。只读不改：用 GetAsyncKeyState 轮询你配置的那几个键，不装键盘钩子、不拦截按键、不记录、不落盘。按键格子的位置和大小在配置页的拖拽画布上摆，支持网格吸附；文字、颜色、阴影、背景、圆角都能自定义。",
+                        "apiVersion":  1,
+                        "capabilities":  [
+                                             "只读地查询指定虚拟键的按下状态（GetAsyncKeyState 轮询，不安装任何键盘钩子）",
+                                             "显示一个置顶、透明、默认鼠标穿透的键位悬浮窗",
+                                             "在自己目录里读写配置"
+                                         ],
+                        "downloadUrl":  "packages/goldiamond.keydisplay-1.0.0.zip",
+                        "sha256":  "D664D7CC667C2D651772E31B88EC6ADDF933BFC9FA3F86399B96E80848DF824F",
+                        "size":  44005,
                         "tags":  [
 
                                  ]
