@@ -5,6 +5,7 @@
         {
             "name": "墨染",
             "amount": "¥20"
+            "message":"打不打44"
         },
         {
             "name":"骑单车的鸡",
@@ -23,6 +24,7 @@
         {
             "name":"like",
             "amount":"¥10"
+            "message":"[动画表情]主人"
         },
         {
             "name":"schen404",
