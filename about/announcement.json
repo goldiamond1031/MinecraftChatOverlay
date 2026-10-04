@@ -1,10 +1,10 @@
 {
     "schemaVersion": 1,
-    "id": "2026-10-3-1809",
-    "updatedAt": "2026-10-03T18:09:07+08:00",
+    "id": "2026-10-4-0829",
+    "updatedAt": "2026-10-04T08:29:28+08:00",
     "enabled": true,
     "title": "按键显示更新",
-    "body": "新增调整整体大小的滑动控件\n新增RGB轮换",
+    "body": "新增可开关的防止按键显示移出屏幕\n新增对其他游戏的适配，按键显示换低级钩子模式后在其他游戏也可正常使用",
     "link": "https://github.com/goldiamond1031/MinecraftChatOverlay/releases",
     "linkText": "无可用更新"
 }
