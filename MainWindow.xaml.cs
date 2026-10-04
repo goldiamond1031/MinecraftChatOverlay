@@ -1114,8 +1114,11 @@ private void SaveThemePreference(bool darkMode)
 
             NotifySoundForChat(replacedForCheck);
             NotifyKillFeedback(replacedForCheck);
-            ShowOverlay();
-            _overlay?.AddMessage(chatMessage);
+
+            // ⚠ 这里**不能**调 ShowOverlay()：用户手动隐藏之后，一来消息就被强行显示回来
+            // （2026-10-04 报的 bug）。用 EnsureOverlay()：只保证实例在、消息进队列，
+            // 可见性完全由用户控制。想"隐藏时也能自动弹"的话，那是另一个开关的事。
+            EnsureOverlay().AddMessage(chatMessage);
         });
     }
 
@@ -1151,7 +1154,19 @@ private void SaveThemePreference(bool darkMode)
         });
     }
 
-    private void ShowOverlay()
+    /// <summary>
+    /// 保证悬浮窗实例存在，但**不显示它**。
+    ///
+    /// 为什么要有这个方法：隐藏状态下收到新消息，消息仍然要进队列
+    /// （用户点「显示悬浮窗」时能看到这期间的消息）。而实例可能不存在
+    /// （用户从任务栏关过窗口 → Closed 里把 _overlay 置了 null），
+    /// 所以「不显示」不等于「不创建」。
+    ///
+    /// 顺带修正的一个老 bug（2026-10-04）：新消息的处理路径原来直接调 ShowOverlay()，
+    /// 结果用户手动隐藏之后，一来消息就被强行显示回来 —— 隐藏状态被覆盖。
+    /// 现在新消息走这个方法：只保证实例在，不改变可见性。
+    /// </summary>
+    private OverlayWindow EnsureOverlay()
     {
         if (_overlay == null)
         {
@@ -1163,9 +1178,16 @@ private void SaveThemePreference(bool darkMode)
             };
         }
 
-        if (!_overlay.IsVisible)
+        return _overlay;
+    }
+
+    private void ShowOverlay()
+    {
+        var overlay = EnsureOverlay();
+
+        if (!overlay.IsVisible)
         {
-            _overlay.Show();
+            overlay.Show();
         }
 
         ToggleOverlayButton.Content = "隐藏悬浮窗";

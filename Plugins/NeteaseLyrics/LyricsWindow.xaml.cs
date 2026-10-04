@@ -107,6 +107,7 @@ public partial class LyricsWindow : Window
             : Brushes.Transparent;
 
         ClickThrough = settings.ClickThrough;
+        SetObsMode(settings.ObsMode);
         Width = Math.Max(240, settings.WindowWidth);
         Left = settings.WindowLeft;
         Top = settings.WindowTop;
@@ -238,6 +239,38 @@ public partial class LyricsWindow : Window
             }
 
             SetWindowLong(handle, GwlExStyle, style | WsExToolWindow);
+        }
+        catch
+        {
+        }
+    }
+
+    /// <summary>
+    /// OBS 直播模式：true = 摘掉 TOOLWINDOW（窗口出现在 OBS 窗口捕获列表里，可被抓）；
+    /// false = 恢复 TOOLWINDOW（不占任务栏 / 不进 Alt+Tab，但 OBS 看不到）。
+    ///
+    /// 动态切换，不用重建窗口 —— 只改一个 Win32 扩展样式位。
+    /// 代价（开着的时）：所有者已被 DetachFromOwner 清掉、ShowInTaskbar="False" 失效，
+    /// 任务栏和 Alt+Tab 里会出现这个窗口。好在 Closing 被拦成 Hide 了
+    /// （见插件创建窗口处），任务栏右键"关闭窗口"不会弄废实例，只是隐藏 —— 再开开关就回来。
+    /// </summary>
+    public void SetObsMode(bool on)
+    {
+        try
+        {
+            var handle = new WindowInteropHelper(this).Handle;
+            if (handle == IntPtr.Zero)
+            {
+                return;
+            }
+
+            var style = GetWindowLong(handle, GwlExStyle);
+            var wanted = on ? (style & ~WsExToolWindow) : (style | WsExToolWindow);
+
+            if (wanted != style)
+            {
+                SetWindowLong(handle, GwlExStyle, wanted);
+            }
         }
         catch
         {

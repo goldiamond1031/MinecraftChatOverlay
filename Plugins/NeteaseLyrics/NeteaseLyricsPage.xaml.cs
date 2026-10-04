@@ -73,6 +73,7 @@ public partial class NeteaseLyricsPage : System.Windows.Controls.UserControl
         ShowNextLineCheckBox.IsChecked = s.ShowNextLine;
         ShowTrackInfoCheckBox.IsChecked = s.ShowTrackInfo;
         ClickThroughCheckBox.IsChecked = s.ClickThrough;
+        ObsModeCheckBox.IsChecked = s.ObsMode;
 
         FontSizeSlider.Value = Clamp(s.FontSize, FontSizeSlider.Minimum, FontSizeSlider.Maximum);
         NextScaleSlider.Value = Clamp(s.NextLineScale, NextScaleSlider.Minimum, NextScaleSlider.Maximum);
@@ -180,6 +181,7 @@ public partial class NeteaseLyricsPage : System.Windows.Controls.UserControl
         s.ShowNextLine = ShowNextLineCheckBox.IsChecked == true;
         s.ShowTrackInfo = ShowTrackInfoCheckBox.IsChecked == true;
         s.ClickThrough = ClickThroughCheckBox.IsChecked == true;
+        s.ObsMode = ObsModeCheckBox.IsChecked == true;
 
         if (FontComboBox.SelectedItem is string font && !string.IsNullOrWhiteSpace(font))
         {

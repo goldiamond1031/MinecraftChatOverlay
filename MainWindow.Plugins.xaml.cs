@@ -118,14 +118,18 @@ public partial class MainWindow
         }
     }
 
-    /// <summary>插件要往悬浮窗发消息：显示悬浮窗并追加一条。</summary>
+    /// <summary>
+    /// 插件要往悬浮窗发消息：**追加一条**（不改可见性）。
+    ///
+    /// ⚠ 和聊天消息同一条规矩（2026-10-04 修）：以前这里也调 ShowOverlay()，
+    /// 用户隐藏了悬浮窗，插件随便发个消息就把它顶出来。改成 EnsureOverlay() ——
+    /// 实例在就写进去，用户想看的时候自然能看到。
+    /// </summary>
     private void OnPluginOverlayMessage(PluginEntry entry, string text)
     {
         try
         {
-            ShowOverlay();
-            // 插件发过来的消息直接进悬浮窗，和聊天栏来的走同一条显示路径
-            _overlay?.AddMessage(text);
+            EnsureOverlay().AddMessage(text);
         }
         catch (Exception ex)
         {

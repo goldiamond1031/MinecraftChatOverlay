@@ -540,6 +540,10 @@ public sealed class KeyDisplayPlugin : IPlugin
         window.Rebuild(Settings);
         window.ClickThrough = Settings.ClickThrough;
         window.ClampEnabled = Settings.ClampToScreen;
+
+        // OBS 直播模式：窗口创建流程的末尾（DetachFromOwner 在 OnSourceInitialized 里已跑过）
+        // 摘掉 TOOLWINDOW，让 OBS 能枚举到这个窗口
+        window.SetObsMode(Settings.ObsMode);
         window.ApplyPosition(Settings);
         return window;
     }
@@ -615,6 +619,7 @@ public sealed class KeyDisplayPlugin : IPlugin
             {
                 _window.ClickThrough = Settings.ClickThrough;
                 _window.ClampEnabled = Settings.ClampToScreen;
+                _window.SetObsMode(Settings.ObsMode);
                 _window.UpdateTransparent();
             }
 

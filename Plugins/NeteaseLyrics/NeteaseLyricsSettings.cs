@@ -11,6 +11,13 @@ public sealed class NeteaseLyricsSettings
     public bool ShowTrackInfo { get; set; } = true;
     public bool ClickThrough { get; set; }
 
+    /// <summary>
+    /// OBS 直播模式：摘掉 TOOLWINDOW，让歌词窗能被 OBS「窗口捕获」抓到。
+    /// 默认关 —— 开了之后窗口会出现在任务栏和 Alt+Tab 里（所有者被清了，压不住），
+    /// 这个代价写在设置页文案里，直播的人自己权衡。
+    /// </summary>
+    public bool ObsMode { get; set; }
+
     // ---- 字体与文字 ----
     public string FontFamily { get; set; } = "Microsoft YaHei UI";
     public double FontSize { get; set; } = 30;

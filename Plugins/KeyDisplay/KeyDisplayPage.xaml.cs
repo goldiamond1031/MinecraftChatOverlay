@@ -353,6 +353,7 @@ public partial class KeyDisplayPage : System.Windows.Controls.UserControl
         EnabledCheckBox.IsChecked = s.Enabled;
         ClickThroughCheckBox.IsChecked = s.ClickThrough;
         ClampToScreenCheckBox.IsChecked = s.ClampToScreen;
+        ObsModeCheckBox.IsChecked = s.ObsMode;
         SnapCheckBox.IsChecked = s.SnapToGrid;
         ShadowEnabledCheckBox.IsChecked = s.ShadowEnabled;
         DynamicCheckBox.IsChecked = s.DynamicEnabled;
@@ -1177,6 +1178,7 @@ public partial class KeyDisplayPage : System.Windows.Controls.UserControl
         s.Enabled = EnabledCheckBox.IsChecked == true;
         s.ClickThrough = ClickThroughCheckBox.IsChecked == true;
         s.ClampToScreen = ClampToScreenCheckBox.IsChecked == true;
+        s.ObsMode = ObsModeCheckBox.IsChecked == true;
         s.SnapToGrid = SnapCheckBox.IsChecked == true;
         s.ShadowEnabled = ShadowEnabledCheckBox.IsChecked == true;
         s.DynamicEnabled = DynamicCheckBox.IsChecked == true;

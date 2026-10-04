@@ -52,6 +52,17 @@
                     </StackPanel>
                 </CheckBox>
 
+                <CheckBox x:Name="ObsModeCheckBox"
+                          Style="{DynamicResource ToggleSwitchStyle}"
+                          Margin="0,14,0,0"
+                          Checked="Option_Changed"
+                          Unchecked="Option_Changed">
+                    <StackPanel>
+                        <TextBlock Text="OBS 直播模式" FontSize="13" FontWeight="Bold"/>
+                        <TextBlock Text="默认关着 —— 悬浮窗平时不在 OBS 的窗口捕获列表里（被工具窗标记过滤了）。要直播抓取按键显示就打开这个；代价是悬浮窗会出现在任务栏和 Alt+Tab 里。开了之后 OBS 用「窗口捕获」就能选到它。" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0"/>
+                    </StackPanel>
+                </CheckBox>
+
                 <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
                     <TextBlock Text="刷新间隔" Style="{DynamicResource FieldLabelStyle}" Width="72" VerticalAlignment="Center"/>
                     <ComboBox x:Name="RefreshComboBox" Width="300" Height="32" SelectionChanged="Option_Changed"/>

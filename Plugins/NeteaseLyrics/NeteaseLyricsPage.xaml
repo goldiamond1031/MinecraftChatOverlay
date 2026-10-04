@@ -87,6 +87,13 @@
                         <TextBlock Text="开着时点不到歌词窗（适合盖在游戏上）；想拖动歌词窗就先关掉" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0"/>
                     </StackPanel>
                 </CheckBox>
+
+                <CheckBox x:Name="ObsModeCheckBox" Style="{DynamicResource ToggleSwitchStyle}" Margin="0,14,0,0" Checked="Option_Changed" Unchecked="Option_Changed">
+                    <StackPanel>
+                        <TextBlock Text="OBS 直播模式" FontSize="13" FontWeight="Bold"/>
+                        <TextBlock Text="默认关着 —— 歌词窗平时不在 OBS 的窗口捕获列表里（被工具窗标记过滤了）。要直播抓取歌词就打开这个；代价是歌词窗会出现在任务栏和 Alt+Tab 里。开了之后 OBS 用「窗口捕获」就能选到它。" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0"/>
+                    </StackPanel>
+                </CheckBox>
             </StackPanel>
         </Border>
 

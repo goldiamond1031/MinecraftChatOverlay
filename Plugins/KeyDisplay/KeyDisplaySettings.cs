@@ -124,6 +124,15 @@ public sealed class KeyDisplaySettings
     /// </summary>
     public bool ClampToScreen { get; set; } = true;
 
+    /// <summary>
+    /// OBS 直播模式：让悬浮窗能被 OBS「窗口捕获」抓到。
+    ///
+    /// 默认关。为什么默认关：开了之后悬浮窗会出现在任务栏和 Alt+Tab 里
+    /// （TOOLWINDOW 被摘掉、所有者又被清了，压不住任务栏）—— 代价摆在这，直播的人自己开。
+    /// 直播时任务栏多一个图标基本无感，但普通用户平白多这俩就是干扰。
+    /// </summary>
+    public bool ObsMode { get; set; }
+
     // ---- 全局外观 ----
     public string FontFamily { get; set; } = "Microsoft YaHei UI";
     public double FontSize { get; set; } = 18;

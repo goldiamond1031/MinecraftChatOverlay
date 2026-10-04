@@ -566,7 +566,7 @@ footer{margin-top:70px;padding-top:22px;border-top:2px solid var(--border);
 <tr><td><code class="k">string PluginsRootDirectory</code></td><td>所有插件的根目录。一般用不到，除非做插件间共享。</td></tr>
 <tr><td><code class="k">void RegisterPage(PluginPage)</code></td><td>注册导航页。一个插件一个，重复注册以最后为准。</td></tr>
 <tr><td><code class="k">void Log(string)</code></td><td>写一行到宿主调试后台页（用户开了「启用后端日志」才显示）。</td></tr>
-<tr><td><code class="k">void SendToOverlay(string)</code></td><td>往宿主的聊天悬浮窗发一条消息（插件输出、播报结果走这里）。</td></tr>
+<tr><td><code class="k">void SendToOverlay(string)</code></td><td>往宿主的聊天悬浮窗发一条消息（插件输出、播报结果走这里）。<b>不会强制显示悬浮窗</b> —— 用户把悬浮窗关掉了就保持关着，消息照样进队列，等他打开时能看到。</td></tr>
 <tr><td><code class="k">void ReassertOverlayTopmost()</code></td><td>把聊天悬浮窗重新抬到最前（不抢焦点）。<b>你动了别的窗口层级之后调一下</b>——比如你做的「窗口全屏」把游戏窗口铺满后，别让宿主悬浮窗被压下去。悬浮窗没开时调用是安全的。</td></tr>
 <tr><td><code class="k">void ShowToast(string)</code></td><td>右下角弹一条提示。</td></tr>
 <tr><td><code class="k">event Action&lt;ChatLine&gt; ChatLineReceived</code></td><td>收到聊天消息。<b>宿主 UI 线程触发</b>，别做耗时操作。</td></tr>
@@ -1600,6 +1600,45 @@ WPF 自带的属性只能解决一半，另一半必须 Win32。先给完整模�
 [DllImport(<span class="s">"user32.dll"</span>, EntryPoint = <span class="s">"SetWindowLong"</span>)]
 <span class="k">private static extern int</span> SetWindowLongPtr32(IntPtr hWnd, <span class="k">int</span> nIndex, <span class="k">int</span> dwNewLong);</pre></div>
 
+<div class="notice danger"><span class="ic">⛔</span><div>
+<b>WS_EX_TOOLWINDOW 的隐藏代价：OBS 抓不到这个窗口。</b>
+OBS「窗口捕获」枚举窗口时会过滤掉工具窗 —— 悬浮窗设了 TOOLWINDOW 就**根本不出现在 OBS 的窗口列表里**，
+直播用户想抓按键显示/歌词窗抓不到。
+判断依据（2026-10-04 实证）：宿主自己的聊天悬浮窗<b>没</b>设 TOOLWINDOW
+（它保留所有者，<code class="inline">ShowInTaskbar="False"</code> 就够），所以 OBS 一直能看到它。
+</div></div>
+
+<p><b>解法：OBS 直播模式开关</b>（KeyDisplay / NeteaseLyrics 都是这么做的）——
+设置加一个 <code class="inline">ObsMode</code>（默认关），开着时动态摘掉 TOOLWINDOW：</p>
+
+<div class="codeblock"><div class="bar"><span class="lang">C# · SetObsMode：动态切换（不用重建窗口）</span><button class="copy">复制</button></div><pre><span class="c">/// true = 摘掉 TOOLWINDOW（OBS 列表能看到、能抓）；false = 恢复（不占任务栏/Alt+Tab）</span>
+<span class="k">public void</span> SetObsMode(<span class="k">bool</span> on)
+{
+    <span class="k">var</span> handle = <span class="k">new</span> WindowInteropHelper(<span class="k">this</span>).Handle;
+    <span class="k">if</span> (handle == IntPtr.Zero) <span class="k">return</span>;
+
+    <span class="k">var</span> style = GetWindowLong(handle, GWL_EXSTYLE);
+    <span class="k">var</span> wanted = on ? (style &amp; ~WS_EX_TOOLWINDOW) : (style | WS_EX_TOOLWINDOW);
+    <span class="k">if</span> (wanted != style) SetWindowLong(handle, GWL_EXSTYLE, wanted);
+}</pre></div>
+
+<p>三个必须想清楚的点：</p>
+<ul>
+  <li><b>开着的代价</b>：所有者已被清（悬浮窗必须独立存活），<code class="inline">ShowInTaskbar="False"</code> 失效，
+  摘掉 TOOLWINDOW 后窗口会出现在<b>任务栏和 Alt+Tab</b> 里。直播场景基本无感，但要写进设置页文案让用户自己选；</li>
+  <li><b>任务栏右键"关闭窗口"</b>：窗口出现在任务栏后用户能右键关它 —— 必须像 KeyDisplay 那样
+  把 <code class="inline">Closing</code> 拦成 <code class="inline">Hide</code>（<code class="inline">args.Cancel = true</code>），
+  不然窗口实例被关废（WPF 不允许 Show 一个已 Close 的窗口）；</li>
+  <li><b>切换即时生效</b>：改样式位就行，不用重建窗口。挂在 <code class="inline">ApplySettings</code> /
+  <code class="inline">SyncWindowState</code> 这类统一同步点上。</li>
+</ul>
+
+<div class="notice info"><span class="ic">💡</span><div>
+<b>顺带说明透明窗黑屏问题：</b>WPF 的 <code class="inline">AllowsTransparency="True"</code> 窗口是分层窗口，
+OBS 默认的 BitBlt 捕获方式抓出来是黑的 —— 但<b>现代 OBS 的「Windows 10（1903+）」捕获方式（WGC）能正常抓</b>。
+所以 OBS 侧把窗口捕获的方法切到 WGC 即可，代码侧不用为黑屏做任何事。
+</div></div>
+
 <h3><span class="no">8.6</span>显示/隐藏：常驻窗口，别反复 Show/Hide</h3>
 <div class="codeblock"><div class="bar"><span class="lang">C#</span><button class="copy">复制</button></div><pre><span class="c">/// 隐藏 = 透明度归零 + 强制穿透。反复 Hide()/Show() 会重排 z-order、扰动游戏。</span>
 <span class="k">public void</span> ShowOverlay()
@@ -2342,6 +2381,12 @@ CallNextHookEx 放行（9.2.2 ⑥）。</td></tr>
 <td><code class="inline">DragMove()</code> 随便拖出屏，出界位置还存盘。
 自绘拖动 + 每帧 <code class="inline">ClampToVirtualScreen</code>（用 VirtualScreen，多显示器安全），
 尺寸变化/分辨率变化也要钳（8.10）。</td></tr>
+
+<tr><td>33</td><td><b>悬浮窗 OBS 抓不到</b></td>
+<td>两个独立原因：<code class="inline">WS_EX_TOOLWINDOW</code> 被 OBS 窗口枚举过滤（列表里根本不出现，
+宿主聊天窗没设它所以一直能看到）；<code class="inline">AllowsTransparency</code> 分层窗口 BitBlt 抓出来黑屏
+（OBS 切 WGC 捕获即可）。前者加「OBS 直播模式」开关动态摘 TOOLWINDOW，
+代价是窗口会出现在任务栏和 Alt+Tab（8.5）。</td></tr>
 </table></div>
 </section>
 

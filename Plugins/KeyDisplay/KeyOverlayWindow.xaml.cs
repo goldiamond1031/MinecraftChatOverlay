@@ -1115,6 +1115,12 @@ public partial class KeyOverlayWindow : Window
     /// <summary>
     /// 不占任务栏 / 不进 Alt+Tab。必须用 Win32 的 WS_EX_TOOLWINDOW ——
     /// WPF 的 ShowInTaskbar="False" 是靠"挂个隐藏所有者"实现的，而我们要把所有者清掉。
+    ///
+    /// ⚠ 代价（2026-10-04 发现）：WS_EX_TOOLWINDOW 会被 OBS 的窗口枚举过滤 ——
+    ///   悬浮窗在 OBS「窗口捕获」的列表里根本不出现，直播用户抓不到。
+    ///   所以有 <see cref="SetObsMode"/>：直播时把 TOOLWINDOW 摘掉，
+    ///   换成"出现在 OBS 列表（代价：任务栏 / Alt+Tab 里也会出现）"。
+    ///   宿主的聊天悬浮窗（OverlayWindow）没设 TOOLWINDOW 所以 OBS 一直能看到，就是这个道理。
     /// </summary>
     public void MakeToolWindow()
     {
@@ -1133,6 +1139,38 @@ public partial class KeyOverlayWindow : Window
             }
 
             SetWindowLong(handle, GwlExStyle, style | WsExToolWindow);
+        }
+        catch
+        {
+        }
+    }
+
+    /// <summary>
+    /// OBS 直播模式：true = 摘掉 TOOLWINDOW（窗口出现在 OBS 窗口捕获列表里，可被抓）；
+    /// false = 恢复 TOOLWINDOW（不占任务栏 / 不进 Alt+Tab，但 OBS 看不到）。
+    ///
+    /// 动态切换，不用重建窗口 —— 就是改一个 Win32 扩展样式位。
+    /// 开着的代价：因为所有者已被 <see cref="DetachFromOwner"/> 清掉、
+    /// WPF 的 ShowInTaskbar="False" 失效，任务栏和 Alt+Tab 里会出现这个窗口。
+    /// 直播时任务栏多一个图标基本无感，但要在设置页把这个取舍写明白。
+    /// </summary>
+    public void SetObsMode(bool on)
+    {
+        try
+        {
+            var handle = new WindowInteropHelper(this).Handle;
+            if (handle == IntPtr.Zero)
+            {
+                return;
+            }
+
+            var style = GetWindowLong(handle, GwlExStyle);
+            var wanted = on ? (style & ~WsExToolWindow) : (style | WsExToolWindow);
+
+            if (wanted != style)
+            {
+                SetWindowLong(handle, GwlExStyle, wanted);
+            }
         }
         catch
         {

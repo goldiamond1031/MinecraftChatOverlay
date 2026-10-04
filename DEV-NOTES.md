@@ -198,6 +198,10 @@ cd C:/MinecraftChatOverlayDSUI3/native
 75. **击杀反馈的「新手引导」是"页面内浮层 + 高亮目标控件"，不是弹窗** —— 16 步状态机在 `MainWindow.KillFeed.xaml.cs` 的 `BuildTutorialSteps()`（正文里的 `{id}` 占位符在**显示那一刻**替换成用户填的 ID，因为他可能走到第 2 步才填）；浮层 `KillFeedbackTutorialOverlay` 在 `MainWindow.Modern.xaml` 里、**放在 ScrollViewer 外面**，靠 `UpdateTutorialOverlayVisibility()` 挂钩 `KillFeedPanel.IsVisibleChanged` 跟页面显隐；要高亮的两个控件外面各套了一层 Border（`KillFeedbackPlayerIdHighlight` / `KillFeedbackRulesHighlight`），高亮/红闪都在代码里改它们。**进引导前必须弹窗说明"已填规则会被清空"**（`KillFeedbackTutorialIntroWindow`）—— 引导会**替用户改规则框**（`SetTutorialRules`），不先说清楚就是毁数据。改步骤只动 `BuildTutorialSteps()` 那个数组就行。
 76. **"从列表里选一个"有三种模式，都在 `Services\RandomPicker.cs`**：不勾开关 = 固定用列表选中的那个；`randomEnabled` = 从勾中的里随机抽（避开上一次那个）；`sequential` = 顺序播放。**关键不变量：列表的选中项（紫色高亮）就是"轮到谁"** —— 顺序播放时 `Pick()` 直接返回选中项，放完由调用方用 `Next()` 算出下一个**并把列表选中项搬过去**（`SelectKillIcon` / `SelectKillSound`），高亮才跟着走。两个开关在 UI 上互斥（勾一个取消另一个）；勾选框（参与池子）在"随机或顺序"任一个开着时都显示，所以 `ApplyKillIconCheckBoxVisibility` / `ApplySoundChoiceCheckBoxVisibility` 要传 `random || sequential`。
 
+77. **「隐藏悬浮窗」会被新消息顶回来**（2026-10-04 修）—— `Watcher_ChatLineReceived` 和新消息路径原来**无条件**调 `ShowOverlay()`，用户手动隐藏之后一来消息就被强行显示回来，插件走 `SendToOverlay` 发的消息也一样（`MainWindow.Plugins.xaml.cs` 的 `OnPluginOverlayMessage`）。
+已改成 `EnsureOverlay()`：**只保证实例存在、消息进队列，不动可见性**；`ShowOverlay()` 现在只服务「开始监听」「界面里手动发送」这类明确要显示的用户主动动作。
+**教训：「保证实例存在」和「显示窗口」是两件事**，别用一个方法兜两种需求 —— 原来那段"顺手 Show 一下"的写法让隐藏状态变成了不可靠的东西。（另：隐藏期间消息照样 AddMessage 进队列，重新显示时都在。）
+
 ---
 
 ## 4. 协作习惯（gold_）
