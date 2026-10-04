@@ -27,6 +27,15 @@ public sealed class ProcessFpsPlugin : IPlugin
     private IPluginHost? _host;
     private FpsSharedMemory? _source;
     private FpsOverlayWindow? _window;
+
+    /// <summary>
+    /// 正在退出（宿主关窗 → 插件管理器调 Shutdown）。
+    ///
+    /// 悬浮窗的 Closing 被拦成「只藏不关」（防任务栏右键把窗口关废），
+    /// 但退出流程必须放行 —— 宿主用默认的 OnLastWindowClose，只要还有窗口没关，
+    /// 应用就不退出 → 宿主窗口关了、进程驻留后台（2026-10-04 与 KeyDisplay 同因同修）。
+    /// </summary>
+    private bool _shuttingDown;
     private ProcessFpsPage? _page;
     private DispatcherTimer? _timer;
 
@@ -201,6 +210,9 @@ public sealed class ProcessFpsPlugin : IPlugin
 
     public void Shutdown()
     {
+        // ★ 先放行窗口关闭（见 _shuttingDown 的注释）——下面 _window?.Close() 要靠它生效
+        _shuttingDown = true;
+
         try
         {
             _timer?.Stop();
@@ -336,9 +348,15 @@ public sealed class ProcessFpsPlugin : IPlugin
     {
         var window = new FpsOverlayWindow();
 
-        // 关闭只许"藏起来"：窗口一旦真 Close 掉，WPF 不允许再 Show 同一个实例
+        // 关闭只许"藏起来"：窗口一旦真 Close 掉，WPF 不允许再 Show 同一个实例。
+        // ⚠ 退出流程里放行，否则宿主关窗后进程退不掉（见 _shuttingDown 的注释）。
         window.Closing += (_, args) =>
         {
+            if (_shuttingDown)
+            {
+                return;
+            }
+
             args.Cancel = true;
             window.Hide();
         };

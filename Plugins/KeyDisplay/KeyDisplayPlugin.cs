@@ -104,6 +104,17 @@ public sealed class KeyDisplayPlugin : IPlugin
 
     private IPluginHost? _host;
     private KeyOverlayWindow? _window;
+
+    /// <summary>
+    /// 正在退出（宿主关窗 → 插件管理器调 Shutdown）。
+    ///
+    /// 为什么需要这个标志：悬浮窗的 Closing 被拦成「只藏不关」（防用户从任务栏右键把窗口
+    /// 关废 —— WPF 不允许 Show 一个已 Close 的窗口）。但那个拦截**不能**在退出流程里生效：
+    /// 宿主用的 ShutdownMode 是默认的 OnLastWindowClose，只要还有窗口没关，应用就不退出 →
+    /// **宿主窗口关了、进程却驻留在后台**（2026-10-04 用户报的就是这个）。
+    /// 所以 Shutdown 先把标志立起来，Closing 见到它就放行，让窗口真关。
+    /// </summary>
+    private bool _shuttingDown;
     private KeyDisplayPage? _page;
     private DispatcherTimer? _timer;
     private DispatcherTimer? _cycleTimer;
@@ -311,6 +322,10 @@ public sealed class KeyDisplayPlugin : IPlugin
 
     public void Shutdown()
     {
+        // ★ 第一件事：放行窗口关闭（见 _shuttingDown 的注释）。
+        // 必须放在最前面 —— 后面 _window?.Close() 要靠它绕过 Closing 拦截。
+        _shuttingDown = true;
+
         // 先卸钩子 —— 这是最要紧的一步。留着一个钩子比留一个定时器危险得多：
         // 它挂在系统输入链路上，宿主都关了它还在跑的话，全系统按键都要过一遍我们的回调。
         try
@@ -519,8 +534,15 @@ public sealed class KeyDisplayPlugin : IPlugin
         var window = new KeyOverlayWindow();
 
         // 关闭只许"藏起来"：真 Close 掉之后 WPF 不允许再 Show 同一个实例
+        // （用户从任务栏右键"关闭窗口"→ 拦成 Hide，实例保留）。
+        // ⚠ 但退出流程里必须放行，否则宿主关窗后进程退不掉（见 _shuttingDown 的注释）。
         window.Closing += (_, args) =>
         {
+            if (_shuttingDown)
+            {
+                return;   // 退出中：真关，让应用能正常结束
+            }
+
             args.Cancel = true;
             window.Hide();
         };

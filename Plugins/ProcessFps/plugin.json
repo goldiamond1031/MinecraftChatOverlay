@@ -1,7 +1,7 @@
 {
   "id": "goldiamond.processfps",
   "name": "游戏 FPS",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "goldiamond",
   "assembly": "ProcessFpsPlugin.dll",
   "description": "把目标进程的实时帧率显示成一个可自定义的悬浮窗：前缀后缀、字体字号、文字颜色、阴影、背景、圆角、位置都能改。帧率来自软件「游戏动态模糊」注入的那个钩子写进共享内存的实测值（和帧混合开关无关），所以目标进程需要先注入过一次。",

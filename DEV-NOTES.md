@@ -202,6 +202,21 @@ cd C:/MinecraftChatOverlayDSUI3/native
 已改成 `EnsureOverlay()`：**只保证实例存在、消息进队列，不动可见性**；`ShowOverlay()` 现在只服务「开始监听」「界面里手动发送」这类明确要显示的用户主动动作。
 **教训：「保证实例存在」和「显示窗口」是两件事**，别用一个方法兜两种需求 —— 原来那段"顺手 Show 一下"的写法让隐藏状态变成了不可靠的东西。（另：隐藏期间消息照样 AddMessage 进队列，重新显示时都在。）
 
+78. **jsDelivr 的分支缓存 12 小时 + 发布删旧包 = 用户下载 502**（2026-10-04 修）——
+  · jsDelivr 对 `@main` 这类**分支引用**的缓存能压约 12 小时；**带 `?t=` / `?nocache=` 查询串没用**（实测：加了参数仍返回旧清单，它按路径缓存、忽略 query）。→ `PluginMarketClient.FetchOneAsync` 里"时间戳绕开 CDN 缓存"那条注释**是错的**，别信。
+  · `pack-market-package.ps1` 的"一个 id 只留最新"会在发布时**删掉旧包**；于是还缓存着旧清单的用户 → 去下载一个**已被删除的包** → jsDelivr 回源 GitHub 404 → **502**，或者 301 跳去 raw.githubusercontent.com → 国内网络 RST → "远程主机强迫关闭了一个现有的连接"。
+  · **解法**：① `push.bat` 推送成功后自动 purge 清单（`https://purge.jsdelivr.net/gh/<owner>/<repo>@main/market/index.json`，失败只提示、不影响推送）；② 根治是**发布不删旧包**（代价：仓库多几个 50KB 的 zip）；③ 客户端下载失败换源重试（还没做）。
+  · 诊断技巧：**jsDelivr 与 raw 拿到的清单字节数不一样，就说明 CDN 缓存滞后**（本次 8715 vs 9865，一比就看出来）。
+  · 另外两个待改进点（没做）：`DownloadAsync` 只试一个 URL、失败不切源；清单"谁新用谁"在 raw 不通时会退化成只能用滞后的主源。
+
+79. **插件悬浮窗不真关 → 宿主关窗后进程驻留后台**（2026-10-04 修）——
+  · 机制：宿主的 `ShutdownMode` 是 WPF 默认的 **OnLastWindowClose**（App.xaml 没设），只要**还有窗口没真的关掉**，应用就不退出。
+  · 而插件悬浮窗为了"防任务栏右键把窗口关废"，普遍把 `Closing` 拦成只藏不关（`args.Cancel = true` + `Hide()`）。宿主 `Window_Closing` → `ShutdownPlugins()` → `PluginManager.ShutdownAll()` → `Unload()` → 插件 `Shutdown()` 里的 `_window.Close()` **被自己的拦截吃掉** → 窗口只 Hide → 进程驻留（主窗口消失、任务管理器里还在）。
+  · 涉及插件：**KeyDisplay、ProcessFps**（都没留放行出口）；**NeteaseLyrics 是对的**（Shutdown 先置 `_shuttingDown = true`，Closing 见到就 return）。AutoGg / PlayerQuery / RegionMagnifier / WindowFullscreen / SamplePlugin / FpsOverlay 不拦 Closing，不受影响。
+  · 修法：加 `private bool _shuttingDown;`，`Shutdown()` 第一行置 true，`Closing` 里 `if (_shuttingDown) return;`。已在 KeyDisplay / ProcessFps 落地。
+  · 顺带排查过：唯一的自建线程（KeyDisplay 的 `CpsSampler`）已 `IsBackground = true`，不是驻留原因；宿主自己的窗口（OverlayWindow / KillBannerWindow / BiliOverlayWindow）都没有拦 Closing，也干净。
+  · 另一个方向的隐患（**没修，先记着**）：FpsOverlay 之类**不拦** Closing 的插件，用户从任务栏右键关掉窗口会让实例作废（WPF 不允许 Show 已 Close 的窗口）——要修就得反过来加拦截，同时记得留上面的退出放行。
+
 ---
 
 ## 4. 协作习惯（gold_）
@@ -283,6 +298,17 @@ cd C:/MinecraftChatOverlayDSUI3/native
 ① 编 `Plugins\<插件名>` → ② 打包 `market\packages\<插件id>-<版本>.zip` → ③ 删掉这个插件的旧版本包（一个 id 只留最新）→
 ④ 重建 `market\index.json`。底层干活的是 `tools\pack-market-package.ps1`。
 **故意不把插件装进本机** —— 否则市场卡片直接显示"已装最新"，就没法验"更新"这条路了。
+
+**完整发布顺序（发新版 / 新插件通用，2026-10-04 踩过漏步后固化）**：
+
+1. **升版本号** —— 改 `Plugins\<名>\plugin.json` 的 `version`。**这步最容易漏**：卡片是按 id + 版本比对的，忘了升版本 → 市场不显示"可更新"，用户装了旧的还以为发过了。
+2. **跑** `tools\publish-plugin.bat <插件目录名>` ——编 Release + 打包 + 删同 id 旧包 + 重建 `index.json`，一条命令全干。
+3. **跑** `C:\Github\MinecraftChatOverlay\push.bat`（在**仓库副本**里）——robocopy 同步 + commit + push（被拒自动 rebase 重试），**并自动 purge jsDelivr 缓存**（见坑 78）。**只跑第 2 步不推等于没发**，市场是从 GitHub 拉的。
+4. **等生效** —— 正常情况下第 3 步那次 purge 让用户**立刻**拿到新清单；万一 purge 没成功（脚本会提示，不影响推送），才要等 jsDelivr 缓存自然过期（约 12 小时）。
+
+市场清单条目（id / name / version / author / description / apiVersion / capabilities / sha256 / size / downloadUrl）**全部由 `rebuild-market-index.ps1` 从包里的 plugin.json 自动生成**，不需要手工维护 `index.json`。所以新插件的 `plugin.json` 必须写全，**带附属 dll 的插件必须写 `assembly` 字段**（否则打包脚本自动挑主 dll 会挑错）。
+
+多条提醒：`publish-plugin.bat` **故意不装进本机**（要自己用新版就手动装一遍）；一次只发一个插件，多发几次；DEV 里删的文件 robocopy `/E` 不会从仓库删，要手动 `git rm`。
 
 **push.bat**（只在仓库副本里，开发目录没有）：4/4 段加了自动重试 —— `git push` 被拒（远程有本地没有的提交）
 → 自动 `git fetch` + `git pull --rebase origin main` → 重推，最多 3 轮；rebase 真出冲突就停下并打印手动处理步骤。

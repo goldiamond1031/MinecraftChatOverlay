@@ -1751,6 +1751,49 @@ OBS 默认的 BitBlt 捕获方式抓出来是黑的 —— 但<b>现代 OBS 的�
     <span class="k">if</span> (_host <span class="k">is not null</span>)
         _host.ChatLineReceived -= OnChatLine;   <span class="c">// 事件</span>
 }</pre></div>
+
+<div class="notice danger"><span class="ic">⛔</span><div>
+<b>悬浮窗的 <code class="inline">Closing</code> 拦截，必须在退出时放行 —— 否则宿主关窗后进程驻留后台。</b><br>
+悬浮窗通常会把 <code class="inline">Closing</code> 拦成「只藏不关」（防用户从任务栏右键把窗口关废 ——
+WPF 不允许 <code class="inline">Show</code> 一个已经 <code class="inline">Close</code> 的窗口），
+于是 Shutdown 里那句 <code class="inline">Close()</code> 会被自己的拦截吃掉、窗口只 Hide。
+而宿主用的 <code class="inline">ShutdownMode</code> 是默认的 <b>OnLastWindowClose</b>：
+<b>只要还有一个窗口没真的关掉，应用就不退出</b> —— 表现就是「主窗口消失了、进程还在任务管理器里」。
+（2026-10-04 用户报的就是这个，KeyDisplay 和 ProcessFps 都中招。）
+</div></div>
+
+<div class="codeblock"><div class="bar"><span class="lang">C# · 放行标志（正确写法）</span><button class="copy">复制</button></div><pre><span class="k">private bool</span> _shuttingDown;
+
+<span class="k">public void</span> Shutdown()
+{
+    _shuttingDown = <span class="k">true</span>;   <span class="c">// ★ 第一件事：放行窗口关闭（后面 Close() 才关得掉）</span>
+    _timer?.Stop();
+    ...
+    _window?.Close();
+    _window = <span class="k">null</span>;
+}
+
+<span class="c">// 建窗时 —— 拦截要留一个"退出中"的出口：</span>
+window.Closing += (_, args) =&gt;
+{
+    <span class="k">if</span> (_shuttingDown)
+    {
+        <span class="k">return</span>;             <span class="c">// 退出中：真关，让应用能正常结束</span>
+    }
+
+    args.Cancel = <span class="k">true</span>;      <span class="c">// 平时：拦成 Hide（窗口实例保住，还能再 Show）</span>
+    window.Hide();
+};</pre></div>
+
+<div class="notice info"><span class="ic">💡</span><div>
+<b>和"实例复用"的关系：</b>当前 <code class="inline">PluginManager</code> 卸载时会把实例和 ALC 一起丢掉
+（<code class="inline">entry.Instance = null</code> + <code class="inline">LoadContext.Unload()</code>），
+重新启用是**全新实例**，<code class="inline">_shuttingDown</code> 天然是 false，不用管。
+但**如果将来改成复用实例**（或者 <code class="inline">Initialize</code> 被调用两次），
+就必须在 <code class="inline">Initialize</code> 里把它复位 —— 否则那个标志一直是 true，
+「关闭拦截」永久失效，用户一点关闭窗口就真关、实例作废。
+</div></div>
+
 <h3><span class="no">8.10</span>防出屏：窗口永远不许跑出屏幕</h3>
 
 <p>用户拖悬浮窗能拖到哪？默认答案是<b>屏幕外任意远</b>——WPF 的 <code class="inline">DragMove()</code>

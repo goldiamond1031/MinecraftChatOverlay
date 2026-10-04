@@ -76,7 +76,8 @@ if errorlevel 1 (
 )
 
 echo.
-echo   完成。下一步：push.bat 把 market 和插件源码推上去。
+echo   完成。下一步：push.bat 把 market 和插件源码推上去 ——
+echo           它会顺手刷新 jsDelivr 缓存，用户那边立刻就能看到新版本。
 echo.
 
 :end
