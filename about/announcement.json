@@ -1,10 +1,10 @@
 {
     "schemaVersion": 1,
-    "id": "2026-10-4-1655",
-    "updatedAt": "2026-10-04T16:55:56+08:00",
+    "id": "2026-10-4-1707",
+    "updatedAt": "2026-10-04T17:07:45+08:00",
     "enabled": true,
-    "title": "不知道为什么插件没推到github上",
-    "body": "重新推了一遍，按键显示和网易云歌词显示都有更新，都可以被OBS捕获了",
+    "title": "不好意思插件上传时出了点问题",
+    "body": "又又又重新推了一遍，按键显示和网易云歌词显示都有更新，都可以被OBS捕获了\n你们在插件市场刷新没那么快收到新版本\n不过最慢几个小时就有了\n记得也要开github的加速器，不然还是会显示镜像站的滞后版本",
     "link": "https://github.com/goldiamond1031/MinecraftChatOverlay/releases",
     "linkText": "无可用更新"
 }
