@@ -1572,6 +1572,41 @@ WPF 自带的属性只能解决一半，另一半必须 Win32。先给完整模�
   <li><b>不进任务栏/Alt+Tab 用 <code class="inline">WS_EX_TOOLWINDOW</code></b>。不能只靠 <code class="inline">ShowInTaskbar="False"</code>——
   那个的 WPF 实现是「给窗口挂一个隐藏的所有者」，而悬浮窗恰恰要清所有者（见下），两个需求打架，Win32 说了算：</li>
 </ul>
+
+<h4>先看清规则：任务栏 / Alt+Tab / OBS 是三套独立判定</h4>
+
+<p>宿主聊天悬浮窗（保留所有者）和插件悬浮窗（清所有者）形态不同，表现完全不同。
+<b>先把这张表刻进脑子，再决定自己该用哪种</b>（2026-10-04 实测五个真实窗口得出）：</p>
+
+<div class="scrollx"><table>
+<tr><th style="width:230px">窗口形态</th><th style="width:90px">任务栏</th><th style="width:90px">Alt+Tab</th><th>OBS 窗口列表</th></tr>
+<tr><td>普通顶层窗口（无所有者、非工具窗）</td><td>出现</td><td>出现</td><td>出现</td></tr>
+<tr><td><b>有所有者</b>（WPF <code class="inline">ShowInTaskbar="False"</code> 的实际效果）</td>
+    <td><b>不出现</b></td><td>出现</td><td>出现</td></tr>
+<tr><td><b><code class="inline">WS_EX_TOOLWINDOW</code></b></td>
+    <td>不出现</td><td><b>不出现</b></td><td><b>看不到</b></td></tr>
+</table></div>
+
+<p>两套判定标准的差别 —— 这就是「为什么宿主聊天窗任务栏没有、Alt+Tab 却有」的答案：</p>
+
+<ul>
+  <li><b>任务栏按钮</b>：只给 "app window" 建。核心判定是
+  <code class="inline">GetWindow(hwnd, GW_OWNER) == NULL</code> ——
+  <b>有主人的窗口不算 app window</b>，不给按钮；</li>
+  <li><b>Alt+Tab</b>：另一套判定（IsAltTabWindow），沿 owner 链取根窗口，
+  <b>只排除 <code class="inline">WS_EX_TOOLWINDOW</code>，不排除「有主人」</b> ——
+  所以有主人的普通窗口照样列出来。</li>
+</ul>
+
+<div class="notice info"><span class="ic">💡</span><div>
+<b>WPF 的 <code class="inline">ShowInTaskbar="False"</code> 不是「告诉系统别显示」，而是「给窗口挂一个隐藏的主人」。</b>
+实测那个隐藏窗口标题就叫 <code class="inline">Hidden Window</code>
+（类名 <code class="inline">HwndWrapper[&lt;程序名&gt;;;{guid}]</code>、不可见、同进程）。
+宿主聊天悬浮窗走的就是这条路：<b>保留主人</b> → 任务栏不出现、Alt+Tab 出现、OBS 能看到。
+而插件悬浮窗必须清主人（宿主最小化时被拥有的窗口会跟着不可见），
+所以只能靠 TOOLWINDOW —— 代价就是 OBS 也看不到（见下面的 OBS 直播模式）。
+</div></div>
+
 <div class="codeblock"><div class="bar"><span class="lang">C# · 清所有者 + 工具窗</span><button class="copy">复制</button></div><pre><span class="c">/// 清所有者：宿主主窗口最小化时，「被拥有的窗口」会跟着不可见——悬浮窗不能有主人。</span>
 <span class="k">public void</span> DetachFromOwner()
 {
@@ -2386,7 +2421,7 @@ CallNextHookEx 放行（9.2.2 ⑥）。</td></tr>
 <td>两个独立原因：<code class="inline">WS_EX_TOOLWINDOW</code> 被 OBS 窗口枚举过滤（列表里根本不出现，
 宿主聊天窗没设它所以一直能看到）；<code class="inline">AllowsTransparency</code> 分层窗口 BitBlt 抓出来黑屏
 （OBS 切 WGC 捕获即可）。前者加「OBS 直播模式」开关动态摘 TOOLWINDOW，
-代价是窗口会出现在任务栏和 Alt+Tab（8.5）。</td></tr>
+代价是窗口会出现在任务栏和 Alt+Tab。<b>任务栏 / Alt+Tab / OBS 三套判定规则的对比表在 8.5。</b></td></tr>
 </table></div>
 </section>
 
@@ -2403,7 +2438,9 @@ CallNextHookEx 放行（9.2.2 ⑥）。</td></tr>
 <tr><td><code class="k">Plugins/KeyDisplay</code></td><td>全家桶</td>
 <td>最复杂的实战插件：自绘页面（卡片+开关+滑条+下拉+调色板组合）、悬浮窗自由布局、彩色循环动画、
 CPS 统计、20+ 项常驻自检、UI 快照。<b>第 6 章的调色板模板、第 9.2 节的输入捕获双模式
-（轮询 / 低级键盘钩子）都出自这里</b>：<code class="k">KeyStateSource.cs</code> 是那两种实现与接口。</td></tr>
+（轮询 / 低级键盘钩子）、第 8.5 节的 OBS 直播模式都出自这里</b>：
+<code class="k">KeyStateSource.cs</code> 是输入捕获的两种实现与接口，
+<code class="k">KeyOverlayWindow.SetObsMode()</code> 是 OBS 模式的动态切换。</td></tr>
 <tr><td><code class="k">Plugins/RegionMagnifier</code></td><td>区域放大</td>
 <td>选游戏窗口、截图、放大的完整流程；窗口选择下拉的用法。</td></tr>
 <tr><td><code class="k">Plugins/NeteaseLyrics</code></td><td>歌词窗</td>
