@@ -70,6 +70,22 @@ public partial class KeyOverlayWindow : Window
 
     private bool _positioned;
 
+    // ---- 自绘拖动 ----
+    //
+    // 为什么不用系统 DragMove()：它允许把窗口拖出屏幕外任意远，松手就停在那儿，
+    // 出界的位置还会被 LocationChanged 存进配置 —— 重启才被拉回来。
+    // 自绘拖动能在移动的每一帧做钳制，窗口物理上出不了屏幕。
+    // 手感和 DragMove 一致：都是「鼠标相对窗口的抓取点保持不变」。
+
+    /// <summary>正在拖动。</summary>
+    private bool _dragging;
+
+    /// <summary>按下时鼠标在窗口内的坐标（DIP）。增量公式：Left += (当前窗口内X - 抓取点X)。</summary>
+    private double _dragGrabX;
+
+    /// <summary>按下时鼠标在窗口内的 Y。</summary>
+    private double _dragGrabY;
+
     public KeyOverlayWindow()
     {
         InitializeComponent();
@@ -77,6 +93,13 @@ public partial class KeyOverlayWindow : Window
 
     /// <summary>鼠标穿透。开着时点不到这个窗口（按键显示盖在游戏上必须默认开着）。</summary>
     public bool ClickThrough { get; set; }
+
+    /// <summary>
+    /// 防出屏开关。关了之后 <see cref="ClampToVirtualScreen"/> 直接跳过 ——
+    /// 用户想把窗口一半藏在屏幕外就随他去（他自己的选择）。
+    /// 默认 true，由插件从设置同步过来（<see cref="KeyDisplaySettings.ClampToScreen"/>）。
+    /// </summary>
+    public bool ClampEnabled { get; set; } = true;
 
     // ===================== 重建 =====================
 
@@ -559,6 +582,9 @@ public partial class KeyOverlayWindow : Window
 
         Width = Math.Max(8, width + _shadowPadding * 2);
         Height = Math.Max(8, height + _shadowPadding * 2);
+
+        // 窗口尺寸变了，右/下缘可能出界（放大缩放、改阴影的典型场景）—— 钳回来
+        ClampToVirtualScreen();
     }
 
     // ===================== 每帧刷新 =====================
@@ -914,6 +940,9 @@ public partial class KeyOverlayWindow : Window
         Left = settings.WindowLeft - _shadowPadding;
         Top = settings.WindowTop - _shadowPadding;
         _positioned = true;
+
+        // 装载摆位后钳一次 —— 防手改配置/换显示器之后位置在屏幕外
+        ClampToVirtualScreen();
     }
 
     /// <summary>用户拖过窗口之后，把当前位置记回设置（记的是内容左上角）。</summary>
@@ -921,6 +950,63 @@ public partial class KeyOverlayWindow : Window
     {
         settings.WindowLeft = Left + _shadowPadding;
         settings.WindowTop = Top + _shadowPadding;
+    }
+
+    /// <summary>
+    /// 把窗口位置钳进「所有显示器的联合范围」—— **防超出屏幕**的统一出口。
+    ///
+    /// 用 <c>SystemParameters.VirtualScreen</c>（全部屏幕的联合包围盒）而不是单屏 WorkArea：
+    /// 多显示器下副屏也能去（联合盒自然覆盖），只拦「所有屏幕之外」。
+    /// 这些值是 DIP 单位，跟窗口 Left/Top 同单位，不需要 DPI 换算。
+    ///
+    /// 调用时机（窗口位置/尺寸可能变了的出口都挂上）：
+    ///   · 拖动的每一帧（OnMouseMove）；
+    ///   · ResizeToContent 之后（放大缩放/改阴影 → 窗口变大 → 右/下缘出界）；
+    ///   · ApplyPosition（装载摆位，防手改配置把位置写出界）；
+    ///   · SyncPositionToContent（留白反向补偿 → 窗口原点出界）。
+    ///
+    /// ⚠ Math.Clamp 在 min&gt;max 时抛异常 —— 窗口比整个屏幕还大的极端情况要先判，
+    ///   直接对齐到左上角。
+    /// </summary>
+    public void ClampToVirtualScreen()
+    {
+        // 开关关着就完全不动位置 —— "防出屏"是保护，不是强制
+        if (!ClampEnabled)
+        {
+            return;
+        }
+
+        if (double.IsNaN(Left) || double.IsNaN(Top) ||
+            double.IsNaN(ActualWidth) || double.IsNaN(ActualHeight))
+        {
+            return;
+        }
+
+        var vsLeft = SystemParameters.VirtualScreenLeft;
+        var vsTop = SystemParameters.VirtualScreenTop;
+        var vsRight = vsLeft + SystemParameters.VirtualScreenWidth;
+        var vsBottom = vsTop + SystemParameters.VirtualScreenHeight;
+
+        // 水平
+        if (ActualWidth <= vsRight - vsLeft)
+        {
+            Left = Math.Clamp(Left, vsLeft, vsRight - ActualWidth);
+        }
+        else
+        {
+            // 窗口比所有屏幕加起来还宽 —— 对齐左缘（窗口比屏幕大时不存在"好位置"）
+            Left = vsLeft;
+        }
+
+        // 垂直
+        if (ActualHeight <= vsBottom - vsTop)
+        {
+            Top = Math.Clamp(Top, vsTop, vsBottom - ActualHeight);
+        }
+        else
+        {
+            Top = vsTop;
+        }
     }
 
     /// <summary>
@@ -950,12 +1036,24 @@ public partial class KeyOverlayWindow : Window
         {
             Top = top;
         }
+
+        // 留白反向补偿后窗口原点可能出界（内容贴屏幕左/上边缘时）—— 钳回来。
+        // 注意：钳的是窗口位置，万一真触发了，"内容纹丝不动"就让位给"别出屏幕"
+        // —— 出界的格子用户根本看不见，比移位严重。
+        ClampToVirtualScreen();
     }
 
     // ===================== 穿透 / 任务栏 / 拖动 =====================
 
     public void UpdateTransparent()
     {
+        // 拖到一半被打开穿透（窗口从此收不到鼠标事件）—— 先把拖动收干净，
+        // 不然 _dragging 挂在 true，后续行为全是错的
+        if (ClickThrough)
+        {
+            EndDrag();
+        }
+
         try
         {
             var handle = new WindowInteropHelper(this).Handle;
@@ -1053,8 +1151,65 @@ public partial class KeyOverlayWindow : Window
         base.OnMouseLeftButtonDown(e);
         if (!ClickThrough)
         {
-            try { DragMove(); } catch { }
+            // 自绘拖动（不用 DragMove —— 见字段区注释）：记抓取点、捕获鼠标。
+            // 捕获是为了鼠标移出窗口后事件仍然派发给本窗口 —— 拖动不中断。
+            _dragging = true;
+            var pos = e.GetPosition(this);
+            _dragGrabX = pos.X;
+            _dragGrabY = pos.Y;
+
+            try { CaptureMouse(); } catch { }
         }
+    }
+
+    protected override void OnMouseMove(MouseEventArgs e)
+    {
+        base.OnMouseMove(e);
+
+        if (!_dragging)
+        {
+            return;
+        }
+
+        try
+        {
+            // 增量式跟随：鼠标在窗口内的坐标相对抓取点偏了多少，窗口就补多少。
+            // 不需要鼠标的屏幕物理坐标（那套要 DPI 换算），全是 DIP，直接算。
+            // 数学：鼠标物理移 D、窗口还没动 → 窗口内坐标偏 +D → 窗口 Left += D 补上 →
+            //       鼠标窗口内坐标回到抓取点。每帧如此，窗口始终跟手。
+            var pos = e.GetPosition(this);
+
+            Left += pos.X - _dragGrabX;
+            Top += pos.Y - _dragGrabY;
+
+            // ★ 每帧钳制 —— 这就是「防超出屏幕」的核心。拖动中窗口就出不了屏，
+            // 而不是拖出去再弹回来。
+            ClampToVirtualScreen();
+        }
+        catch
+        {
+            // 拖动路径绝不抛 —— 抛了会留下 _dragging=true 的脏状态
+            EndDrag();
+        }
+    }
+
+    protected override void OnMouseLeftButtonUp(MouseButtonEventArgs e)
+    {
+        base.OnMouseLeftButtonUp(e);
+        EndDrag();
+    }
+
+    /// <summary>结束拖动：释放捕获、清标志。幂等。</summary>
+    private void EndDrag()
+    {
+        if (!_dragging)
+        {
+            return;
+        }
+
+        _dragging = false;
+
+        try { ReleaseMouseCapture(); } catch { }
     }
 
     private static Color ParseColor(string? text, Color fallback)

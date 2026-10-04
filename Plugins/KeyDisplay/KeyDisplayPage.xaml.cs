@@ -89,6 +89,18 @@ public partial class KeyDisplayPage : System.Windows.Controls.UserControl
         (100, "100 毫秒（最省）"),
     };
 
+    /// <summary>
+    /// 读取方式下拉的选项。<see cref="KeyInputMode"/> 的值跟 Tag 对齐。
+    ///
+    /// 文案刻意写成"什么时候该选它"，而不是"它是什么技术" —— 用户关心的是
+    /// "我玩绝区零，该选哪个"，不是"WH_KEYBOARD_LL 挂在哪个层级"。
+    /// </summary>
+    private static readonly (KeyInputMode Mode, string Text)[] InputModeChoices =
+    {
+        (KeyInputMode.Polling, "轮询（默认，兼容性最好）"),
+        (KeyInputMode.Hook, "键盘钩子（游戏里也读得到）"),
+    };
+
     public KeyDisplayPage(KeyDisplayPlugin plugin)
     {
         _plugin = plugin;
@@ -99,6 +111,7 @@ public partial class KeyDisplayPage : System.Windows.Controls.UserControl
         {
             FillFonts();
             FillRefreshChoices();
+            FillInputModeChoices();
             FillCommonKeys();
             FillCellLookCombos();
             LoadFromSettings();
@@ -166,6 +179,32 @@ public partial class KeyDisplayPage : System.Windows.Controls.UserControl
     /// <summary>自检用：页面当前的 <c>_loading</c> 闸门状态（一直卡在 true 就会"点什么都没反应"）。</summary>
     internal bool LoadingGate => _loading;
 
+    /// <summary>
+    /// 自检用：模拟用户把「读取方式」切到钩子。
+    ///
+    /// 这条验的是"下拉框 → 设置 → 插件真的去装钩子"整条链路。
+    /// 装不上时插件会把设置退回轮询，所以顺带验了兜底逻辑。
+    /// </summary>
+    internal void ProbeInputModeComboBox()
+    {
+        // 先掰到轮询（0），再切钩子（1）—— 同值不触发 SelectionChanged，见 ProbeCycleCheckBox 的注释
+        InputModeComboBox.SelectedIndex = 0;
+        InputModeComboBox.SelectedIndex = 1;
+    }
+
+    /// <summary>自检用：把读取方式切回轮询。</summary>
+    internal void ProbeInputModeBackToPolling()
+    {
+        InputModeComboBox.SelectedIndex = 0;
+    }
+
+    /// <summary>自检用：读取方式下拉的当前项，判断绑定还在不在。</summary>
+    internal string InputModeComboInfo =>
+        string.Format("项数={0} 选中={1} 设置里={2}",
+            InputModeComboBox.Items.Count,
+            (InputModeComboBox.SelectedItem as ComboBoxItem)?.Content,
+            _settings.InputMode);
+
     /// <summary>自检用：循环复选框的 Tag / IsChecked，用来判断绑定还在不在。</summary>
     internal string CycleCheckBoxInfo =>
         string.Format("Tag={0} IsChecked={1} 可见={2} 使能={3}",
@@ -219,6 +258,65 @@ public partial class KeyDisplayPage : System.Windows.Controls.UserControl
         }
     }
 
+    private void FillInputModeChoices()
+    {
+        foreach (var choice in InputModeChoices)
+        {
+            InputModeComboBox.Items.Add(new ComboBoxItem { Content = choice.Text, Tag = choice.Mode });
+        }
+    }
+
+    /// <summary>
+    /// 刷新权限提示与当前状态文字。
+    ///
+    /// 这段文案是**这个功能的说明书**：用户报"游戏里不亮"十有八九是
+    /// "选了钩子但没提权"，把这句话摆在设置页里，比在文档里写十遍管用。
+    /// </summary>
+    private void UpdateInputModeHints()
+    {
+        try
+        {
+            var elevated = KeyDisplayPlugin.IsProcessElevated;
+            var useHook = InputModeComboBox.SelectedItem is ComboBoxItem sel
+                          && sel.Tag is KeyInputMode m
+                          && m == KeyInputMode.Hook;
+
+            if (useHook)
+            {
+                ElevationHintText.Text = elevated
+                    ? "✓ 宿主正以管理员权限运行 —— 钩子能读到绝区零这类提权游戏里的按键。"
+                    : "⚠ 宿主**不是**管理员权限。绝区零这类由启动器提权拉起的游戏，"
+                      + "它的按键受 Windows 的 UIPI 隔离保护，不提权读不到。"
+                      + "想让它生效，请用管理员身份重启宿主。";
+            }
+            else
+            {
+                ElevationHintText.Text = "轮询不读 Windows 消息队列之外的输入，"
+                    + "所以走 Raw Input 的游戏（绝区零、原神）里读不到 —— 那些游戏请选「键盘钩子」。"
+                    + (elevated ? "（宿主当前是管理员权限）" : "");
+            }
+
+            InputModeStatusText.Text = BuildInputSourceLiveText();
+        }
+        catch
+        {
+        }
+    }
+
+    /// <summary>把"当前实际在用什么读"如实写出来 —— 设置是钩子但钩子装失败了要看得出来。</summary>
+    private static string BuildInputSourceLiveText()
+    {
+        try
+        {
+            var source = VirtualKeys.Source;
+            return $"当前实际生效：{source.Name}。";
+        }
+        catch
+        {
+            return "";
+        }
+    }
+
     /// <summary>
     /// 键位下拉列**全部虚拟键**（0x01~0xFE，约 250 个）。
     ///
@@ -254,6 +352,7 @@ public partial class KeyDisplayPage : System.Windows.Controls.UserControl
 
         EnabledCheckBox.IsChecked = s.Enabled;
         ClickThroughCheckBox.IsChecked = s.ClickThrough;
+        ClampToScreenCheckBox.IsChecked = s.ClampToScreen;
         SnapCheckBox.IsChecked = s.SnapToGrid;
         ShadowEnabledCheckBox.IsChecked = s.ShadowEnabled;
         DynamicCheckBox.IsChecked = s.DynamicEnabled;
@@ -274,7 +373,11 @@ public partial class KeyDisplayPage : System.Windows.Controls.UserControl
         var index = Array.FindIndex(RefreshChoices, c => c.Ms == s.RefreshMs);
         RefreshComboBox.SelectedIndex = index >= 0 ? index : 2;
 
+        var modeIndex = Array.FindIndex(InputModeChoices, c => c.Mode == s.InputMode);
+        InputModeComboBox.SelectedIndex = modeIndex >= 0 ? modeIndex : 0;
+
         RefreshCycleToggles();
+        UpdateInputModeHints();
     }
 
     // ===================== 画布 =====================
@@ -1073,6 +1176,7 @@ public partial class KeyDisplayPage : System.Windows.Controls.UserControl
 
         s.Enabled = EnabledCheckBox.IsChecked == true;
         s.ClickThrough = ClickThroughCheckBox.IsChecked == true;
+        s.ClampToScreen = ClampToScreenCheckBox.IsChecked == true;
         s.SnapToGrid = SnapCheckBox.IsChecked == true;
         s.ShadowEnabled = ShadowEnabledCheckBox.IsChecked == true;
         s.DynamicEnabled = DynamicCheckBox.IsChecked == true;
@@ -1098,6 +1202,18 @@ public partial class KeyDisplayPage : System.Windows.Controls.UserControl
             s.RefreshMs = ms;
         }
 
+        // 读取方式：跟"刷新率"一样不属于外观，而且它要装/卸钩子 —— 是个重活，
+        // 所以单独判一下"变了没有"，没变就别折腾（每次拖滑块都会走到这里）。
+        var modeChanged = false;
+        if (InputModeComboBox.SelectedItem is ComboBoxItem modeItem && modeItem.Tag is KeyInputMode mode)
+        {
+            if (s.InputMode != mode)
+            {
+                s.InputMode = mode;
+                modeChanged = true;
+            }
+        }
+
         UpdateValueLabels();
         UpdateCanvasGrid();            // 网格大小可能刚变，底纹要跟着重画
         RefreshAllCanvasLooks();       // 只改属性、不重建元素 —— 拖滑块才跟手
@@ -1107,7 +1223,38 @@ public partial class KeyDisplayPage : System.Windows.Controls.UserControl
         // 早先只调了上面那条轻路径，结果这两个开关关了没反应
         _plugin.SyncWindowState();
 
+        if (modeChanged)
+        {
+            // 换读取通道（内部会装/卸钩子），然后重建 —— 钩子装失败时设置会被插件改回轮询，
+            // 所以这里要把下拉框重新对齐一次，免得界面显示的是"钩子"、实际在轮询
+            _plugin.OnSettingsChanged();
+            RefreshInputModeFromSettings();
+        }
+
+        UpdateInputModeHints();
+
         ScheduleSave();                // 只有「写盘」这一件事被攒起来
+    }
+
+    /// <summary>
+    /// 把下拉框重新对齐到设置里的真实值。
+    ///
+    /// 为什么需要：切钩子失败时插件会把 <c>Settings.InputMode</c> 改回轮询，
+    /// 界面得跟着退回去，否则用户看到开关是"钩子"、实际在轮询，会觉得莫名其妙。
+    /// </summary>
+    private void RefreshInputModeFromSettings()
+    {
+        var wasLoading = _loading;
+        _loading = true;
+        try
+        {
+            var idx = Array.FindIndex(InputModeChoices, c => c.Mode == _settings.InputMode);
+            InputModeComboBox.SelectedIndex = idx >= 0 ? idx : 0;
+        }
+        finally
+        {
+            _loading = wasLoading;
+        }
     }
 
     /// <summary>

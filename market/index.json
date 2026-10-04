@@ -1,6 +1,6 @@
 {
     "schemaVersion":  1,
-    "updatedAt":  "2026-10-03T18:07:01+08:00",
+    "updatedAt":  "2026-10-04T08:26:41+08:00",
     "plugins":  [
                     {
                         "id":  "goldiamond.autogg",
@@ -24,18 +24,20 @@
                     {
                         "id":  "goldiamond.keydisplay",
                         "name":  "按键显示",
-                        "version":  "1.1.0",
+                        "version":  "1.2.0",
                         "author":  "goldiamond",
-                        "description":  "把指定按键的按下状态做成一个悬浮窗显示（PVP 客户端那种键位显示）。只读不改：用 GetAsyncKeyState 轮询你配置的那几个键，不装键盘钩子、不拦截按键、不记录、不落盘。按键格子的位置和大小在配置页的拖拽画布上摆，支持网格吸附；文字、颜色、阴影、背景、圆角都能自定义，每个能换颜色的地方都能单独开「彩色循环」，让颜色沿完整 RGB 光谱循环（红→橙→黄→绿→青→蓝→紫→红），各处共用一个时间轴，不会错位。",
+                        "description":  "把指定按键的按下状态做成一个悬浮窗显示（PVP 客户端那种键位显示）。只读不改：不拦截按键、不记录、不落盘。两种读取方式可切换 —— 默认 GetAsyncKeyState 轮询（不装钩子、零介入，桌面和 Minecraft 够用）；要读绝区零、原神这类走 Raw Input 的游戏，可切到 WH_KEYBOARD_LL 低级键盘钩子（只观察不吞键，需宿主以管理员权限运行）。按键格子的位置和大小在配置页的拖拽画布上摆，支持网格吸附；文字、颜色、阴影、背景、圆角都能自定义，每个能换颜色的地方都能单独开「彩色循环」，让颜色沿完整 RGB 光谱循环（红→橙→黄→绿→青→蓝→紫→红），各处共用一个时间轴，不会错位。",
                         "apiVersion":  1,
                         "capabilities":  [
-                                             "只读地查询指定虚拟键的按下状态（GetAsyncKeyState 轮询，不安装任何键盘钩子）",
+                                             "只读地查询指定虚拟键的按下状态",
+                                             "轮询模式：GetAsyncKeyState 轮询，不安装任何键盘钩子，对系统输入链路零介入",
+                                             "钩子模式（可选，需管理员权限）：安装 WH_KEYBOARD_LL 低级键盘钩子，回调只读取按下/松开状态并立即 CallNextHookEx 放行，不吞键、不拦截",
                                              "显示一个置顶、透明、默认鼠标穿透的键位悬浮窗",
                                              "在自己目录里读写配置"
                                          ],
-                        "downloadUrl":  "packages/goldiamond.keydisplay-1.1.0.zip",
-                        "sha256":  "DBD7A5409B25C340689670D859974B95AED14A331CBE7B66FA7CC66A03F63FDB",
-                        "size":  53853,
+                        "downloadUrl":  "packages/goldiamond.keydisplay-1.2.0.zip",
+                        "sha256":  "045AB9E7E1D6B61F83A75067D4A9F86A4BF8A17F9AB5C97D82B3F5A47E1B9979",
+                        "size":  61551,
                         "tags":  [
 
                                  ]

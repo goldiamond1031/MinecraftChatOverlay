@@ -18,9 +18,11 @@ namespace MinecraftChatOverlay.Plugins.KeyDisplay;
 ///
 /// 做的事：按固定节奏查一遍你配置的那几个键现在有没有按下，把结果画到键位悬浮窗上。
 ///
-/// ⚠ 只读，不监听：全程用 <c>GetAsyncKeyState</c> 轮询自己关心的那几个键，
-///    **不安装任何键盘钩子、不拦截按键、不记录、不落盘**（详见 VirtualKeys 的注释）。
-///    这个插件对系统输入链路是零侵入的 —— 它做的事情和你在任务管理器里看 CPU 占用是一类事。
+/// ⚠ 只读，不监听：查按键的两种方式都**不拦截按键、不记录历史、不落盘**，
+///    只读「此刻按着没有」这一个状态位（详见 <see cref="KeyInputMode"/> 与 <see cref="HookKeyStateSource"/>）。
+///    默认走 GetAsyncKeyState 轮询 —— 对系统输入链路零介入；
+///    加了一条可选的 WH_KEYBOARD_LL 低级钩子通道，专门用来读走 Raw Input 的游戏（绝区零这类），
+///    钩子只观察、不吞键，且由用户主动开启。
 /// </summary>
 public sealed class KeyDisplayPlugin : IPlugin
 {
@@ -31,6 +33,69 @@ public sealed class KeyDisplayPlugin : IPlugin
 
     [DllImport("user32.dll")]
     private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
+
+    /// <summary>取当前进程的主令牌。</summary>
+    [DllImport("advapi32.dll", SetLastError = true)]
+    private static extern bool OpenProcessToken(IntPtr processHandle, uint desiredAccess, out IntPtr tokenHandle);
+
+    /// <summary>查令牌里那个"是不是提权了"的标志位。</summary>
+    [DllImport("advapi32.dll", SetLastError = true)]
+    private static extern bool GetTokenInformation(
+        IntPtr tokenHandle, int tokenInformationClass, out int tokenInformation,
+        int tokenInformationLength, out int returnLength);
+
+    [DllImport("kernel32.dll")]
+    private static extern IntPtr GetCurrentProcess();
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool CloseHandle(IntPtr handle);
+
+    private const uint TokenQuery = 0x0008;
+    private const int TokenElevation = 20;
+
+    /// <summary>
+    /// 当前进程是不是以管理员权限在跑。
+    ///
+    /// ⚠ 这个值在插件运行期间**不会变**（提权是进程级的，改不了），所以算一次就缓存。
+    ///   设置页的提示文案要用它 —— 钩子模式下不提权是读不到绝区零的，得让用户知道。
+    /// </summary>
+    internal static bool IsProcessElevated
+    {
+        get
+        {
+            if (_elevatedChecked)
+            {
+                return _elevatedCached;
+            }
+
+            try
+            {
+                if (OpenProcessToken(GetCurrentProcess(), TokenQuery, out var token))
+                {
+                    try
+                    {
+                        if (GetTokenInformation(token, TokenElevation, out var elevated, sizeof(int), out _))
+                        {
+                            _elevatedCached = elevated != 0;
+                        }
+                    }
+                    finally
+                    {
+                        CloseHandle(token);
+                    }
+                }
+            }
+            catch
+            {
+            }
+
+            _elevatedChecked = true;
+            return _elevatedCached;
+        }
+    }
+
+    private static bool _elevatedCached;
+    private static bool _elevatedChecked;
 
     private const uint KeyeventfKeyup = 0x0002;
 
@@ -44,6 +109,9 @@ public sealed class KeyDisplayPlugin : IPlugin
     private DispatcherTimer? _cycleTimer;
     private DateTime _cycleStart = DateTime.UtcNow;
     private double _lastCycleProgress = -1;
+
+    /// <summary>当前生效的钩子源（走轮询模式时是 null）。健康检查要用。</summary>
+    private HookKeyStateSource? _hookSource;
 
     public string Id => PluginId;
 
@@ -79,6 +147,9 @@ public sealed class KeyDisplayPlugin : IPlugin
         }
 
         ClampSavedPosition();
+
+        // 按键读取通道：按设置建好（轮询或钩子）
+        ApplyInputMode();
 
         _timer = new DispatcherTimer(DispatcherPriority.Render)
         {
@@ -117,7 +188,7 @@ public sealed class KeyDisplayPlugin : IPlugin
         });
 
         LogLine($"已装载。按键数={Settings.Keys.Count} 刷新={Settings.RefreshMs}ms 穿透={Settings.ClickThrough}");
-        LogLine("按键读取方式：GetAsyncKeyState 轮询（未安装任何键盘钩子）");
+        LogLine($"按键读取方式：{VirtualKeys.Source.Name}");
 
         // 页面 XAML 是运行期解析的，编译过不代表能解析（DEV-NOTES 坑 34）
         try
@@ -148,8 +219,113 @@ public sealed class KeyDisplayPlugin : IPlugin
         host.Log($"[按键显示] 已装载，{Settings.Keys.Count} 个按键，刷新 {Settings.RefreshMs}ms");
     }
 
+    // ===================== 按键读取通道 =====================
+
+    /// <summary>
+    /// 按 <see cref="KeyDisplaySettings.InputMode"/> 建好当前该用的读取通道。
+    ///
+    /// ⚠ 装钩子必须在这个线程（UI 线程）上做 —— 低级钩子靠宿主线程的消息循环派发回调，
+    ///   在没有消息循环的线程上装会"装成功但永远收不到回调"。
+    ///   <see cref="Initialize"/> 就是在 UI 线程被宿主调的，所以这里直接装没问题。
+    ///
+    /// 幂等：重复调用只会在模式没变时不做事，模式变了才换。
+    /// </summary>
+    private void ApplyInputMode()
+    {
+        try
+        {
+            var wantHook = Settings.InputMode == KeyInputMode.Hook;
+
+            // 模式没变，什么都不做（别每次设置变动都卸了重装，那会白白摘掉一次钩子）
+            if (wantHook == (_hookSource is not null))
+            {
+                return;
+            }
+
+            if (wantHook)
+            {
+                var hook = new HookKeyStateSource
+                {
+                    // 把日志能力注入进去，钩子源自己不认识宿主
+                    ReturnToCallerLog = msg => { try { LogLine(msg); } catch { } },
+                };
+
+                if (hook.Install())
+                {
+                    _hookSource = hook;
+                    VirtualKeys.SwitchSource(hook);
+
+                    LogLine(IsProcessElevated
+                        ? "已切到键盘钩子模式。当前进程是管理员权限，游戏里应该能读到了。"
+                        : "已切到键盘钩子模式。⚠ 当前进程**不是**管理员权限 —— "
+                          + "绝区零这类提权运行的进程，它的按键读不到。要用管理员身份重启宿主。");
+                }
+                else
+                {
+                    // 装失败就老实退回轮询，并且把设置改回去 ——
+                    // 不然用户看到开关是"钩子"、实际在轮询，会莫名其妙
+                    hook.Dispose();
+                    _hookSource = null;
+                    VirtualKeys.SwitchSource(new PollingKeyStateSource());
+                    Settings.InputMode = KeyInputMode.Polling;
+
+                    LogLine($"键盘钩子装不上（{hook.LastError}），已退回轮询模式。");
+                }
+            }
+            else
+            {
+                _hookSource = null;
+                VirtualKeys.SwitchSource(new PollingKeyStateSource());
+                LogLine("已切回 GetAsyncKeyState 轮询模式。");
+            }
+        }
+        catch (Exception ex)
+        {
+            LogLine("切换按键读取方式失败：" + ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// 钩子模式下的定期健康检查。
+    ///
+    /// 为什么需要：系统给低级钩子回调 300ms 超时，超时就**静默摘掉**钩子且不通知。
+    /// 表现是"用着用着突然不亮了"，还查不出原因。所以每 2 秒探一次，
+    /// 发现句柄失效就重装。<see cref="HookKeyStateSource.EnsureAlive"/> 里说明得更细。
+    /// </summary>
+    private void CheckHookHealth()
+    {
+        var hook = _hookSource;
+
+        if (hook is null || !hook.IsActive)
+        {
+            return;
+        }
+
+        hook.EnsureAlive();
+    }
+
+    /// <summary>钩子模式下的定期健康检查间隔（毫秒）。2 秒足够快，开销也可以忽略。</summary>
+    private const int HookHealthCheckMs = 2000;
+
+    private DateTime _nextHookCheck = DateTime.UtcNow;
+
     public void Shutdown()
     {
+        // 先卸钩子 —— 这是最要紧的一步。留着一个钩子比留一个定时器危险得多：
+        // 它挂在系统输入链路上，宿主都关了它还在跑的话，全系统按键都要过一遍我们的回调。
+        try
+        {
+            _hookSource?.Dispose();
+            _hookSource = null;
+
+            // 顺手把全局源换回轮询（无状态）。这样万一还有别的地方在跑，
+            // 也不会调到一个已经 Dispose 的钩子源上。
+            VirtualKeys.SwitchSource(new PollingKeyStateSource());
+        }
+        catch
+        {
+        }
+
         try { _timer?.Stop(); } catch { }
         _timer = null;
 
@@ -175,6 +351,26 @@ public sealed class KeyDisplayPlugin : IPlugin
     private void Tick()
     {
         var window = _window;
+
+        // 钩子模式的探活：每 2 秒查一次，被系统摘掉就重装。
+        // 放在这个位置（而不是单开一个定时器）是故意的 —— 这个 Tick 本来就在跑，
+        // 加个时间比较的开销是零，不用为了探活多养一个定时器。
+        if (_hookSource is not null && DateTime.UtcNow >= _nextHookCheck)
+        {
+            _nextHookCheck = DateTime.UtcNow.AddMilliseconds(HookHealthCheckMs);
+            CheckHookHealth();
+        }
+
+        // 防出屏：每帧钳一次窗口位置。正常时候是同值赋值（不触发事件、零开销），
+        // 只在「分辨率变了/拔了副屏/窗口尺寸变了」导致出界时把它拉回屏幕内 ——
+        // 16ms 一次的几条数值比较，可以忽略不计。
+        try
+        {
+            _window?.ClampToVirtualScreen();
+        }
+        catch
+        {
+        }
 
         // 没显示就别白刷（省一点 CPU）；下次显示前会 InvalidateStates 重刷一遍
         if (window is null || !window.IsVisible)
@@ -343,6 +539,7 @@ public sealed class KeyDisplayPlugin : IPlugin
 
         window.Rebuild(Settings);
         window.ClickThrough = Settings.ClickThrough;
+        window.ClampEnabled = Settings.ClampToScreen;
         window.ApplyPosition(Settings);
         return window;
     }
@@ -417,6 +614,7 @@ public sealed class KeyDisplayPlugin : IPlugin
             if (_window is not null)
             {
                 _window.ClickThrough = Settings.ClickThrough;
+                _window.ClampEnabled = Settings.ClampToScreen;
                 _window.UpdateTransparent();
             }
 
@@ -432,11 +630,14 @@ public sealed class KeyDisplayPlugin : IPlugin
         }
     }
 
-    /// <summary>设置变了：重建窗口内容 + 对齐显示状态 + 调刷新节奏。</summary>
+    /// <summary>设置变了：重建窗口内容 + 对齐显示状态 + 调刷新节奏 + 换读取通道。</summary>
     public void OnSettingsChanged()
     {
         try
         {
+            // 读取方式可能刚被改过，先对齐通道（幂等，模式没变时不做事）
+            ApplyInputMode();
+
             var window = _window;
             if (window is not null)
             {
@@ -471,8 +672,9 @@ public sealed class KeyDisplayPlugin : IPlugin
 
         var pressed = Settings.Keys.Count(k => VirtualKeys.IsDown(k.VirtualKey));
         var through = Settings.ClickThrough ? "穿透开" : "穿透关";
+        var mode = Settings.InputMode == KeyInputMode.Hook ? "钩子" : "轮询";
 
-        return $"正在显示 {keys} 个按键 · 当前按下 {pressed} 个 · 刷新 {Settings.RefreshMs}ms · {through}";
+        return $"正在显示 {keys} 个按键 · 当前按下 {pressed} 个 · 刷新 {Settings.RefreshMs}ms · {through} · 读取={mode}";
     }
 
     /// <summary>
@@ -536,8 +738,11 @@ public sealed class KeyDisplayPlugin : IPlugin
     /// 数据链路自检：设了 <c>MCO_KEY_SELFTEST=1</c> 时才会跑。
     ///
     /// 做法是**发一个真实的按键**（右 Shift，无副作用；DEV-NOTES 里验证输入类插件的既定做法），
-    /// 然后看轮询能不能读到它 —— 这验证的是"读到的是真实按键状态"，而不是在读自己的缓存。
+    /// 然后看当前读取通道能不能读到它 —— 这验证的是"读到的是真实按键状态"，而不是在读自己的缓存。
     /// 检测前后都会把按键抬起来，不留残留。
+    ///
+    /// **两种通道都会验**（不管当前设的是哪个）：钩子模式发的是真实按键，
+    /// 钩子回调会收到，所以这一套对钩子同样有效 —— 不装钩子的模式会被跳过并说明。
     /// </summary>
     private void RunSelfTestIfRequested()
     {
@@ -546,7 +751,8 @@ public sealed class KeyDisplayPlugin : IPlugin
             return;
         }
 
-        LogLine("=== 自检开始（发一个真实的右 Shift，看轮询读不读得到）===");
+        LogLine("=== 自检开始（发一个真实的右 Shift，看当前读取通道读不读得到）===");
+        LogLine($"当前通道：{VirtualKeys.Source.Name}；进程提权：{(IsProcessElevated ? "是" : "否")}");
 
         // ⚠ 自检全程**禁止写盘**。自检会临时篡改 Settings 来量尺寸 / 验颜色，
         // 那些是探针值、不是用户的配置，绝不能落进 settings.json。
@@ -596,6 +802,20 @@ public sealed class KeyDisplayPlugin : IPlugin
         catch (Exception defEx)
         {
             LogLine("默认配置核对异常：" + defEx);
+        }
+
+        // ---- 钩子通道专项自检 ----
+        //
+        // 单独拉出来试一次钩子，**不管当前设的是哪个模式**。
+        // 理由：将来用户报"绝区零里还是不亮"时，需要能一条命令分清是
+        // "钩子本身没装上" 还是 "钩子装上了但权限不够/游戏没走这条路"。
+        try
+        {
+            RunHookSelfTest();
+        }
+        catch (Exception hookEx)
+        {
+            LogLine("钩子自检异常：" + hookEx.Message);
         }
 
         try
@@ -717,6 +937,81 @@ public sealed class KeyDisplayPlugin : IPlugin
             catch (Exception posEx)
             {
                 LogLine("位置补偿自检异常：" + posEx);
+            }
+
+            // 防出屏自检：把窗口位置故意扔到屏幕外四个方向，看 ClampToVirtualScreen
+            // 能不能都拉回来。位置探针值由防污染三件套兜底（_suppressSave + 磁盘重载），
+            // 不会污染用户配置。
+            // 开关两个方向都验：开着→能钳；关着→真的不钳（开关没接好就是"关了还钳"）。
+            try
+            {
+                var wasClampEnabled = window.ClampEnabled;
+                var vsLeft = SystemParameters.VirtualScreenLeft;
+                var vsTop = SystemParameters.VirtualScreenTop;
+                var vsRight = vsLeft + SystemParameters.VirtualScreenWidth;
+                var vsBottom = vsTop + SystemParameters.VirtualScreenHeight;
+
+                var wasLeft = window.Left;
+                var wasTop = window.Top;
+
+                bool pass = true;
+                string detail = "";
+
+                // —— 开关关着：扔出去就不该动 ——
+                window.ClampEnabled = false;
+                window.Left = vsLeft - 5000;
+                window.ClampToVirtualScreen();
+                var offByPass = Math.Abs(window.Left - (vsLeft - 5000)) < 0.5;
+                pass &= offByPass;
+                if (!offByPass) detail += $" 关掉时仍被钳到({window.Left:0})；";
+
+                // —— 开关开着：左上方向出界要拉回 ——
+                window.ClampEnabled = true;
+                window.Left = vsLeft - 5000;
+                window.Top = vsTop - 5000;
+                window.ClampToVirtualScreen();
+                var leftTopOk = window.Left >= vsLeft - 0.5 && window.Top >= vsTop - 0.5;
+                pass &= leftTopOk;
+                if (!leftTopOk) detail += $" 左上出界后钳到({window.Left:0},{window.Top:0})；";
+
+                // —— 右下方向出界 ——
+                window.Left = vsRight + 5000;
+                window.Top = vsBottom + 5000;
+                window.ClampToVirtualScreen();
+                var rightBottomOk = window.Left + window.ActualWidth <= vsRight + 0.5
+                                    && window.Top + window.ActualHeight <= vsBottom + 0.5;
+                pass &= rightBottomOk;
+                if (!rightBottomOk) detail += $" 右下出界后钳到({window.Left:0},{window.Top:0})+{window.ActualWidth:0}×{window.ActualHeight:0}；";
+
+                // —— 放大到超出屏幕（缩放窗口到比屏幕大 —— 对齐左上角，不许死循环/抛异常）——
+                var savedScale = Settings.OverallScale;
+                try
+                {
+                    Settings.OverallScale = 8.0;   // 大到必超屏幕
+                    window.Rebuild(Settings);
+                    window.ClampToVirtualScreen();
+                    var hugeOk = window.Left >= vsLeft - 0.5 && window.Top >= vsTop - 0.5;
+                    pass &= hugeOk;
+                    if (!hugeOk) detail += $" 超大窗口钳到({window.Left:0},{window.Top:0})；";
+                }
+                finally
+                {
+                    Settings.OverallScale = savedScale;
+                    window.Rebuild(Settings);
+                }
+
+                // 还原（自检结束还有磁盘重载兜底，这里先物归原主）
+                window.ClampEnabled = wasClampEnabled;
+                window.Left = wasLeft;
+                window.Top = wasTop;
+
+                LogLine(pass
+                    ? "防出屏自检通过：开关关着不动、开着时左上/右下/超大窗口三种出界都拉回屏幕内。"
+                    : $"防出屏自检失败：{detail}");
+            }
+            catch (Exception clampEx)
+            {
+                LogLine("防出屏自检异常：" + clampEx);
             }
 
             // 局部外观自检：给一格单独设字号，看它是不是只影响那一格
@@ -1322,6 +1617,53 @@ public sealed class KeyDisplayPlugin : IPlugin
                 LogLine("循环真实运转自检异常：" + liveEx);
             }
 
+            // ===================== 读取方式切换链路自检 =====================
+            // 验"下拉框 → 设置 → 真的装了/卸了钩子"整条链路。
+            // ⚠ 验完必须切回原来的模式：这个自检会真的装、卸钩子，
+            //   不改回去的话用户跑一次自检就把模式悄悄换了（性能/权限行为都跟着变）。
+            try
+            {
+                var page = new KeyDisplayPage(this);
+                var wasMode = Settings.InputMode;
+
+                try
+                {
+                    LogLine("读取方式诊断：" + page.InputModeComboInfo);
+
+                    // 切到钩子
+                    page.ProbeInputModeComboBox();
+                    var afterHook = Settings.InputMode;
+                    var hookLive = VirtualKeys.Source.Name;
+
+                    LogLine(afterHook == KeyInputMode.Hook
+                        ? $"读取方式切换自检通过：切到钩子后设置变成了 Hook，当前通道={hookLive}。"
+                        : $"读取方式切换自检失败：切到钩子后设置是 {afterHook}（应为 Hook）。");
+
+                    // 切回轮询
+                    page.ProbeInputModeBackToPolling();
+                    var afterPoll = Settings.InputMode;
+                    var pollLive = VirtualKeys.Source.Name;
+
+                    LogLine(afterPoll == KeyInputMode.Polling
+                        ? $"读取方式回切自检通过：切回轮询后设置是 Polling，当前通道={pollLive}。"
+                        : $"读取方式回切自检失败：设置是 {afterPoll}（应为 Polling）。");
+                }
+                finally
+                {
+                    // 恢复用户原本的模式（走设置 + 插件通道，别只改字段）
+                    Settings.InputMode = wasMode;
+                    page.ProbeInputModeBackToPolling();
+                    if (wasMode == KeyInputMode.Hook)
+                    {
+                        page.ProbeInputModeComboBox();
+                    }
+                }
+            }
+            catch (Exception modeEx)
+            {
+                LogLine("读取方式切换链路自检异常：" + modeEx);
+            }
+
             // ===================== UI 开关链路自检（复现"点了开关没反应"） =====================
             // 上面所有自检都是**直接改 Settings** 验的，绕过了 UI。这条走真实的 UI 路径：
             // new 一个页面 → 找到那个复选框 → 真的把它 IsChecked 置 true（模拟用户点击），
@@ -1368,6 +1710,94 @@ public sealed class KeyDisplayPlugin : IPlugin
 
     /// <summary>自检用：读悬浮窗上第一个格子当前文字用的颜色（验循环有没有真的接到画笔上）。</summary>
     private Color? SnapshotFirstTextColor() => _window?.FirstTextColor();
+
+    /// <summary>
+    /// 钩子通道专项自检。
+    ///
+    /// 目的只有一个：将来用户报"绝区零里还是不亮"时，能一条命令分清是哪一层的问题 ——
+    ///   · 钩子压根装不上（<see cref="HookKeyStateSource.Install"/> 返回 false，通常是权限/被杀软拦）；
+    ///   · 钩子装上了、但回调收不到按键（宿主线程没消息循环，或回调超时被摘）；
+    ///   · 钩子工作和权限都正常，那就是游戏那条路我们确实读不到（反作弊挡了低级钩子）。
+    ///
+    /// ⚠ 这个自检**不受当前模式影响**：不管用户设的是轮询还是钩子，都会临时装一次钩子试。
+    ///   试完立刻卸掉、把全局源换回去 —— 绝不留下一个用户没要的钩子挂着。
+    /// </summary>
+    private void RunHookSelfTest()
+    {
+        // 钩子已经装着（用户本来就选的钩子模式）→ 直接在现成的上面验，不要再装一个
+        var existing = _hookSource;
+
+        if (existing is not null)
+        {
+            LogLine("钩子自检：在已安装的钩子上直接验（不重复安装）。");
+            ProbeHook(existing, "现有钩子");
+            return;
+        }
+
+        LogLine("钩子自检：临时装一个钩子试通路，验完立刻卸掉。");
+
+        var probe = new HookKeyStateSource();
+
+        if (!probe.Install())
+        {
+            LogLine($"钩子自检失败：装不上。{probe.LastError}"
+                    + "（常见原因：宿主的钩子链被安全软件拦了）");
+            probe.Dispose();
+            return;
+        }
+
+        try
+        {
+            ProbeHook(probe, "临时钩子");
+        }
+        finally
+        {
+            probe.Dispose();
+            LogLine("钩子自检：临时钩子已卸载。");
+        }
+    }
+
+    /// <summary>
+    /// 发一个真实按键，看钩子回调收不收得到。验完把键抬起来。
+    ///
+    /// ⚠ 只验键盘（右 Shift）。鼠标键**不能发** —— 按项目规矩自检不发鼠标键
+    ///   （会真的点下去，可能点坏用户桌面上的东西）。所以鼠标那一半只能靠
+    ///   "钩子装上了" + 用户实测来确认，这里把"装没装上"如实打出来。
+    /// </summary>
+    private void ProbeHook(HookKeyStateSource hook, string label)
+    {
+        var before = hook.EventCount;
+
+        keybd_event((byte)SelfTestKey, 0, 0, UIntPtr.Zero);
+        Thread.Sleep(60);
+        keybd_event((byte)SelfTestKey, 0, KeyeventfKeyup, UIntPtr.Zero);
+        Thread.Sleep(60);
+
+        var got = hook.EventCount - before;
+        var readDown = hook.IsDown(SelfTestKey);   // 已经抬起来了，应该是 false
+
+        LogLine($"{label}：句柄有效={hook.IsActive}（含鼠标钩子），本次收到 {got} 个键盘事件，"
+                + $"抬起后读到={readDown}（应为 false）。");
+
+        if (got >= 2)
+        {
+            LogLine($"{label}自检通过：发一对按下/抬起，回调收到 {got} 个事件 —— 钩子回调链路是通的。"
+                    + "（鼠标钩子无法自动验 —— 自检不发鼠标键，请在游戏里实测左右键。）"
+                    + (IsProcessElevated
+                        ? "进程已是管理员权限，游戏里应该能读到。"
+                        : "⚠ 但进程**不是**管理员权限 —— 提权运行的游戏（绝区零）按键依然读不到，"
+                          + "需要用管理员身份重启宿主。"));
+        }
+        else if (got == 0)
+        {
+            LogLine($"{label}自检失败：发了一对按键，回调一个事件都没收到。"
+                    + "多半是钩子被系统摘了（回调超时）或被杀软拦了。");
+        }
+        else
+        {
+            LogLine($"{label}自检部分通过：收到 {got} 个事件（期望 2），可能需要更长等待时间。");
+        }
+    }
 
     /// <summary>自检用：数有多少个格子设了循环覆盖（不为 null）。</summary>
     private int CountCellOverrides()

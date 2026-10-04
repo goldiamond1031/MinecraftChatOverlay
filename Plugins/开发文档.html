@@ -1028,7 +1028,7 @@ ToggleButton 只能用 <code class="inline">SmallPrimaryToggleButtonStyle</code>
 <section id="s6-9">
 <h3><span class="no">6.9</span>调色板（颜色选择）</h3>
 <p>宿主没有现成的「取色控件」，但有成熟的<b>组合模式</b>（KeyDisplay 实战验证过）：
-页面上一行 = <b>色块（点击打开取色窗）+ hex 只读文本 + 透明度滑条</b>（+ 可选的清除按钮、循环开关）。</p>
+页面上一行 = <b>色块（点击弹宿主同款系统调色盘）+ hex 只读文本 + 透明度滑条</b>（+ 可选的清除按钮、循环开关）。</p>
 
 <h4>页内组合模板</h4>
 <div class="codeblock"><div class="bar"><span class="lang">XAML · 颜色行：色块 + hex + 透明度</span><button class="copy">复制</button></div><pre>&lt;<span class="a">StackPanel</span> Orientation=<span class="s">"Horizontal"</span> Margin=<span class="s">"0,8,0,0"</span>&gt;
@@ -1052,7 +1052,8 @@ ToggleButton 只能用 <code class="inline">SmallPrimaryToggleButtonStyle</code>
     &lt;<span class="a">Button</span> Content=<span class="s">"✕"</span> Style=<span class="s">"{DynamicResource SwatchButtonStyle}"</span>
             FontSize=<span class="s">"10"</span> ToolTip=<span class="s">"清除这个覆盖"</span> Click=<span class="s">"ClearIdleText_Click"</span>/&gt;
 
-    <span class="c">&lt;!-- 透明度独立滑条（颜色存 #RRGGBB，透明度单独存 0~100） --&gt;</span>
+    <span class="c">&lt;!-- 透明度独立滑条：改的是 hex 里的 A 通道（0~100 × 2.55 → 0~255），
+         RGB 不动 —— 系统调色盘不支持 alpha，透明度只能靠这条滑块 --&gt;</span>
     &lt;<span class="a">TextBlock</span> Text=<span class="s">"透明度"</span> Style=<span class="s">"{DynamicResource HintStyle}"</span>
                Margin=<span class="s">"12,0,8,0"</span> VerticalAlignment=<span class="s">"Center"</span>/&gt;
     &lt;<span class="a">Slider</span> x:Name=<span class="s">"IdleTextAlphaSlider"</span> Width=<span class="s">"140"</span>
@@ -1061,17 +1062,22 @@ ToggleButton 只能用 <code class="inline">SmallPrimaryToggleButtonStyle</code>
     &lt;<span class="a">TextBlock</span> x:Name=<span class="s">"IdleTextAlphaText"</span> Style=<span class="s">"{DynamicResource HintStyle}"</span>
                Width=<span class="s">"52"</span> VerticalAlignment=<span class="s">"Center"</span> Margin=<span class="s">"6,0,0,0"</span>/&gt;
 &lt;/<span class="a">StackPanel</span>&gt;</pre></div>
-<div class="codeblock"><div class="bar"><span class="lang">C# · 色块点击 → 打开取色窗 → 回填</span><button class="copy">复制</button></div><pre><span class="k">private void</span> IdleTextSwatch_Click(<span class="k">object</span> sender, MouseButtonEventArgs e)
+<div class="codeblock"><div class="bar"><span class="lang">C# · 色块点击 → 弹宿主同款调色盘 → 回填</span><button class="copy">复制</button></div><pre><span class="k">private void</span> ColorSwatch_Click(<span class="k">object</span> sender, MouseButtonEventArgs e)
 {
-    <span class="k">var</span> initial = ParseColor(_settings.IdleTextHex, Colors.White);
-    <span class="k">var</span> picker = <span class="k">new</span> ColorPickerWindow(initial);   <span class="c">// 模板见下文</span>
-    picker.Owner = Window.GetWindow(<span class="k">this</span>);          <span class="c">// 模态挂在宿主窗口上</span>
-    <span class="k">if</span> (picker.ShowDialog() == <span class="k">true</span> &amp;&amp; picker.ResultHex <span class="k">is not null</span>)
-    {
-        _settings.IdleTextHex = picker.ResultHex;
-        RefreshSwatch();                            <span class="c">// 色块/hex 文本/滑条全部回填</span>
-        ScheduleSave();
-    }
+    <span class="k">if</span> (sender <span class="k">is not</span> FrameworkElement element || element.Tag <span class="k">is not string</span> field)
+        <span class="k">return</span>;
+
+    <span class="k">var</span> baseHex = ResolveBaseColor(field);
+    <span class="k">var</span> picked = ColorPickerWindow.Pick(Window.GetWindow(<span class="k">this</span>), baseHex);  <span class="c">// 统一入口</span>
+
+    <span class="c">// 调色盘返回的 A 恒为 255（不支持 alpha）—— 只取它的 RGB，A 用原来那个，</span>
+    <span class="c">// 不然用户设好的透明度会被抹平。</span>
+    <span class="k">var</span> before = MakeColor(baseHex, Colors.White);
+    <span class="k">var</span> after = MakeColor(picked, before);
+    SetColorField(field, ColorPickerWindow.FormatHex(
+        Color.FromArgb(before.A, after.R, after.G, after.B)));
+
+    AfterColorChanged();   <span class="c">// 色块/hex 文本/滑条全部回填 + ScheduleSave</span>
 }
 
 <span class="c">// hex → Color 的宽容解析（配置可能被手改坏，永远给兜底）</span>
@@ -1079,7 +1085,7 @@ ToggleButton 只能用 <code class="inline">SmallPrimaryToggleButtonStyle</code>
 {
     <span class="k">if</span> (!<span class="k">string</span>.IsNullOrWhiteSpace(text))
     {
-        <span class="k">try</span> { 
+        <span class="k">try</span> {
             <span class="k">var</span> c = (Color)ColorConverter.ConvertFromString(text.Trim());
             <span class="k">return</span> Color.FromArgb(<span class="n">255</span>, c.R, c.G, c.B);   <span class="c">// 透明度单独管理，这里吃掉 A</span>
         }
@@ -1088,28 +1094,92 @@ ToggleButton 只能用 <code class="inline">SmallPrimaryToggleButtonStyle</code>
     <span class="k">return</span> fallback;
 }</pre></div>
 
-<h4>取色窗：不要指望系统 ColorDialog</h4>
-<div class="notice warn"><span class="ic">⚠️</span><div>
-WinForms 的 <code class="inline">System.Windows.Forms.ColorDialog</code> 在插件上下文里<b>可能调不起来</b>
-（KeyDisplay 实测过：装载时用探针先试一次，失败就永远用自绘窗）。而且开 WinForms 会引入
-System.Drawing / System.Windows.Forms 的隐式 using，跟 WPF 的 Brush / Point / MouseEventArgs
-<b>全部撞名</b>（CS0104 编译错）。<b>建议直接自绘取色窗</b>，样式还能和宿主统一。
+<h4>取色窗：优先宿主同款 ColorDialog，自绘只做兜底</h4>
+
+<div class="notice tip"><span class="ic">💡</span><div>
+宿主内置模块（「击杀反馈」页选边缘颜色）用的就是 WinForms 的
+<code class="inline">System.Windows.Forms.ColorDialog</code> —— 左边一排预设、右边色域随便调、还能自定义。
+<b>插件直接用同一款，观感跟宿主完全一致</b>，用户零学习成本。KeyDisplay 实测在插件上下文里能正常弹出。
 </div></div>
-<p>自绘取色窗的最小实现：预览条 + 常用色快选 + RGBA 四滑条 + 确定取消。</p>
-<div class="codeblock"><div class="bar"><span class="lang">XAML · ColorPickerWindow.xaml（自绘取色窗）</span><button class="copy">复制</button></div><pre>&lt;<span class="a">Window</span> x:Class=<span class="s">"MyPlugin.ColorPickerWindow"</span>
+
+<div class="notice warn"><span class="ic">⚠️</span><div>
+<b>两个真实的坑，别踩：</b><br>
+① <b>CS0104 撞名</b>：开 WinForms 会引入 System.Drawing / System.Windows.Forms 的隐式 using，
+跟 WPF 的 Brush / Point / MouseEventArgs <b>全部撞名</b>。<b>一律写全限定名</b>
+（<code class="inline">System.Windows.Forms.ColorDialog</code>、<code class="inline">System.Drawing.Color</code>），
+或者像 KeyDisplay 那样用 <code class="inline">using Color = System.Windows.Media.Color</code> 显式钉住。<br>
+② <b>调色盘不支持 alpha</b>：它返回的 A 恒为 255，直接拿来用会把用户设的透明度抹平。
+<b>只取 RGB、A 用原值拼回去</b>，透明度交给旁边那条独立滑块（宿主自己也是这个组合）。
+</div></div>
+
+<p>统一入口 + 兜底的完整写法（KeyDisplay 的 <code class="inline">ColorPickerWindow.Pick</code>，逐条对齐宿主
+<code class="inline">MainWindow.PickColorHex</code>）：</p>
+
+<div class="codeblock"><div class="bar"><span class="lang">C# · Pick：宿主同款优先，自绘兜底</span><button class="copy">复制</button></div><pre><span class="c">/// 统一入口：能用系统调色盘就用它，调不起来退回自绘窗</span>
+<span class="k">public static string</span> Pick(Window? owner, <span class="k">string</span> current)
+{
+    <span class="k">return</span> TryPickWithSystemDialog(current, <span class="k">out var</span> picked) ? picked : PickWithOwnWindow(owner, current);
+}
+
+<span class="c">/// 三个关键点逐条对齐宿主 MainWindow.PickColorHex：</span>
+<span class="c">///   FullOpen = true —— 一打开就展开色域，不用再点「规定自定义颜色」</span>
+<span class="c">///   不设 AnyColor —— 宿主也没设，有 FullOpen 就能调任意色</span>
+<span class="c">///   显式保留原 A —— 调色盘的 A 恒为 255，照抄会抹掉透明度</span>
+<span class="k">private static bool</span> TryPickWithSystemDialog(<span class="k">string</span> currentHex, <span class="k">out string</span> result)
+{
+    result = currentHex;
+    <span class="k">try</span>
+    {
+        <span class="k">var</span> start = Parse(currentHex);
+        <span class="k">using var</span> dialog = <span class="k">new</span> System.Windows.Forms.ColorDialog
+        {
+            FullOpen = <span class="k">true</span>,
+            ShowHelp = <span class="k">false</span>,
+            Color = System.Drawing.Color.FromArgb(start.A, start.R, start.G, start.B),
+        };
+
+        <span class="k">if</span> (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+        {
+            <span class="k">var</span> c = dialog.Color;
+            <span class="k">var</span> picked = Color.FromArgb(start.A, c.R, c.G, c.B);  <span class="c">// ★ A 用原来的</span>
+            result = FormatHex(picked);
+        }
+        <span class="k">return</span> <span class="k">true</span>;      <span class="c">// 能弹出来就算成功（点取消 = 保持原值）</span>
+    }
+    <span class="k">catch</span> { <span class="k">return</span> <span class="k">false</span>; }   <span class="c">// 调不起来 → 走兜底</span>
+}
+
+<span class="c">/// hex 格式跟宿主一致：纯色省掉 A（#RRGGBB），半透明才写全（#AARRGGBB）。</span>
+<span class="c">/// 页面写回颜色也走这里 —— 别两处各写一遍格式化。</span>
+<span class="k">internal static string</span> FormatHex(Color color) =&gt;
+    color.A == <span class="n">0xFF</span>
+        ? <span class="s">$"#{color.R:X2}{color.G:X2}{color.B:X2}"</span>
+        : <span class="s">$"#{color.A:X2}{color.R:X2}{color.G:X2}{color.B:X2}"</span>;</pre></div>
+
+<p><b>为什么要留自绘兜底</b>：ColorDialog 在插件的加载上下文里<b>偶尔</b>调不起来
+（网易云歌词插件踩过这个坑，KeyDisplay 至今没复现但不敢赌）。
+兜底策略 = try/catch 探测，调不起来就弹自绘窗 —— 有兜底总比点了没反应强。
+自绘窗还能当第三种用法：想要「只能在预设里挑」的受限选色时直接用它。</p>
+
+<p>自绘取色窗的最小实现：预览条 + 常用色快选 + RGBA 四滑条 + 确定取消。
+<b>注意它不依赖宿主资源</b> —— 独立窗口拿不到宿主挂在 Window 层的那本资源字典，
+所以样式（背景/描边/字体色）要自带，别写 DynamicResource：</p>
+<div class="codeblock"><div class="bar"><span class="lang">XAML · ColorPickerWindow.xaml（自绘兜底窗，样式自带）</span><button class="copy">复制</button></div><pre>&lt;<span class="a">Window</span> x:Class=<span class="s">"MyPlugin.ColorPickerWindow"</span>
         xmlns=<span class="s">"http://schemas.microsoft.com/winfx/2006/xaml/presentation"</span>
         xmlns:x=<span class="s">"http://schemas.microsoft.com/winfx/2006/xaml"</span>
         Title=<span class="s">"选择颜色"</span> Width=<span class="s">"420"</span> SizeToContent=<span class="s">"Height"</span>
-        WindowStartupLocation=<span class="s">"CenterOwner"</span> Topmost=<span class="s">"True"</span>
+        WindowStartupLocation=<span class="s">"CenterScreen"</span> Topmost=<span class="s">"True"</span>
         ResizeMode=<span class="s">"NoResize"</span> ShowInTaskbar=<span class="s">"False"</span>&gt;
+    <span class="c">&lt;!-- ⚠ 颜色全是硬编码 —— 独立窗口拿不到宿主挂在 Window 层的资源字典，</span>
+         <span class="c">DynamicResource 解析不到只会静默退回默认值，别写 --&gt;</span>
     &lt;<span class="a">StackPanel</span> Margin=<span class="s">"16"</span>&gt;
-        &lt;<span class="a">Border</span> x:Name=<span class="s">"Preview"</span> Height=<span class="s">"46"</span> CornerRadius=<span class="s">"10"</span>
-                BorderBrush=<span class="s">"{DynamicResource BorderStrongBrush}"</span>
-                BorderThickness=<span class="s">"1"</span> Background=<span class="s">"White"</span>/&gt;
+        &lt;<span class="a">Border</span> x:Name=<span class="s">"Preview"</span> Height=<span class="s">"46"</span>
+                BorderBrush=<span class="s">"#FF888888"</span> BorderThickness=<span class="s">"1"</span> Background=<span class="s">"White"</span>/&gt;
         &lt;<span class="a">TextBlock</span> x:Name=<span class="s">"HexText"</span> Margin=<span class="s">"0,8,0,0"</span> FontFamily=<span class="s">"Consolas"</span>
                    FontSize=<span class="s">"13"</span> TextAlignment=<span class="s">"Center"</span>/&gt;
 
-        &lt;<span class="a">TextBlock</span> Text=<span class="s">"常用颜色（点一下直接选）"</span> Margin=<span class="s">"0,12,0,6"</span> FontSize=<span class="s">"12"/&gt;</span>
+        &lt;<span class="a">TextBlock</span> Text=<span class="s">"常用颜色（点一下直接选）"</span> Margin=<span class="s">"0,12,0,6"</span> FontSize=<span class="s">"12"</span>
+                   Foreground=<span class="s">"#FF666666"</span>/&gt;
         &lt;<span class="a">WrapPanel</span> x:Name=<span class="s">"SwatchPanel"</span>/&gt;
 
         <span class="c">&lt;!-- R / G / B / A 四行滑条，同一结构复制四遍（略，见下文说明） --&gt;</span>
@@ -1131,67 +1201,54 @@ System.Drawing / System.Windows.Forms 的隐式 using，跟 WPF 的 Brush / Poin
             TickFrequency=<span class="s">"1"</span> IsSnapToTickEnabled=<span class="s">"True"</span> ValueChanged=<span class="s">"Slider_Changed"</span>/&gt;
     &lt;<span class="a">TextBlock</span> x:Name=<span class="s">"RText"</span> Grid.Column=<span class="s">"2"</span> VerticalAlignment=<span class="s">"Center"</span> TextAlignment=<span class="s">"Right"</span>/&gt;
 &lt;/<span class="a">Grid</span>&gt;</pre></div>
-<div class="codeblock"><div class="bar"><span class="lang">C# · 取色窗骨架</span><button class="copy">复制</button></div><pre><span class="k">public partial class</span> ColorPickerWindow : Window
+<div class="codeblock"><div class="bar"><span class="lang">C# · 兜底窗骨架（KeyDisplay 的简化版）</span><button class="copy">复制</button></div><pre><span class="k">public partial class</span> ColorPickerWindow : Window
 {
-    <span class="k">public string</span>? ResultHex { <span class="k">get; private set</span>; }
-    <span class="k">private readonly</span> Color _initial;
-
-    <span class="k">private static readonly</span> (<span class="k">string</span> Hex, <span class="k">string</span> Name)[] CommonColors =
+    <span class="c">/// 常用色板。前四个是黑白和两种半透明黑（按键背景最常用）。</span>
+    <span class="k">private static readonly string</span>[] PresetColors =
     {
-        (<span class="s">"#FFFFFF"</span>, <span class="s">"白"</span>), (<span class="s">"#000000"</span>, <span class="s">"黑"</span>), (<span class="s">"#FF5252"</span>, <span class="s">"红"</span>), (<span class="s">"#FFB547"</span>, <span class="s">"橙"</span>),
-        (<span class="s">"#FFE066"</span>, <span class="s">"黄"</span>), (<span class="s">"#3FCFA9"</span>, <span class="s">"绿"</span>), (<span class="s">"#57C5F2"</span>, <span class="s">"蓝"</span>), (<span class="s">"#7C6CF0"</span>, <span class="s">"紫"</span>),
-        (<span class="s">"#FF8FBE"</span>, <span class="s">"粉"</span>), (<span class="s">"#9BE7C4"</span>, <span class="s">"薄荷"</span>),
+        <span class="s">"#FFFFFFFF"</span>, <span class="s">"#FF9CA3AF"</span>, <span class="s">"#FF000000"</span>, <span class="s">"#80000000"</span>,
+        <span class="s">"#FFEF4444"</span>, <span class="s">"#FFF97316"</span>, <span class="s">"#FFFACC15"</span>, <span class="s">"#FF22C55E"</span>,
+        <span class="s">"#FF06B6D4"</span>, <span class="s">"#FF3B82F6"</span>, <span class="s">"#FF8B5CF6"</span>, <span class="s">"#FFEC4899"</span>,
     };
 
-    <span class="k">public</span> ColorPickerWindow(Color initial)
+    <span class="k">private bool</span> _loading = <span class="k">true</span>;   <span class="c">// 填初值时别触发预览刷新（跟页面的 _loading 闸门同思路）</span>
+
+    <span class="k">public string</span> ResultHex { <span class="k">get; private set</span>; } = <span class="s">"#FFFFFFFF"</span>;
+
+    <span class="k">public</span> ColorPickerWindow(<span class="k">string</span> hex)
     {
         InitializeComponent();
-        _initial = initial;
+        FillPresets();                              <span class="c">// 常用色块（代码生成 Border，点了直接套）</span>
 
-        <span class="c">// 常用色块</span>
-        <span class="k">foreach</span> (<span class="k">var</span> (hex, name) <span class="k">in</span> CommonColors)
-        {
-            <span class="k">var</span> swatch = <span class="k">new</span> Border
-            {
-                Width = <span class="n">30</span>, Height = <span class="n">30</span>, Margin = <span class="k">new</span> Thickness(<span class="n">0</span>, <span class="n">0</span>, <span class="n">8</span>, <span class="n">8</span>),
-                CornerRadius = <span class="k">new</span> CornerRadius(<span class="n">8</span>), Cursor = Cursors.Hand,
-                Background = <span class="k">new</span> SolidColorBrush(ParseColor(hex, Colors.White)),
-                ToolTip = <span class="s">$"{name} {hex}"</span>,
-            };
-            swatch.MouseLeftButtonDown += (_, _) => ApplyColor(hex);
-            SwatchPanel.Children.Add(swatch);
-        }
-
-        PushToSliders(initial);
+        <span class="k">var</span> color = Parse(hex);
+        RSlider.Value = color.R;  GSlider.Value = color.G;
+        BSlider.Value = color.B;  ASlider.Value = color.A;
+        _loading = <span class="k">false</span>;
+        UpdatePreview();
     }
 
-    <span class="k">private void</span> Slider_Changed(<span class="k">object</span> sender, RoutedPropertyChangedEventArgs&lt;<span class="k">double</span>&gt; e)
+    <span class="k">private void</span> Slider_Changed(<span class="k">object</span> sender, RoutedEventArgs e) =&gt; UpdatePreview();
+
+    <span class="k">private void</span> UpdatePreview()
     {
+        RText.Text = ((<span class="k">int</span>)RSlider.Value).ToString();   <span class="c">// GText/BText/AText 同理</span>
         <span class="k">var</span> color = Color.FromArgb((<span class="k">byte</span>)ASlider.Value, (<span class="k">byte</span>)RSlider.Value,
                                         (<span class="k">byte</span>)GSlider.Value, (<span class="k">byte</span>)BSlider.Value);
         Preview.Background = <span class="k">new</span> SolidColorBrush(color);
-        HexText.Text = <span class="s">$"#{color.R:X2}{color.G:X2}{color.B:X2}"</span>;
-        RText.Text = ((<span class="k">int</span>)RSlider.Value).ToString();
-        <span class="c">// GText/BText/AText 同理</span>
+
+        <span class="c">// 跟系统调色盘那条路径统一格式 —— 两条路的输出不该长得不一样</span>
+        ResultHex = FormatHex(color);
+        HexText.Text = ResultHex;
     }
 
-    <span class="k">private void</span> ApplyColor(<span class="k">string</span> hex) =&gt; PushToSliders(ParseColor(hex, Colors.White));
-    <span class="k">private void</span> PushToSliders(Color c) { RSlider.Value = c.R; GSlider.Value = c.G; BSlider.Value = c.B; ASlider.Value = c.A; }
-
-    <span class="k">private void</span> Ok_Click(<span class="k">object</span> sender, RoutedEventArgs e)
-    {
-        <span class="k">var</span> c = ((SolidColorBrush)Preview.Background).Color;
-        ResultHex = <span class="s">$"#{c.R:X2}{c.G:X2}{c.B:X2}"</span>;      <span class="c">// 只回写 RGB，透明度走独立滑条</span>
-        DialogResult = <span class="k">true</span>;
-    }
-
+    <span class="k">private void</span> Ok_Click(<span class="k">object</span> sender, RoutedEventArgs e) =&gt; DialogResult = <span class="k">true</span>;
     <span class="k">private void</span> Cancel_Click(<span class="k">object</span> sender, RoutedEventArgs e) =&gt; DialogResult = <span class="k">false</span>;
-    <span class="k">private void</span> White_Click(<span class="k">object</span> sender, RoutedEventArgs e) =&gt; ApplyColor(<span class="s">"#FFFFFF"</span>);
 }</pre></div>
 <div class="notice info"><span class="ic">💡</span><div>
-设计取舍（KeyDisplay 验证过的）：<b>颜色存 #RRGGBB、透明度单独存 0~100</b>。
-好处是「白底 60% 透明」这种配置一眼能读懂，hex 也能直接粘到别处用；
-A 通道只在最终合成 Brush 时乘进去。
+设计取舍（KeyDisplay 验证过的）：<b>颜色一串 hex 存到底（#AARRGGBB，纯色时省略 A），
+透明度滑块只改 A 通道、RGB 不动</b>。好处是配置里一行就是一个完整颜色，
+hex 也能直接粘到别处用；两条取色路径（系统调色盘 / 自绘窗）输出同一个格式
+（都走 <code class="inline">FormatHex</code>），不会出现"这条路选完和那条路长得不一样"。
 </div></div>
 </section>
 
@@ -1620,9 +1677,100 @@ WPF 自带的属性只能解决一半，另一半必须 Win32。先给完整模�
     <span class="k">if</span> (_host <span class="k">is not null</span>)
         _host.ChatLineReceived -= OnChatLine;   <span class="c">// 事件</span>
 }</pre></div>
-<div class="notice info"><span class="ic">💡</span><div>
-最小可用参考：仓库里 <code class="inline">Plugins/FpsOverlay/FpsOverlayWindow.xaml.cs</code> 就是本节模板的完整实现
-（不到三百行，注释齐全），写悬浮窗前先读它。
+<h3><span class="no">8.10</span>防出屏：窗口永远不许跑出屏幕</h3>
+
+<p>用户拖悬浮窗能拖到哪？默认答案是<b>屏幕外任意远</b>——WPF 的 <code class="inline">DragMove()</code>
+不管这个，松手就停在那儿，出界的位置还会被存进配置，重启才被拉回来。
+放大缩放、改阴影（留白变化）也会让窗口悄悄出界。
+8.8 那个摆位示例只在<b>启动时</b>钳一次，运行中没人管。</p>
+
+<p>正确的做法是四层钳制，全是同一个方法：</p>
+
+<div class="codeblock"><div class="bar"><span class="lang">C# · 钳制方法（多显示器安全）</span><button class="copy">复制</button></div><pre><span class="c">/// 用 VirtualScreen（全部屏幕的联合包围盒）而不是单屏 WorkArea：</span>
+<span class="c">/// 多显示器下副屏也能去，只拦「所有屏幕之外」。都是 DIP，跟 Left/Top 同单位。</span>
+<span class="k">public void</span> ClampToVirtualScreen()
+{
+    <span class="k">var</span> vsLeft = SystemParameters.VirtualScreenLeft;
+    <span class="k">var</span> vsTop  = SystemParameters.VirtualScreenTop;
+    <span class="k">var</span> vsRight  = vsLeft + SystemParameters.VirtualScreenWidth;
+    <span class="k">var</span> vsBottom = vsTop  + SystemParameters.VirtualScreenHeight;
+
+    <span class="c">// ⚠ Math.Clamp 在 min&gt;max 时抛异常 —— 窗口比屏幕还大的极端情况先判，对齐左上角</span>
+    <span class="k">if</span> (ActualWidth &lt;= vsRight - vsLeft)
+        Left = Math.Clamp(Left, vsLeft, vsRight - ActualWidth);
+    <span class="k">else</span>
+        Left = vsLeft;
+
+    <span class="k">if</span> (ActualHeight &lt;= vsBottom - vsTop)
+        Top = Math.Clamp(Top, vsTop, vsBottom - ActualHeight);
+    <span class="k">else</span>
+        Top = vsTop;
+}</pre></div>
+
+<table>
+<tr><th>挂哪</th><th>管什么场景</th></tr>
+<tr><td>拖动的每一帧（自绘拖动的 OnMouseMove 里）</td><td><b>核心场景</b>：拖动中窗口物理上出不了屏，而不是拖出去再弹回</td></tr>
+<tr><td>ResizeToContent / Rebuild 之后</td><td>放大缩放、改阴影 → 窗口变大 → 右/下缘出界</td></tr>
+<tr><td>ApplyPosition（装载摆位）</td><td>手改配置 / 换显示器之后，存的位置本来就在屏幕外</td></tr>
+<tr><td>刷新 Tick 里顺手调一次</td><td>分辨率变化、拔副屏 —— 出界后 16ms 内自动拉回；平时是同值赋值，零开销</td></tr>
+</table>
+
+<p><b>拖动为什么弃用 DragMove：</b>DragMove 是系统模态拖动，拖动期间你插不进手（没法在每一帧做钳制）。
+自绘拖动的手感跟它完全一样（都是「鼠标相对窗口的抓取点不变」），但每一帧都在你手里：</p>
+
+<div class="codeblock"><div class="bar"><span class="lang">C# · 自绘拖动（增量式，纯 DIP，无需 DPI 换算）</span><button class="copy">复制</button></div><pre><span class="k">private bool</span> _dragging;
+<span class="k">private double</span> _dragGrabX, _dragGrabY;
+
+<span class="k">protected override void</span> OnMouseLeftButtonDown(MouseButtonEventArgs e)
+{
+    <span class="k">base</span>.OnMouseLeftButtonDown(e);
+    <span class="k">if</span> (!ClickThrough)
+    {
+        _dragging = <span class="k">true</span>;
+        <span class="k">var</span> pos = e.GetPosition(<span class="k">this</span>);   <span class="c">// 按下时鼠标在窗口内的坐标</span>
+        _dragGrabX = pos.X; _dragGrabY = pos.Y;
+        CaptureMouse();                      <span class="c">// 鼠标出窗口也不中断</span>
+    }
+}
+
+<span class="k">protected override void</span> OnMouseMove(MouseEventArgs e)
+{
+    <span class="k">base</span>.OnMouseMove(e);
+    <span class="k">if</span> (!_dragging) <span class="k">return</span>;
+
+    <span class="k">var</span> pos = e.GetPosition(<span class="k">this</span>);
+    <span class="c">// 增量公式：鼠标在窗口内偏了多少，窗口补多少 —— 不需要鼠标物理坐标（那要 DPI 换算）</span>
+    Left += pos.X - _dragGrabX;
+    Top  += pos.Y - _dragGrabY;
+
+    ClampToVirtualScreen();                  <span class="c">// ★ 每帧钳制，出不了屏</span>
+}
+
+<span class="k">protected override void</span> OnMouseLeftButtonUp(MouseButtonEventArgs e)
+{
+    <span class="k">base</span>.OnMouseLeftButtonUp(e);
+    EndDrag();                               <span class="c">// 清标志 + ReleaseMouseCapture，幂等</span>
+}</pre></div>
+
+<div class="notice warn"><span class="ic">⚠</span><div>
+<b>两个易漏的坑：</b>
+① 拖到一半被打开鼠标穿透（窗口从此收不到鼠标事件）—— <code class="inline">UpdateTransparent</code> 里要先
+<code class="inline">EndDrag()</code>，不然 <code class="inline">_dragging</code> 挂在 true；
+② 自绘拖动全程 try/catch 包住 —— 抛了同样留下脏状态。
+</div></div>
+
+<div class="notice tip"><span class="ic">💡</span><div>
+<b>做成开关：</b>保护性行为也别替用户做死 —— 加一个设置项（如
+<code class="inline">ClampToScreen</code>，默认开），窗口加一个 <code class="inline">ClampEnabled</code> 属性，
+<code class="inline">ClampToVirtualScreen()</code> 开头判断它。想"一半藏在屏幕外"的用户关掉就行。
+自检把开关<b>两个方向</b>都验：开着能钳、关着真的不钳（防止"关了还钳"的接错线）。
+</div></div>
+
+<div class="notice tip"><span class="ic">💡</span><div>
+<b>自检怎么写：</b>把窗口位置故意扔到屏幕外四个方向（左上 -5000、右下 +5000），
+调 <code class="inline">ClampToVirtualScreen()</code> 断言拉回；再把缩放临时拉到 8.0 让窗口必超屏幕，
+断言对齐左上且不抛异常。位置的探针值由防污染三件套兜底（_suppressSave + 磁盘重载），
+不会污染用户配置。KeyDisplay 的「防出屏自检」就是这么验的。
 </div></div>
 </section>
 
@@ -1636,17 +1784,205 @@ WPF 自带的属性只能解决一半，另一半必须 Win32。先给完整模�
 <p>plugin.json 的 <code class="inline">capabilities</code> 数组在安装确认框里展示给用户。它是知情同意的凭据，
 写「读聊天消息」就真的只读聊天消息。同类事情有别的做法时，选侵入性最低的：</p>
 
-<h3><span class="no">9.2</span>输入捕获：轮询可以，钩子不碰</h3>
-<div class="notice danger"><span class="ic">⛔</span><div>
-<b>红线：</b>不要装全局键盘/鼠标钩子（SetWindowsHookEx）。要看按键状态用
-<code class="inline">GetAsyncKeyState</code> 轮询——只问「现在按着吗」，不拦截、不记录别处按键，系统层面零侵入。
-KeyDisplay 就是这样做的，并在 capabilities 里写明「GetAsyncKeyState 轮询（未安装任何键盘钩子）」。
-</div></div>
-<div class="codeblock"><div class="bar"><span class="lang">C# · 按键轮询</span><button class="copy">复制</button></div><pre>[DllImport(<span class="s">"user32.dll"</span>)]
-<span class="k">private static extern short</span> GetAsyncKeyState(<span class="k">int</span> vKey);
+<h3><span class="no">9.2</span>输入捕获：轮询优先，钩子可用（要先说明）</h3>
 
-<span class="c">// DispatcherTimer 里每 40ms 问一遍（只问状态，不拦截）：</span>
-<span class="k">private static bool</span> IsDown(<span class="k">int</span> vk) =&gt; (GetAsyncKeyState(vk) &amp; <span class="n">0x8000</span>) != <span class="n">0</span>;</pre></div>
+<p>先说清楚一件事，免得被误读：<b>钩子不是禁品。</b>项目里 AutoGg 用钩子做键盘锁定、
+KeyDisplay 用钩子读游戏按键，都是正式功能。真正的要求是<b>流程上的</b>——</p>
+
+<div class="notice warn"><span class="ic">⚠</span><div>
+<b>碰输入链路的能力（全局钩子、权限提升、监听）要先摆方案再动手。</b>
+不要因为「需求说得清楚」就直接开做。把「要做什么、代价是什么、能不能回退」讲明白，
+等确认了再写代码。这是硬要求。
+</div></div>
+
+<h3><span class="no">9.2.1</span>两种读法，怎么选</h3>
+
+<p>按键状态有两条路，<b>先问自己「目标是不是走 Raw Input 的游戏」</b>：</p>
+
+<table>
+<tr><th>读法</th><th>能读什么</th><th>代价</th><th>什么时候用</th></tr>
+<tr>
+<td><code class="inline">GetAsyncKeyState</code> 轮询</td>
+<td>桌面、浏览器、Minecraft（Java 版）等走正常消息队列的程序</td>
+<td>几乎没有。零介入、不碰权限、卸载后什么都不剩</td>
+<td><b>默认选它。</b>绝大多数场景够用</td>
+</tr>
+<tr>
+<td><code class="inline">WH_KEYBOARD_LL</code> 低级键盘钩子</td>
+<td><b>也能读走 Raw Input 的游戏</b>（绝区零、原神这类引擎自管输入的）</td>
+<td>全程介入每次按键；<b>需要提权</b>；杀软会多看两眼</td>
+<td>目标明确是游戏，且轮询读不到时</td>
+</tr>
+</table>
+
+<p><b>为什么轮询读不到游戏</b>：<code class="inline">GetAsyncKeyState</code> 读的是 Windows 消息队列里的按键状态。
+游戏引擎（Unity/Unreal 那类）直接读键盘驱动的原始数据（Raw Input / DirectInput），
+不往消息队列塞 <code class="inline">WM_KEYDOWN</code> —— 操作系统根本不知道键被按了，轮询就永远是「没按」。</p>
+
+<p><b>为什么钩子能读到</b>：钩子挂的位置比消息队列<b>更靠近硬件</b>。
+键盘驱动产生的事件先过一遍所有低级钩子，然后才分发给前台窗口或 Raw Input。
+所以哪怕游戏绕过了消息系统，钩子也照样看得见。</p>
+
+<div class="notice danger"><span class="ic">⛔</span><div>
+<b>键盘和鼠标是两个独立的钩子，必须各装一个。</b>
+<code class="inline">WH_KEYBOARD_LL</code>(13) 和 <code class="inline">WH_MOUSE_LL</code>(14) 互不相干 ——
+装了键盘<b>不等于</b>鼠标也会过你的回调。漏了鼠标那个的表现很具体：
+<b>游戏里键盘格子亮了、鼠标格子不亮</b>（桌面场景因为能降级轮询，看着是好的，所以很难察觉）。
+项目里 KeyDisplay 就踩过这个坑（2026-10-03）。
+</div></div>
+
+<div class="notice warn"><span class="ic">⚠</span><div>
+<b>钩子要生效，宿主必须以管理员权限运行。</b>
+Windows 的 UIPI 机制不允许低完整性级别的进程接收高完整性级别进程的输入。
+游戏通常由启动器提权拉起，宿主不提权的话，钩子依然收不到它的按键 ——
+表现是「换成了钩子，游戏里还是不亮」。设置页里要把这句话写给用户看。
+</div></div>
+
+<h3><span class="no">9.2.2</span>只读钩子怎么写（照抄这一段）</h3>
+
+<p>按键显示要的是「看」，不是「拦」。所以回调里<b>只记状态、立刻放行</b>。
+下面这十条每条都会在出问题的时候让你查半天，一条都别省：</p>
+
+<div class="codeblock"><div class="bar"><span class="lang">C# · 只读的低级键盘钩子</span><button class="copy">复制</button></div><pre><span class="k">private const int</span> WH_KEYBOARD_LL = <span class="n">13</span>;
+
+<span class="c">// ① 委托必须存字段 —— 交给系统的是函数指针，托管侧没强引用会被 GC 回收，</span>
+<span class="c">//    回收后回调指向野地址，进程直接崩。这是本文件最容易踩的坑。</span>
+<span class="k">private</span> LowLevelKeyboardProc? _proc;
+
+<span class="c">// ② 装钩子必须在本进程 UI 线程上 —— 低级钩子靠宿主线程的消息循环派发回调，</span>
+<span class="c">//    在纯后台线程上装会「装成功但永远收不到回调」。</span>
+<span class="c">// ③ hMod 传 IntPtr.Zero 对 WH_KEYBOARD_LL 是正确的（不注入 DLL，所以不需要模块句柄）。</span>
+_hookHandle = SetWindowsHookEx(WH_KEYBOARD_LL, _proc, <span class="k">IntPtr</span>.Zero, <span class="n">0</span>);
+
+<span class="k">private</span> IntPtr HookCallback(<span class="k">int</span> nCode, <span class="k">IntPtr</span> wParam, <span class="k">IntPtr</span> lParam)
+{
+    <span class="c">// ④ 整段 try/catch 包住 —— 回调往外抛异常会一路穿到系统，后果不可控，</span>
+    <span class="c">//    而且异常本身就会导致钩子被摘。</span>
+    <span class="k">try</span>
+    {
+        <span class="c">// ⑤ 别做任何耗时的事。系统给钩子回调的超时是 300ms（LowLevelHooksTimeout），</span>
+        <span class="c">//    超时一次 Windows 会【静默摘掉】这个钩子且不通知 —— 表现是「用着用着突然不亮了」，</span>
+        <span class="c">//    查不出任何报错。所以回调里只做一次状态位写入：不取锁、不做 IO、不碰 UI。</span>
+        <span class="k">if</span> (nCode &gt;= <span class="n">0</span>) { <span class="cm">/* 只记「哪个键按下/松开」 */</span> }
+    }
+    <span class="k">catch</span> { }
+
+    <span class="c">// ⑥ ★ 必须 CallNextHookEx 放行。漏了这行 = 吞掉全系统按键，用户机器直接没法打字。</span>
+    <span class="c">//    这是整个文件最不能出错的一行。</span>
+    <span class="k">return</span> CallNextHookEx(_hookHandle, nCode, wParam, lParam);
+}</pre></div>
+
+<h4>鼠标钩子：另一套消息和结构体</h4>
+
+<p>鼠标钩子的写法和键盘一样（超时意识、异常吞掉、必须放行），只有两处不同：</p>
+
+<div class="codeblock"><div class="bar"><span class="lang">C# · 鼠标回调的消息映射</span><button class="copy">复制</button></div><pre><span class="c">// ① 装的时候用 WH_MOUSE_LL(14)，回调委托是另一个类型</span>
+_mouseHookHandle = SetWindowsHookEx(WH_MOUSE_LL, _mouseProc, <span class="k">IntPtr</span>.Zero, <span class="n">0</span>);
+
+<span class="c">// ② 结构体完全不同 —— 别拿 KBDLLHOOKSTRUCT 去解析鼠标消息，会读到垃圾值</span>
+[StructLayout(LayoutKind.Sequential)]
+<span class="k">private struct</span> MsLlHookStruct
+{
+    <span class="k">public int</span> PtX; <span class="k">public int</span> PtY;      <span class="c">// 坐标 —— 键位显示不需要，别读，少读少一份隐私面</span>
+    <span class="k">public uint</span> MouseData;                  <span class="c">// 判侧键用</span>
+    <span class="k">public uint</span> Flags; <span class="k">public uint</span> Time; <span class="k">public</span> IntPtr DwExtraInfo;
+}
+
+<span class="c">// ③ 鼠标消息的 wParam 不是虚拟键码，要自己映射 —— 这样上层拿到的和键盘统一</span>
+<span class="k">int</span>? vk = msg <span class="k">switch</span>
+{
+    WM_LBUTTONDOWN <span class="k">or</span> WM_LBUTTONUP =&gt; <span class="n">0x01</span>,   <span class="c">// VK_LBUTTON</span>
+    WM_RBUTTONDOWN <span class="k">or</span> WM_RBUTTONUP =&gt; <span class="n">0x02</span>,   <span class="c">// VK_RBUTTON</span>
+    WM_MBUTTONDOWN <span class="k">or</span> WM_MBUTTONUP =&gt; <span class="n">0x04</span>,   <span class="c">// VK_MBUTTON</span>
+    _ =&gt; <span class="k">null</span>,
+};
+
+<span class="c">// ④ 侧键（XBUTTON）要读 mouseData 才知道是哪个：高位 1 = 侧键1，2 = 侧键2</span>
+<span class="k">var</span> which = (xInfo.MouseData &gt;&gt; <span class="n">16</span>) &amp; <span class="n">0xFFFF</span>;
+vk = which <span class="k">switch</span> { <span class="n">1</span> =&gt; <span class="n">0x05</span>, <span class="n">2</span> =&gt; <span class="n">0x06</span>, _ =&gt; <span class="k">null</span> };</pre></div>
+
+<p>两个钩子共用一个虚拟键码状态位图就够了 —— 这样对上层（悬浮窗、CPS、自检）
+接口仍然只有一个 <code class="inline">IsDown(vk)</code>，不用改。</p>
+
+<div class="notice tip"><span class="ic">💡</span><div>
+<b>降级要分键盘鼠标判。</b>万一只有键盘钩子装上了、鼠标钩子没装上，
+鼠标键那半必须走轮询兜底，否则位图里没人写它、永远是"没按"。
+按虚拟键码区间分（0x01~0x06 是鼠标键）即可。
+</div></div>
+
+<h4>回调里读什么、写什么</h4>
+
+<ul>
+  <li><b>读</b>：<code class="inline">wParam</code>（消息类型：<code class="inline">WM_KEYDOWN</code> /
+  <code class="inline">WM_KEYUP</code> / 含 Alt 的 SYS 版）和
+  <code class="inline">KBDLLHOOKSTRUCT.VkCode</code>（虚拟键码）。<b>别的字段一律别碰</b>；</li>
+  <li><b>写</b>：只写一个「按下/松开」的位。用位图（<code class="inline">ulong[4]</code>）而不是
+  <code class="inline">HashSet</code>——回调是高频路径，任何分配/哈希/扩容都可能把它拖过 300ms 线；</li>
+  <li><b>绝对不要</b> return 1。那是「吞键」，属于键盘锁定/改键的活（见 AutoGg），不是按键显示该干的。</li>
+</ul>
+
+<h4>被静默摘掉怎么办</h4>
+
+<p>系统摘钩子<b>不通知</b>，所以得自己探活。<code class="inline">EnsureAlive()</code> 之类的健康检查
+每 2 秒跑一次：发现句柄失效就重装，并记日志。
+重装代价极小（两次 Win32 调用），比设计复杂的判活逻辑划算。KeyDisplay 就是这么做的。</p>
+
+<h4>隐私边界（写代码时要守住）</h4>
+
+<ul>
+  <li>只记按键的<b>按下/松开状态位</b>；时间戳只用于判断钩子是否还活着；</li>
+  <li><b>不</b>记录按键序列、<b>不</b>区分来源进程、<b>不</b>记窗口标题 —— 那就成键盘记录器了；</li>
+  <li><b>不</b>写任何文件；卸载时句柄释放、状态表清空；</li>
+  <li>capabilities 里如实写「安装了 WH_KEYBOARD_LL 钩子，只读取状态、不拦截、不记录」——
+  别含糊其辞，用户有知情权。</li>
+</ul>
+
+<h3><span class="no">9.2.3</span>两种模式并存的写法</h3>
+
+<p>如果插件的用户群既有「桌面党」也有「游戏党」，别二选一，做成可切换的。
+关键在于<b>抽一层接口</b>，让上层逻辑不关心底下用哪种方式：</p>
+
+<div class="codeblock"><div class="bar"><span class="lang">C# · 读取层抽象</span><button class="copy">复制</button></div><pre><span class="k">internal interface</span> IKeyStateSource : IDisposable
+{
+    <span class="k">bool</span> IsActive { <span class="k">get</span>; }        <span class="c">// 钩子装失败时 false</span>
+    <span class="k">string</span> Name { <span class="k">get</span>; }          <span class="c">// 人话名字，日志/界面用</span>
+    <span class="k">bool</span> IsDown(<span class="k">int</span> virtualKey);     <span class="c">// 唯一的对外接口</span>
+}
+
+<span class="c">// 轮询实现：无状态，Dispose 是空的</span>
+<span class="c">// 钩子实现：有句柄，Dispose 要 UnhookWindowsHookEx</span>
+
+<span class="c">// 全局出口 —— 调用方（悬浮窗刷新、CPS 采样、自检）只认这行，换实现不动它们</span>
+<span class="k">internal static</span> IKeyStateSource _source = <span class="k">new</span> PollingKeyStateSource();
+
+<span class="k">internal static void</span> SwitchSource(IKeyStateSource next)
+{
+    <span class="k">var</span> old = Interlocked.Exchange(<span class="k">ref</span> _source, next);   <span class="c">// 换引用是原子操作</span>
+    <span class="k">if</span> (!ReferenceEquals(old, next)) old?.Dispose();
+}</pre></div>
+
+<p>几个要注意的点：</p>
+
+<ul>
+  <li><b>切换要即时生效</b>，不用重启宿主。切到钩子就装、切回轮询就卸，路径要对称；</li>
+  <li><b>切换是幂等的</b>——模式没变就别卸了重装，白白摘掉一次钩子；</li>
+  <li><b>装失败要退回轮询并改回设置</b>。否则用户看到开关是「钩子」、实际在轮询，
+  会觉得莫名其妙（设置项要跟着回退，界面也要重新对齐）；</li>
+  <li><b>Shutdown 必须先卸钩子</b>。留一个钩子比留一个定时器危险得多 ——
+  宿主都关了它还在跑的话，全系统按键都要过一遍你的回调；</li>
+  <li><b>卸载路径必须幂等</b>，重复调用安全。这是四条铁律之一；</li>
+  <li><b>钩子没装成时，IsDown 要退回轮询</b>，别让整个功能哑掉 —— 至少桌面场景还能用。</li>
+</ul>
+
+<div class="notice tip"><span class="ic">💡</span><div>
+<b>参考实现：</b><code class="inline">Plugins/KeyDisplay/</code> 里的
+<code class="inline">KeyStateSource.cs</code>（两种实现 + 接口）、
+<code class="inline">VirtualKeys.cs</code>（统一切换出口）、
+<code class="inline">KeyDisplayPlugin.cs</code> 的 <code class="inline">ApplyInputMode()</code> /
+<code class="inline">CheckHookHealth()</code>。设置页的读取方式开关见
+<code class="inline">KeyDisplayPage.xaml</code>，权限提示的实现见
+<code class="inline">KeyDisplayPlugin.IsProcessElevated</code>。
+</div></div>
 
 <h3><span class="no">9.3</span>游戏交互：只做「读」和「飘窗」</h3>
 <ul>
@@ -1932,8 +2268,9 @@ WS_EX_TOOLWINDOW（8.5）。</td></tr>
 <tr><td>13</td><td><b>频繁 Hide()/Show() 悬浮窗</b></td>
 <td>z-order 重排扰动游戏。窗口常驻，隐藏用 Opacity=0 + 强制穿透（8.6）。</td></tr>
 
-<tr><td>14</td><td><b>ColorDialog 调不起来</b></td>
-<td>WinForms ColorDialog 在插件上下文可能弹不出（还带来 CS0104 撞名）。自绘取色窗（6.9）。</td></tr>
+<tr><td>14</td><td><b>ColorDialog 的三个坑</b></td>
+<td>插件上下文里<b>能</b>弹（宿主内置模块就用它）—— 但要全限定名防 CS0104 撞名、
+返回的 A 恒 255 得拼回原透明度、并留自绘窗兜底（网易云歌词插件踩过调不起来的坑）（6.9）。</td></tr>
 
 <tr><td>15</td><td><b>UseWindowsForms 开了之后一堆 CS0104</b></td>
 <td>System.Drawing / System.Windows.Forms 隐式 using 与 WPF 的 Brush/Point/MouseEventArgs 撞名。
@@ -1968,7 +2305,43 @@ csproj 里 <code class="inline">&lt;Using Remove="System.Drawing"/&gt;&lt;Using 
 <td>Load 的默认值就是用户首体验。0.5 缩放、0 号字这类默认值等于开箱即坏（7.1）。</td></tr>
 
 <tr><td>24</td><td><b>Capabilities 含糊</b></td>
-<td>安装确认框是知情同意。写「读取聊天消息」「GetAsyncKeyState 轮询（无键盘钩子）」这种用户能懂的话（9.1）。</td></tr>
+<td>安装确认框是知情同意。写「读取聊天消息」「GetAsyncKeyState 轮询」这种用户能懂的话；
+用了钩子就写「安装 WH_KEYBOARD_LL 钩子只读按键状态，不拦截不记录」，别含糊（9.1 / 9.2）。</td></tr>
+
+<tr><td>25</td><td><b>钩子回调里 return 1 / 忘 CallNextHookEx</b></td>
+<td>吞掉全系统按键，用户机器直接没法打字。按键显示只观察，最后一行必须是
+CallNextHookEx 放行（9.2.2 ⑥）。</td></tr>
+
+<tr><td>26</td><td><b>钩子委托没存字段</b></td>
+<td>交给系统的是函数指针，托管侧没强引用会被 GC 回收；回收后回调指向野地址，
+进程直接崩。委托一定要存成字段（9.2.2 ①）。</td></tr>
+
+<tr><td>27</td><td><b>钩子回调里做耗时操作</b></td>
+<td>系统给 300ms 超时，超时一次 Windows <b>静默摘掉</b>钩子且不通知 ——
+表现是「用着用着突然不亮了」，查不出报错。回调里只写状态位（9.2.2 ⑤），
+另外加个探活重装（9.2.2「被静默摘掉怎么办」）。</td></tr>
+
+<tr><td>28</td><td><b>只装了键盘钩子，没装鼠标</b></td>
+<td><code class="inline">WH_KEYBOARD_LL</code> 和 <code class="inline">WH_MOUSE_LL</code> 是两个独立钩子。
+漏了鼠标的表现很具体：<b>游戏里键盘亮、鼠标不亮</b>（桌面场景能降级轮询所以看不出问题）。
+键位显示这种要显示鼠标键的插件必踩（9.2.1 / 9.2.2「鼠标钩子」）。</td></tr>
+
+<tr><td>29</td><td><b>在后台线程装钩子</b></td>
+<td>低级钩子靠宿主线程的消息循环派发回调。在纯后台线程上装会「装成功但
+永远收不到回调」。要在本进程 UI 线程装（9.2.2 ②）。</td></tr>
+
+<tr><td>30</td><td><b>Shutdown 没卸钩子</b></td>
+<td>比没停定时器严重得多 —— 宿主关了它还在跑，全系统按键都要过一遍你的回调。
+卸载路径必须幂等（9.2.3 / 3.2）。</td></tr>
+
+<tr><td>31</td><td><b>切了钩子但没提权</b></td>
+<td>绝区零这类提权进程的按键受 UIPI 保护，宿主不提权就依然读不到 ——
+表现是「换了钩子还是没反应」。设置页要把这条写给用户，并实时显示当前是否已提权（9.2.1）。</td></tr>
+
+<tr><td>32</td><td><b>悬浮窗拖出屏幕外</b></td>
+<td><code class="inline">DragMove()</code> 随便拖出屏，出界位置还存盘。
+自绘拖动 + 每帧 <code class="inline">ClampToVirtualScreen</code>（用 VirtualScreen，多显示器安全），
+尺寸变化/分辨率变化也要钳（8.10）。</td></tr>
 </table></div>
 </section>
 
@@ -1984,7 +2357,8 @@ csproj 里 <code class="inline">&lt;Using Remove="System.Drawing"/&gt;&lt;Using 
 <td>本档第 8 章模板的出处。WS_EX 三件套、常驻窗口、穿透切换、拖动定位，全都有，代码量最小。<b>写悬浮窗先读它</b>。</td></tr>
 <tr><td><code class="k">Plugins/KeyDisplay</code></td><td>全家桶</td>
 <td>最复杂的实战插件：自绘页面（卡片+开关+滑条+下拉+调色板组合）、悬浮窗自由布局、彩色循环动画、
-CPS 统计、18 项常驻自检、UI 快照。第 6 章的调色板模板就是它的页面。</td></tr>
+CPS 统计、20+ 项常驻自检、UI 快照。<b>第 6 章的调色板模板、第 9.2 节的输入捕获双模式
+（轮询 / 低级键盘钩子）都出自这里</b>：<code class="k">KeyStateSource.cs</code> 是那两种实现与接口。</td></tr>
 <tr><td><code class="k">Plugins/RegionMagnifier</code></td><td>区域放大</td>
 <td>选游戏窗口、截图、放大的完整流程；窗口选择下拉的用法。</td></tr>
 <tr><td><code class="k">Plugins/NeteaseLyrics</code></td><td>歌词窗</td>
@@ -2049,7 +2423,9 @@ CPS 统计、18 项常驻自检、UI 快照。第 6 章的调色板模板就是�
 
 <h4>行为与红线</h4>
 <ul class="checklist">
-<li>没有键盘/鼠标钩子（按键读取用 GetAsyncKeyState 轮询）</li>
+<li>输入捕获：默认轮询；用了钩子的话，回调<b>只读不吞</b>（必 CallNextHookEx）、整段 try/catch、有超时意识（回调里不取锁不做 IO）、有探活重装（9.2）</li>
+<li>用了钩子的话，capabilities 如实声明「安装了 WH_KEYBOARD_LL，只读状态、不拦截、不记录」，并说明需要提权</li>
+<li>用了钩子的话，Shutdown 一定卸掉（幂等），切回轮询路径对称</li>
 <li>没有注入游戏进程、没有 mod/Forge 类侵入</li>
 <li>ChatLineReceived 处理器里没有耗时操作（有就 Task.Run）</li>
 <li>Capabilities 如实描述了读什么、联什么网</li>

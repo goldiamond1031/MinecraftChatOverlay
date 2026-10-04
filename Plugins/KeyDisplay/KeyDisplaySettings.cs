@@ -104,6 +104,26 @@ public sealed class KeyDisplaySettings
     /// <summary>轮询间隔（毫秒）。键位显示要跟手，默认 16 毫秒（约 60fps）。</summary>
     public int RefreshMs { get; set; } = 16;
 
+    /// <summary>
+    /// 按键读取方式：轮询（默认）还是键盘钩子。
+    ///
+    /// 默认轮询的理由：零介入、不碰权限、卸载后什么都不剩 —— 大多数场景（桌面、Minecraft
+    /// 这类走正常消息队列的程序）够用。只有要读**走 Raw Input 的游戏**（绝区零这类）时，
+    /// 才需要用户主动切到钩子。
+    ///
+    /// ⚠ 存的是 enum，JSON 里就是数字（0=轮询 / 1=钩子）。settings.json 是给人看的，
+    ///   但这里存数字更稳：以后加模式不会因为字符串拼写差异读不出来。
+    /// </summary>
+    public KeyInputMode InputMode { get; set; } = KeyInputMode.Polling;
+
+    /// <summary>
+    /// 防出屏：悬浮窗拖动/缩放时不许跑出屏幕。
+    ///
+    /// 默认开 —— 这是纯保护性行为，对绝大多数用户只有好处；
+    /// 想把窗口一半藏在屏幕边缘外面那种玩法，关掉这个开关就行。
+    /// </summary>
+    public bool ClampToScreen { get; set; } = true;
+
     // ---- 全局外观 ----
     public string FontFamily { get; set; } = "Microsoft YaHei UI";
     public double FontSize { get; set; } = 18;

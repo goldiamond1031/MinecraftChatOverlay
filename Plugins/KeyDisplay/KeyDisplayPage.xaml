@@ -18,7 +18,7 @@
             <StackPanel>
                 <TextBlock Text="1. 开关与刷新" Style="{DynamicResource CardTitleStyle}"/>
                 <TextBlock Style="{DynamicResource CardDescStyle}" TextWrapping="Wrap" Margin="0,3,0,14"
-                           Text="这个插件只做一件事：查你指定的那几个键现在有没有按下，然后显示出来。用的是 GetAsyncKeyState 轮询 —— 不安装键盘钩子、不拦截按键、不记录、不写任何文件，对系统输入链路是零侵入的。"/>
+                           Text="这个插件只做一件事：查你指定的那几个键现在有没有按下，然后显示出来。两种读法都只读「此刻按着没有」这一个状态位 —— 不拦截按键、不记录历史、不写任何文件。"/>
 
                 <CheckBox x:Name="EnabledCheckBox"
                           Style="{DynamicResource ToggleSwitchStyle}"
@@ -41,12 +41,54 @@
                     </StackPanel>
                 </CheckBox>
 
+                <CheckBox x:Name="ClampToScreenCheckBox"
+                          Style="{DynamicResource ToggleSwitchStyle}"
+                          Margin="0,14,0,0"
+                          Checked="Option_Changed"
+                          Unchecked="Option_Changed">
+                    <StackPanel>
+                        <TextBlock Text="防止拖出屏幕" FontSize="13" FontWeight="Bold"/>
+                        <TextBlock Text="默认开着 —— 拖动悬浮窗或放大缩放时，窗口不会被拖出屏幕外。想把它一半藏在屏幕边缘外面，就关掉这个。" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,3,0,0"/>
+                    </StackPanel>
+                </CheckBox>
+
                 <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
                     <TextBlock Text="刷新间隔" Style="{DynamicResource FieldLabelStyle}" Width="72" VerticalAlignment="Center"/>
                     <ComboBox x:Name="RefreshComboBox" Width="300" Height="32" SelectionChanged="Option_Changed"/>
                     <TextBlock Style="{DynamicResource HintStyle}" VerticalAlignment="Center" Margin="12,0,0,0"
                                Text="越小越跟手，也越费一点 CPU"/>
                 </StackPanel>
+
+                <!-- ============ 按键读取方式 ============ -->
+                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0"
+                        Margin="0,18,0,0" Padding="0,14,0,0">
+                    <StackPanel>
+                        <TextBlock Text="按键读取方式" FontSize="13" FontWeight="Bold"/>
+                        <TextBlock Style="{DynamicResource CardDescStyle}" TextWrapping="Wrap" Margin="0,4,0,10"
+                                   Text="桌面、Minecraft 这类程序用轮询就够了。绝区零、原神这类游戏引擎直接读键盘、绕过 Windows 消息系统，轮询读不到，得换成钩子。"/>
+
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="读取方式" Style="{DynamicResource FieldLabelStyle}" Width="72" VerticalAlignment="Center"/>
+                            <ComboBox x:Name="InputModeComboBox" Width="300" Height="32" SelectionChanged="Option_Changed"/>
+                        </StackPanel>
+
+                        <!-- 权限提示：只有钩子模式下才显眼，但一直放着让用户能自己判断 -->
+                        <Border x:Name="ElevationHintBorder"
+                                Background="{DynamicResource HoverBgBrush}"
+                                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                                CornerRadius="6" Padding="10,8" Margin="0,12,0,0">
+                            <StackPanel>
+                                <TextBlock Style="{DynamicResource HintStyle}" TextWrapping="Wrap"
+                                           x:Name="ElevationHintText"
+                                           Text=""/>
+                            </StackPanel>
+                        </Border>
+
+                        <TextBlock x:Name="InputModeStatusText"
+                                   Style="{DynamicResource HintStyle}" TextWrapping="Wrap" Margin="0,8,0,0"
+                                   Text=""/>
+                    </StackPanel>
+                </Border>
 
                 <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0"
                         Margin="0,18,0,0" Padding="0,14,0,0">
@@ -124,7 +166,7 @@
                     尺寸由代码算（宽度铺满可视区、高度跟着内容长），所以正常情况下不会多出一条滚动条。
                 -->
                 <Border BorderBrush="{DynamicResource BorderStrongBrush}" BorderThickness="1" CornerRadius="8"
-                        Background="{DynamicResource Surface2Brush}" Margin="0,12,0,0"
+                        Background="{DynamicResource HoverBgBrush}" Margin="0,12,0,0"
                         HorizontalAlignment="Stretch" Height="480">
                     <ScrollViewer x:Name="CanvasScroll"
                                   HorizontalScrollBarVisibility="Auto"
