@@ -1,10 +1,10 @@
 {
     "schemaVersion": 1,
-    "id": "2026-10-4-0829",
-    "updatedAt": "2026-10-04T08:29:28+08:00",
+    "id": "2026-10-4-1047",
+    "updatedAt": "2026-10-04T10:47:06+08:00",
     "enabled": true,
-    "title": "按键显示更新",
-    "body": "新增可开关的防止按键显示移出屏幕\n新增对其他游戏的适配，按键显示换低级钩子模式后在其他游戏也可正常使用",
+    "title": "V1.2.9更新",
+    "body": "非必要可不更新\n修复了点击隐藏聊天悬浮窗按钮后收到消息仍会弹出悬浮窗的bug",
     "link": "https://github.com/goldiamond1031/MinecraftChatOverlay/releases",
-    "linkText": "无可用更新"
+    "linkText": "有可用更新"
 }
