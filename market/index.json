@@ -1,6 +1,6 @@
 {
     "schemaVersion":  1,
-    "updatedAt":  "2026-10-04T17:55:32+08:00",
+    "updatedAt":  "2026-10-04T18:37:56+08:00",
     "plugins":  [
                     {
                         "id":  "goldiamond.autogg",
@@ -24,9 +24,9 @@
                     {
                         "id":  "goldiamond.keydisplay",
                         "name":  "按键显示",
-                        "version":  "1.3.1",
+                        "version":  "1.3.2",
                         "author":  "goldiamond",
-                        "description":  "把指定按键的按下状态做成一个悬浮窗显示（PVP 客户端那种键位显示）。只读不改：不拦截按键、不记录、不落盘。两种读取方式可切换 —— 默认 GetAsyncKeyState 轮询（不装钩子、零介入，桌面和 Minecraft 够用）；要读绝区零、原神这类走 Raw Input 的游戏，可切到 WH_KEYBOARD_LL 低级键盘钩子（只观察不吞键，需宿主以管理员权限运行）。按键格子的位置和大小在配置页的拖拽画布上摆，支持网格吸附；文字、颜色、阴影、背景、圆角都能自定义，每个能换颜色的地方都能单独开「彩色循环」，让颜色沿完整 RGB 光谱循环（红→橙→黄→绿→青→蓝→紫→红），各处共用一个时间轴，不会错位。可选「OBS 直播模式」：摘掉工具窗标记，让悬浮窗能被 OBS 窗口捕获抓到。",
+                        "description":  "把指定按键的按下状态做成悬浮窗（PVP 键位显示）。只读不改：不拦按键、不记录、不落盘。默认轮询；读绝区零、原神这类走 Raw Input 的游戏可切低级键盘钩子（只观察不吞键，需管理员权限）。格子位置大小在配置页拖拽摆放，颜色、阴影、圆角、彩色循环都能自定义。另有「OBS 直播模式」。",
                         "apiVersion":  1,
                         "capabilities":  [
                                              "只读地查询指定虚拟键的按下状态",
@@ -36,9 +36,9 @@
                                              "在自己目录里读写配置",
                                              "OBS 直播模式（可选开关）：摘掉 WS_EX_TOOLWINDOW，让悬浮窗出现在 OBS 窗口捕获列表里；开启后窗口会出现在任务栏和 Alt+Tab"
                                          ],
-                        "downloadUrl":  "packages/goldiamond.keydisplay-1.3.1.zip",
-                        "sha256":  "E5017036DF8DDA5B72AA0A097BA50FFE61624639FB7423DE45BAD16302AA2A3C",
-                        "size":  62084,
+                        "downloadUrl":  "packages/goldiamond.keydisplay-1.3.2.zip",
+                        "sha256":  "8520E483AFA737C878C38799B25660FF681A98F55146703A56BF18BB2A88E2C2",
+                        "size":  61802,
                         "tags":  [
 
                                  ]
@@ -46,9 +46,9 @@
                     {
                         "id":  "goldiamond.neteaselyrics",
                         "name":  "网易云歌词",
-                        "version":  "1.2.0",
+                        "version":  "1.2.1",
                         "author":  "goldiamond",
-                        "description":  "在屏幕任意位置显示网易云正在播放的歌词（当前行 + 下一行 + 翻译），跟着播放进度逐行滚动，支持逐字染色，进度靠中继插件实时上报。不注入、不改网易云，只读一个由中继小插件写出的进度文件。可选「OBS 直播模式」：摘掉工具窗标记，让歌词窗能被 OBS 窗口捕获抓到。",
+                        "description":  "在屏幕任意位置显示网易云正在播放的歌词（当前行 + 下一行 + 翻译），支持逐字染色。不注入、不改网易云，只读中继插件写出的进度文件。另有「OBS 直播模式」。",
                         "apiVersion":  1,
                         "capabilities":  [
                                              "读取网易云客户端的窗口标题（识别当前歌曲）",
@@ -58,9 +58,9 @@
                                              "显示一个置顶歌词窗",
                                              "OBS 直播模式（可选开关）：摘掉 WS_EX_TOOLWINDOW，让歌词窗出现在 OBS 窗口捕获列表里；开启后窗口会出现在任务栏和 Alt+Tab"
                                          ],
-                        "downloadUrl":  "packages/goldiamond.neteaselyrics-1.2.0.zip",
-                        "sha256":  "E5B61C2260F9DB9C2B86E48014FBF04A24D7BCF4AA10B325E78BAD5B0E219BD7",
-                        "size":  52745,
+                        "downloadUrl":  "packages/goldiamond.neteaselyrics-1.2.1.zip",
+                        "sha256":  "3A648EA8A8C92D6662584D59EF9EE9A0E9141BD2E017CCF8463B01B62F468E20",
+                        "size":  52672,
                         "tags":  [
 
                                  ]

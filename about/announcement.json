@@ -1,10 +1,10 @@
 {
     "schemaVersion": 1,
-    "id": "2026-10-4-1748",
-    "updatedAt": "2026-10-04T17:48:11+08:00",
+    "id": "2026-10-4-1837",
+    "updatedAt": "2026-10-04T18:37:48+08:00",
     "enabled": true,
-    "title": "发现了一个很严重的bug",
-    "body": "按键显示会让MCO关闭时停留在后台进程，需要在任务管理器手动删除\n该问题可以通过禁用按键显示插件暂时解决\n我会尽快修复这个bug",
+    "title": "按键显示的 bug 已修复",
+    "body": "「按键显示」会让 MCO 关闭后进程驻留后台的问题已修复。\n在插件市场把「按键显示」更新到 1.3.2 就好；同样毛病的「游戏 FPS」也一起修了。\n顺便：插件介绍都改短了，列表里不再是密密麻麻一大段。",
     "link": "https://github.com/goldiamond1031/MinecraftChatOverlay/releases",
-    "linkText": "无可用更新"
+    "linkText": "查看更新日志"
 }
