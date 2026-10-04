@@ -1,10 +1,10 @@
 {
     "schemaVersion": 1,
-    "id": "2026-10-4-1102",
-    "updatedAt": "2026-10-04T11:02:54+08:00",
+    "id": "2026-10-4-1655",
+    "updatedAt": "2026-10-04T16:55:56+08:00",
     "enabled": true,
-    "title": "V1.2.9更新",
-    "body": "非必要可不更新\n修复了点击隐藏聊天悬浮窗按钮后收到消息仍会弹出悬浮窗的bug",
+    "title": "不知道为什么插件没推到github上",
+    "body": "重新推了一遍，按键显示和网易云歌词显示都有更新，都可以被OBS捕获了",
     "link": "https://github.com/goldiamond1031/MinecraftChatOverlay/releases",
-    "linkText": "有可用更新"
+    "linkText": "无可用更新"
 }
