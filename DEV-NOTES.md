@@ -79,19 +79,6 @@ cd C:/MinecraftChatOverlayDSUI3/native
   -lopengl32 -luser32 -lgdi32 -lole32 -lpsapi -ladvapi32
 ```
 
-**只数帧的探针（`FpsOverlay` 插件用的那份）**，编法同上但只编**一份**（插件的 csproj 直接从
-`native\dist\FpsProbeHook.dll` 带进输出目录，没有 `_v6` 那一套）：
-
-```bash
-cd C:/MinecraftChatOverlayDSUI3/native
-/c/mingw64/bin/g++.exe -shared -O2 -std=c++17 -fno-exceptions -fno-rtti \
-  -static-libgcc -static-libstdc++ -Wall -Wno-unknown-pragmas -Wno-cast-function-type \
-  -DUNICODE -D_UNICODE -DWIN32_LEAN_AND_MEAN -D_WIN32_WINNT=0x0A00 \
-  -DNTDDI_VERSION=0x0A000000 -DWINVER=0x0A00 \
-  FpsProbe/fpsprobe.cpp FpsProbe/fpsdllmain.cpp \
-  -o dist/FpsProbeHook.dll -luser32 -lgdi32 -lkernel32
-```
-
 - 2026-09-28 起原生侧**不再需要 JDK**：JNI 探针 `jmc_probe.cpp`（附着到游戏进程里的 JVM 反射读聊天类布局）
   连同调用点、`build.ps1` 里的 `jni.h` 探测段**已彻底移除**（属于废弃的「真实颜色提取」路线）。
 - ⚠ `native\build.ps1` 是 **UTF-8 无 BOM** → `powershell -File` 会按 GBK 读它，中文注释变乱码、直接语法报错。
@@ -212,10 +199,10 @@ cd C:/MinecraftChatOverlayDSUI3/native
 79. **插件悬浮窗不真关 → 宿主关窗后进程驻留后台**（2026-10-04 修）——
   · 机制：宿主的 `ShutdownMode` 是 WPF 默认的 **OnLastWindowClose**（App.xaml 没设），只要**还有窗口没真的关掉**，应用就不退出。
   · 而插件悬浮窗为了"防任务栏右键把窗口关废"，普遍把 `Closing` 拦成只藏不关（`args.Cancel = true` + `Hide()`）。宿主 `Window_Closing` → `ShutdownPlugins()` → `PluginManager.ShutdownAll()` → `Unload()` → 插件 `Shutdown()` 里的 `_window.Close()` **被自己的拦截吃掉** → 窗口只 Hide → 进程驻留（主窗口消失、任务管理器里还在）。
-  · 涉及插件：**KeyDisplay、ProcessFps**（都没留放行出口）；**NeteaseLyrics 是对的**（Shutdown 先置 `_shuttingDown = true`，Closing 见到就 return）。AutoGg / PlayerQuery / RegionMagnifier / WindowFullscreen / SamplePlugin / FpsOverlay 不拦 Closing，不受影响。
+  · 涉及插件：**KeyDisplay、ProcessFps**（都没留放行出口）；**NeteaseLyrics 是对的**（Shutdown 先置 `_shuttingDown = true`，Closing 见到就 return）。AutoGg / PlayerQuery / RegionMagnifier / WindowFullscreen / SamplePlugin 不拦 Closing，不受影响。
   · 修法：加 `private bool _shuttingDown;`，`Shutdown()` 第一行置 true，`Closing` 里 `if (_shuttingDown) return;`。已在 KeyDisplay / ProcessFps 落地。
   · 顺带排查过：唯一的自建线程（KeyDisplay 的 `CpsSampler`）已 `IsBackground = true`，不是驻留原因；宿主自己的窗口（OverlayWindow / KillBannerWindow / BiliOverlayWindow）都没有拦 Closing，也干净。
-  · 另一个方向的隐患（**没修，先记着**）：FpsOverlay 之类**不拦** Closing 的插件，用户从任务栏右键关掉窗口会让实例作废（WPF 不允许 Show 已 Close 的窗口）——要修就得反过来加拦截，同时记得留上面的退出放行。
+  · 另一个方向的隐患（**没修，先记着**）：**不拦** Closing 的插件（如 FpsOverlay-window 这种独立小窗），用户从任务栏右键关掉窗口会让实例作废（WPF 不允许 Show 已 Close 的窗口）——要修就得反过来加拦截，同时记得留上面的退出放行。
 
 ---
 
@@ -255,18 +242,18 @@ cd C:/MinecraftChatOverlayDSUI3/native
 - **一键脚本**：`build-plugins.bat` —— 编契约 + 编所有插件 + 装到用户插件目录 + 打 zip 到
   `%APPDATA%\MinecraftChatOverlay\plugin-packages\`（可直接拖进「插件」页试装）。
 - **现有插件**（`Plugins\`）：`AutoGg`（goldiamond.autogg 自动 GG）、`NeteaseLyrics`（goldiamond.neteaselyrics）、
-  `PlayerQuery`、`RegionMagnifier`、`WindowFullscreen`、`SamplePlugin`（最小示例）、**`FpsOverlay`**。
-  - **`FpsOverlay`（`goldiamond.fpsoverlay`）是目前唯一自带原生组件的插件**，2026-10-02 新加：
-    它用 `<Compile Include>` 链主工程的 `ManualMapper` / `ManualMapper.Remote` / `GameProcessInjector`
-    三个源文件（只依赖 BCL，能干净地编进插件程序集）来自己做注入，
-    把 `native\FpsProbe\FpsProbeHook.dll` 手动映射进目标进程。
-  - 那个探针**只做一件事**：把 `SwapBuffers` / `wglSwapBuffers` 的 IAT 槽位换成自己的 thunk，
-    每出一次帧给计数加一；**不读后备缓冲、不碰渲染状态、不做任何效果**（跟 `gmblur` 的区别就在这）。
-    计数写在 `Local\McoFpsProbe_<pid>`（带 pid，多进程互不干扰），插件读它算 FPS，
-    显示在自己的独立悬浮窗上（`WS_EX_NOACTIVATE + WS_EX_TRANSPARENT`，常驻只切 Opacity）。
-  - ⚠ **它刻意不复用 `gmblur` 的钩子**：两个钩子会抢同一个 IAT 槽位。插件靠"共享内存能不能打开"
-    自己查重；同理，如果用户已经用动态模糊注入了同一个游戏，插件的注入也**不会**被
-    `GameProcessInjector` 那本静态账挡住（所以它直接调 `ManualMapper.MapRemote`，绕开 `Inject()` 的查重）。
+  `PlayerQuery`、`RegionMagnifier`、`WindowFullscreen`、`SamplePlugin`（最小示例）、`ProcessFps`（游戏 FPS）、
+  `KeyDisplay`（按键显示）。
+  - **`ProcessFps`（`goldiamond.processfps`）** 显示目标进程的实时帧率悬浮窗。
+    **它自己不做任何注入** —— 帧率数据直接读软件「游戏动态模糊」注入的那个钩子写出的共享内存
+    （`GameMotionBlurControlBlock`，和帧混合开关无关），所以目标进程**必须先被动态模糊注入过一次**。
+    注意它内部两个窗口文件仍叫 `FpsOverlayWindow.xaml` / `.xaml.cs`（从已删的 `FpsOverlay` 复制来的残留名），
+    **它们是 ProcessFps 在用的，别当成废弃文件删掉**。
+  - **已删插件：`FpsOverlay`（`goldiamond.fpsoverlay`）** —— 2026-10-02 加的"自带原生探针自己注入"版 FPS 悬浮窗
+    （链主工程 `ManualMapper` 往目标进程手动映射 `native\FpsProbe\FpsProbeHook.dll`，探针把
+    `SwapBuffers` / `wglSwapBuffers` 的 IAT 槽位换成 thunk 数帧，写 `Local\McoFpsProbe_<pid>`）。
+    它**从未进市场、也没装进用户目录**，功能被 `ProcessFps` 取代（后者不注入、不抢 `gmblur` 的 IAT 槽位），
+    2026-10-05 连同 `native\FpsProbe` 一起删除。**别再照旧文档去编 `FpsProbeHook.dll` 或找 `native\FpsProbe`。**
   - **`build-plugins.bat` 里没有它**（那个脚本本来就只列了 3 个插件），要装得自己拷。
   - **网易云歌词不是"探针可行性验证"了**：源码在 `Plugins\NeteaseLyrics\`、market 里 `1.1.5`；
     中继插件 MCOBridge 装到 `C:\betterncm\plugins_dev\MCOBridge\`。数据来源仍是"窗口标题 + 中继读进度"，

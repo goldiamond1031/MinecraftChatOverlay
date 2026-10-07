@@ -4,41 +4,42 @@
     "rewards": [
         {
             "name": "墨染",
-            "amount": "¥20"
-            "message":"打不打44"
+            "amount": "¥20",
+            "message": "打不打44"
         },
         {
-            "name":"骑单车的鸡",
-            "amount":"¥124",
-            "message":"关注木卜实无华的钻石谢谢喵"
+            "name": "骑单车的鸡",
+            "amount": "¥124",
+            "message": "关注木卜实无华的钻石谢谢喵"
         },
         {
-            "name":"Mike_Mo",
-            "amount":"¥10",
-            "message":"看了这个视频感觉gd声音变化好大BV1sKYseDEzR"
+            "name": "Mike_Mo",
+            "amount": "¥10",
+            "message": "看了这个视频感觉gd声音变化好大BV1sKYseDEzR"
         },
         {
-            "name":"小江",
-            "amount":"¥30"
+            "name": "小江",
+            "amount": "¥30",
+            "message": "🤯太呆了"
         },
         {
-            "name":"like",
-            "amount":"¥10"
-            "message":"[动画表情]主人"
+            "name": "like",
+            "amount": "¥10",
+            "message": "[动画表情]主人"
         },
         {
-            "name":"schen404",
-            "amount":"¥50"
+            "name": "schen404",
+            "amount": "¥50"
         },
         {
-            "name":"天浅浅呀",
-            "amount":"¥30"
+            "name": "天浅浅呀",
+            "amount": "¥30"
         },
         {
-            "name":"雪染墨色",
-            "amount":"¥15"
+            "name": "雪染墨色",
+            "amount": "¥15",
+            "message": "怎么还没写上去"
         }
-        
     ],
     "pluginDevs": [
         {
