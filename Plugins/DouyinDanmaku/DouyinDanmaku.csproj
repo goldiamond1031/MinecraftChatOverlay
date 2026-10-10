@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <UseWPF>true</UseWPF>
+    <!-- 不做应用（exe），只是类库。插件里的控件由宿主的 Application 承载。 -->
+    <EnableDefaultApplicationDefinition>false</EnableDefaultApplicationDefinition>
+    <AssemblyName>DouyinDanmaku</AssemblyName>
+    <RootNamespace>DouyinDanmaku</RootNamespace>
+    <Version>1.0.7</Version>
+    <!-- 插件工程绝不引用主程序 exe（铁律一）：契约以工程引用方式引入，
+         产出独立的 Abstractions dll 供编译期使用；Private=false 不让它进插件目录，
+         运行期由宿主 ALC 把该程序集名回落给默认上下文（见 Abstractions.csproj 注释）。 -->
+    <EnableDefaultNoneItems>true</EnableDefaultNoneItems>
+    <!-- 类库工程默认不把 NuGet 依赖复制到输出目录（dotnet build 只给 DouyinDanmaku.dll），
+         而官方打包脚本 tools\pack-market-package.ps1 是从 bin\Release\net8.0-windows\ 收集
+         附属 dll 的 —— 不开这个开关，Jint.dll / Acornima.dll 就进不了插件包，
+         用户装上会因为找不到 Jint 直接崩。开了之后 build 输出和 publish 输出一致。 -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Update="plugin.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 签名器：抖音 webmssdk 是 JS，用纯托管 ES 引擎 Jint 执行（不依赖 WebView2/浏览器子进程）。
+         发布时必须把 Jint.dll + Acornima.dll 一起打进插件目录 —— 宿主 ALC 只从插件目录解析依赖。 -->
+    <PackageReference Include="Jint" Version="4.17.0" />
+    <!-- LogicalName 固定资源名：原文件名带 ~（webpack 产物），默认派生名不好认也不好用 -->
+    <EmbeddedResource Include="Assets\runtime~client-entry.44b556b4.js" LogicalName="douyindanmaku.signature.runtime.js" />
+    <EmbeddedResource Include="Assets\webmssdk.es5.js" LogicalName="douyindanmaku.signature.webmssdk.js" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Abstractions\MinecraftChatOverlay.Plugin.Abstractions.csproj">
+      <Private>false</Private>
+    </ProjectReference>
+  </ItemGroup>
+
+</Project>
