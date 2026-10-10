@@ -1,6 +1,6 @@
 {
     "schemaVersion":  1,
-    "updatedAt":  "2026-10-07T11:06:32+08:00",
+    "updatedAt":  "2026-10-11T03:43:42+08:00",
     "plugins":  [
                     {
                         "id":  "goldiamond.autogg",
@@ -178,6 +178,25 @@
                         "downloadUrl":  "packages/goldiamond.windowfullscreen-1.0.0.zip",
                         "sha256":  "7C46B64EF56F78371CAB359C2AD53BDCA3F39821CA2E161470FD26D3BF9380D8",
                         "size":  14040,
+                        "tags":  [
+
+                                 ]
+                    },
+                    {
+                        "id":  "nn.douyindanmaku",
+                        "name":  "抖音直播弹幕",
+                        "version":  "1.0.7",
+                        "author":  "nn",
+                        "description":  "接入抖音直播间的弹幕、礼物、点赞、入场、粉丝团与房间统计六类消息，转发到 MCO 聊天悬浮窗。支持关键词过滤与自定义输出模板。v1.0.3：内置 X-Bogus 推流签名（Jint 纯托管 JS 引擎），修复握手被服务端拒绝导致的连不上问题。v1.0.6：修复弹幕收得到却不出现在悬浮窗（跨线程更新 UI 集合被宿主吞异常），连接区移到页面最上面。v1.0.7：修复点「断开」后按钮永久卡在「连接中…」且点不动，连接/断开过程现在随时可以取消。",
+                        "apiVersion":  1,
+                        "capabilities":  [
+                                             "通过 wss + protobuf 直连抖音直播推流，读取六类 webcast 消息",
+                                             "把解析后的弹幕文本发送到宿主聊天悬浮窗（通过 host.SendToOverlay）",
+                                             "读写自己的插件数据目录（房间号与各开关配置持久化）"
+                                         ],
+                        "downloadUrl":  "packages/nn.douyindanmaku-1.0.7.zip",
+                        "sha256":  "5AC6D63412660B5647D7E2C7A29816028573F975C69B3BAC7B43F1CCE493D465",
+                        "size":  1270012,
                         "tags":  [
 
                                  ]
