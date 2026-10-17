@@ -10,7 +10,7 @@
     <EnableDefaultApplicationDefinition>false</EnableDefaultApplicationDefinition>
     <AssemblyName>DouyinDanmaku</AssemblyName>
     <RootNamespace>DouyinDanmaku</RootNamespace>
-    <Version>1.0.7</Version>
+    <Version>1.0.8</Version>
     <!-- 插件工程绝不引用主程序 exe（铁律一）：契约以工程引用方式引入，
          产出独立的 Abstractions dll 供编译期使用；Private=false 不让它进插件目录，
          运行期由宿主 ALC 把该程序集名回落给默认上下文（见 Abstractions.csproj 注释）。 -->

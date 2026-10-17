@@ -68,6 +68,7 @@ internal sealed class DouyinPageView : StackPanel
         Children.Add(BuildKindsCard());
         Children.Add(BuildTemplatesCard());
         Children.Add(BuildFilterCard());
+        Children.Add(BuildCreditsCard());
     }
 
     // ---------- 对外接口 ----------
@@ -314,6 +315,102 @@ internal sealed class DouyinPageView : StackPanel
         };
         block.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush");
         return block;
+    }
+
+    // ---------- 来源与致谢 ----------
+
+    /// <summary>
+    /// 署名卡片。协议层不是凭空想出来的——签名算法、握手参数、端点清单
+    /// 都来自下面这些开源实现，这里如实列出来。
+    ///
+    /// 用纯文本而不是 Hyperlink：宿主没给插件暴露"打开浏览器"的接口，
+    /// 做成可点却打不开反而更糟，直接给可复制的 URL 更实在。
+    /// </summary>
+    private Border BuildCreditsCard()
+    {
+        var stack = new StackPanel();
+        stack.Children.Add(Title("来源与致谢"));
+        stack.Children.Add(Desc(
+            "本插件的抖音协议层不是逆向出来的原创成果，而是照着下面几个开源项目的实现重写成 C# 的。"
+            + "算法与参数归他们，C# 移植和 MCO 适配归本插件。"));
+
+        // 参考实现：一条一行，仓库名加粗、URL 换行可复制
+        stack.Children.Add(Secondary("参考实现（协议流程与签名算法）", 12.5));
+        stack.Children.Add(CreditEntry(
+            "tiangalon/DyDanmaku",
+            "Java + Nashorn 执行 webmssdk 签名。本插件的签名流程、浏览器环境桩写法、"
+            + "六类消息的字段语义与模板变量命名都以它为准；插件内置的两个签名 JS "
+            + "（runtime~client-entry.44b556b4.js、webmssdk.es5.js）也直接取自该仓库的 src/main/resources。"
+            + "该仓库为「保留所有权利」（LICENSE 仅一句 All rights reserved），此处仅作非商业性兼容实现参考并注明出处。",
+            "https://github.com/tiangalon/DyDanmaku"));
+        stack.Children.Add(CreditEntry(
+            "skmcj/dycast（抖音弹幕姬）",
+            "TypeScript 实现。签名 base_string 模板与 byted_acrawler.frontierSign 入口、"
+            + "推流端点、心跳与 ACK 时序，均与它交叉核对过。",
+            "https://github.com/skmcj/dycast"));
+        stack.Children.Add(CreditEntry(
+            "saermart/DouyinLiveWebFetcher",
+            "Python 实现。WebSocket 握手参数（cursor / internal_ext / 各 query 字段）的取值方式参照了它。"
+            + "该项目为 AGPL-3.0：本插件未复制其代码，仅按其行为规格独立实现 C# 版本。",
+            "https://github.com/saermart/DouyinLiveWebFetcher"));
+        stack.Children.Add(CreditEntry(
+            "zhonghangAlex/DySpider",
+            "Python 实现。RENDER_DATA 解析与短号/抖音号形态的兼容思路来自它。",
+            "https://github.com/zhonghangAlex/DySpider"));
+        stack.Children.Add(CreditEntry(
+            "XiaoMiku01/douyin-live-go",
+            "Go 实现。protobuf 消息的字段名清单与它核对过（GPL-3.0，同样未复制代码）。",
+            "https://github.com/XiaoMiku01/douyin-live-go"));
+
+        stack.Children.Add(Secondary("第三方组件", 12.5));
+        stack.Children.Add(CreditEntry(
+            "Jint 4.17.0（BSD-2-Clause）",
+            "纯托管的 JavaScript 引擎，用来在进程内执行抖音的 webmssdk 算 X-Bogus 签名。"
+            + "没有它就只能依赖 WebView2 或 Node 子进程，那样插件就不再是「装上就能用」。",
+            "https://github.com/sebastienros/jint"));
+        stack.Children.Add(CreditEntry(
+            "Acornima 1.7.0（BSD-3-Clause）",
+            "Jint 的 JavaScript 解析器依赖，随插件一起分发。",
+            "https://github.com/adams85/acornima"));
+
+        stack.Children.Add(Secondary("插件契约", 12.5));
+        stack.Children.Add(CreditEntry(
+            "MinecraftChatOverlay（goldiamond1031）",
+            "本插件运行在 MCO 里。Abstractions\\PluginApi.cs 是照官方插件契约复刻的编译期引用，"
+            + "页面样式一律取宿主的 DynamicResource 键，跟随宿主主题。",
+            "https://github.com/goldiamond1031/MinecraftChatOverlay"));
+
+        stack.Children.Add(Secondary(
+            "签名算法本身是抖音的商业资产，本插件只是调用其公开下发的 webmssdk，"
+            + "不主张任何权利，也不对使用后果负责。若相关权利人认为不妥，请联系下架。",
+            11.5));
+
+        return Card(stack);
+    }
+
+    /// <summary>一条署名：标题行 + 说明 + 可复制的 URL。</summary>
+    private static StackPanel CreditEntry(string name, string detail, string url)
+    {
+        var row = new StackPanel { Margin = new Thickness(0, 10, 0, 0) };
+        row.Children.Add(new TextBlock { Text = name, FontSize = 13, FontWeight = FontWeights.Bold });
+        row.Children.Add(Secondary(detail, 11.5));
+
+        // 只读文本框：能选中、能 Ctrl+C，比纯 TextBlock 实用，又不会像链接那样点了没反应
+        var link = new TextBox
+        {
+            Text = url,
+            IsReadOnly = true,
+            BorderThickness = new Thickness(0),
+            Background = System.Windows.Media.Brushes.Transparent,
+            Padding = new Thickness(0),
+            Margin = new Thickness(0, 4, 0, 0),
+            FontSize = 11.5,
+            Cursor = Cursors.IBeam,
+        };
+        link.SetResourceReference(TextBox.ForegroundProperty, "AccentBrush");
+        row.Children.Add(link);
+
+        return row;
     }
 
     // ---------- 事件 ----------
