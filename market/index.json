@@ -1,186 +1,189 @@
 {
-    "schemaVersion":  1,
-    "updatedAt":  "2026-10-07T11:06:32+08:00",
-    "plugins":  [
-                    {
-                        "id":  "goldiamond.autogg",
-                        "name":  "自动 GG",
-                        "version":  "1.1.0",
-                        "author":  "MinecraftChatOverlay",
-                        "description":  "检测到胜利消息后，自动打开游戏聊天栏并发送 gg（模拟按键，需要游戏窗口在前台）。",
-                        "apiVersion":  1,
-                        "capabilities":  [
-                                             "读取聊天消息",
-                                             "模拟键盘输入与剪贴板（往游戏里发消息）",
-                                             "在自己目录里读写配置"
-                                         ],
-                        "downloadUrl":  "packages/goldiamond.autogg-1.1.0.zip",
-                        "sha256":  "5EF45BD36664F36F5EE785642524EE2358B1C703BE957AA0BE814B9AF10F5E9C",
-                        "size":  10522,
-                        "tags":  [
-
-                                 ]
-                    },
-                    {
-                        "id":  "goldiamond.jiuhukeys",
-                        "name":  "按键显示-酒狐版",
-                        "version":  "1.3.0",
-                        "author":  "goldiamond",
-                        "description":  "除了有点可爱似乎并没有什么实际作用的按键显示",
-                        "apiVersion":  1,
-                        "capabilities":  [
-                                             "只读地查询指定虚拟键的按下状态（默认 GetAsyncKeyState 轮询；可选低级键盘/鼠标钩子，只读按下状态位、立刻放行、不记录、不落盘）",
-                                             "显示一个置顶、透明、默认鼠标穿透的按键悬浮窗，每个按键是一枚酒狐像素头像，按下时切换表情",
-                                             "按键按下的瞬间播放用户指定的本地音频文件（wav/mp3/wma/m4a/aac），只在按下沿触发，不拦截、不修改任何按键",
-                                             "可选「OBS 直播模式」：摘掉 WS_EX_TOOLWINDOW，让悬浮窗出现在 OBS 的窗口捕获列表里；开启后窗口会出现在任务栏和 Alt+Tab",
-                                             "在自己目录里读写配置"
-                                         ],
-                        "downloadUrl":  "packages/goldiamond.jiuhukeys-1.3.0.zip",
-                        "sha256":  "CA59A6365F3C25E929F516DCE29C8E3B9C8DEC99485896BE86E87446E8287AC3",
-                        "size":  48379,
-                        "tags":  [
-
-                                 ]
-                    },
-                    {
-                        "id":  "goldiamond.keydisplay",
-                        "name":  "按键显示",
-                        "version":  "1.3.2",
-                        "author":  "goldiamond",
-                        "description":  "把指定按键的按下状态做成悬浮窗（PVP 键位显示）。只读不改：不拦按键、不记录、不落盘。默认轮询；读绝区零、原神这类走 Raw Input 的游戏可切低级键盘钩子（只观察不吞键，需管理员权限）。格子位置大小在配置页拖拽摆放，颜色、阴影、圆角、彩色循环都能自定义。另有「OBS 直播模式」。",
-                        "apiVersion":  1,
-                        "capabilities":  [
-                                             "只读地查询指定虚拟键的按下状态",
-                                             "轮询模式：GetAsyncKeyState 轮询，不安装任何键盘钩子，对系统输入链路零介入",
-                                             "钩子模式（可选，需管理员权限）：安装 WH_KEYBOARD_LL 低级键盘钩子，回调只读取按下/松开状态并立即 CallNextHookEx 放行，不吞键、不拦截",
-                                             "显示一个置顶、透明、默认鼠标穿透的键位悬浮窗",
-                                             "在自己目录里读写配置",
-                                             "OBS 直播模式（可选开关）：摘掉 WS_EX_TOOLWINDOW，让悬浮窗出现在 OBS 窗口捕获列表里；开启后窗口会出现在任务栏和 Alt+Tab"
-                                         ],
-                        "downloadUrl":  "packages/goldiamond.keydisplay-1.3.2.zip",
-                        "sha256":  "8520E483AFA737C878C38799B25660FF681A98F55146703A56BF18BB2A88E2C2",
-                        "size":  61802,
-                        "tags":  [
-
-                                 ]
-                    },
-                    {
-                        "id":  "goldiamond.neteaselyrics",
-                        "name":  "网易云歌词",
-                        "version":  "1.2.1",
-                        "author":  "goldiamond",
-                        "description":  "在屏幕任意位置显示网易云正在播放的歌词（当前行 + 下一行 + 翻译），支持逐字染色。不注入、不改网易云，只读中继插件写出的进度文件。另有「OBS 直播模式」。",
-                        "apiVersion":  1,
-                        "capabilities":  [
-                                             "读取网易云客户端的窗口标题（识别当前歌曲）",
-                                             "读取中继插件写出的播放进度文件",
-                                             "访问网易云公开的歌词接口",
-                                             "在自己目录里读写配置与歌词缓存",
-                                             "显示一个置顶歌词窗",
-                                             "OBS 直播模式（可选开关）：摘掉 WS_EX_TOOLWINDOW，让歌词窗出现在 OBS 窗口捕获列表里；开启后窗口会出现在任务栏和 Alt+Tab"
-                                         ],
-                        "downloadUrl":  "packages/goldiamond.neteaselyrics-1.2.1.zip",
-                        "sha256":  "3A648EA8A8C92D6662584D59EF9EE9A0E9141BD2E017CCF8463B01B62F468E20",
-                        "size":  52672,
-                        "tags":  [
-
-                                 ]
-                    },
-                    {
-                        "id":  "goldiamond.playerquery",
-                        "name":  "玩家查询",
-                        "version":  "1.0.0",
-                        "author":  "MinecraftChatOverlay",
-                        "description":  "输入布吉岛 API KEY，查询起床战争 / 空岛战争战绩。显示哪些字段可以自己挑，也能拖着排序。",
-                        "apiVersion":  1,
-                        "capabilities":  [
-                                             "联网访问布吉岛接口（api.mcbjd.net）查询玩家战绩",
-                                             "在自己目录里读写配置"
-                                         ],
-                        "downloadUrl":  "packages/goldiamond.playerquery-1.0.0.zip",
-                        "sha256":  "8C548ABB34518D317ECA46CA88228323AB26A204F0BC7493A32ECEE561AD473E",
-                        "size":  29272,
-                        "tags":  [
-
-                                 ]
-                    },
-                    {
-                        "id":  "goldiamond.processfps",
-                        "name":  "游戏 FPS",
-                        "version":  "1.0.1",
-                        "author":  "goldiamond",
-                        "description":  "把目标进程的实时帧率显示成一个可自定义的悬浮窗：前缀后缀、字体字号、文字颜色、阴影、背景、圆角、位置都能改。帧率来自软件「游戏动态模糊」注入的那个钩子写进共享内存的实测值（和帧混合开关无关），所以目标进程需要先注入过一次。",
-                        "apiVersion":  1,
-                        "capabilities":  [
-                                             "列出本机上带窗口的进程（用来选目标）",
-                                             "读取本软件动态模糊钩子写出的共享内存（帧率、画面尺寸、出帧计数）",
-                                             "在自己目录里读写配置",
-                                             "显示一个置顶的帧率悬浮窗"
-                                         ],
-                        "downloadUrl":  "packages/goldiamond.processfps-1.0.1.zip",
-                        "sha256":  "28F85E8FDDCEB710BA864467271D7F18A59BEF55059C4C950FF812C32535BCE0",
-                        "size":  25826,
-                        "tags":  [
-
-                                 ]
-                    },
-                    {
-                        "id":  "goldiamond.regionmagnifier",
-                        "name":  "区域放大",
-                        "version":  "1.0.0",
-                        "author":  "MinecraftChatOverlay",
-                        "description":  "框选游戏画面的一块（比如物品栏最后一格），放大后钉在屏幕某个位置。第一个从内置功能改成插件的例子。",
-                        "apiVersion":  1,
-                        "capabilities":  [
-                                             "读取当前窗口列表",
-                                             "抓取屏幕画面",
-                                             "自己开一个置顶小窗",
-                                             "在自己目录里读写配置"
-                                         ],
-                        "downloadUrl":  "packages/goldiamond.regionmagnifier-1.0.0.zip",
-                        "sha256":  "17C839E6142D6D2E725D912A0733E33CDA5000AD10B1D9FC1A3130B3926236E3",
-                        "size":  20390,
-                        "tags":  [
-
-                                 ]
-                    },
-                    {
-                        "id":  "goldiamond.sample",
-                        "name":  "示例插件",
-                        "version":  "1.0.0",
-                        "author":  "MinecraftChatOverlay",
-                        "description":  "演示插件平台：加一个自己的导航页、收聊天消息、往悬浮窗发消息、存自己的配置。",
-                        "apiVersion":  1,
-                        "capabilities":  [
-                                             "读取聊天消息",
-                                             "往悬浮窗发消息",
-                                             "在自己目录里读写配置"
-                                         ],
-                        "downloadUrl":  "packages/goldiamond.sample-1.0.0.zip",
-                        "sha256":  "FC821F3D4F2744161D7A87F485DA5B4403BC78AA0A15E0ADCFA05B8C20E406DF",
-                        "size":  4729,
-                        "tags":  [
-
-                                 ]
-                    },
-                    {
-                        "id":  "goldiamond.windowfullscreen",
-                        "name":  "窗口全屏",
-                        "version":  "1.0.0",
-                        "author":  "MinecraftChatOverlay",
-                        "description":  "把游戏窗口改成无边框全屏，这样聊天悬浮窗才能盖在游戏画面上。只改窗口样式和位置，不注入进程、不碰游戏画面。",
-                        "apiVersion":  1,
-                        "capabilities":  [
-                                             "枚举系统里带窗口的进程",
-                                             "修改目标窗口的边框、位置和置顶状态（可还原）",
-                                             "在自己目录里读写配置"
-                                         ],
-                        "downloadUrl":  "packages/goldiamond.windowfullscreen-1.0.0.zip",
-                        "sha256":  "7C46B64EF56F78371CAB359C2AD53BDCA3F39821CA2E161470FD26D3BF9380D8",
-                        "size":  14040,
-                        "tags":  [
-
-                                 ]
-                    }
-                ]
+  "schemaVersion": 1,
+  "updatedAt": "2026-10-18T01:25:55+08:00",
+  "plugins": [
+    {
+      "id": "goldiamond.autogg",
+      "name": "自动 GG",
+      "version": "1.1.0",
+      "author": "MinecraftChatOverlay",
+      "description": "检测到胜利消息后，自动打开游戏聊天栏并发送 gg（模拟按键，需要游戏窗口在前台）。",
+      "apiVersion": 1,
+      "capabilities": [
+        "读取聊天消息",
+        "模拟键盘输入与剪贴板（往游戏里发消息）",
+        "在自己目录里读写配置"
+      ],
+      "downloadUrl": "packages/goldiamond.autogg-1.1.0.zip",
+      "sha256": "5EF45BD36664F36F5EE785642524EE2358B1C703BE957AA0BE814B9AF10F5E9C",
+      "size": 10522,
+      "tags": []
+    },
+    {
+      "id": "goldiamond.jiuhukeys",
+      "name": "按键显示-酒狐版",
+      "version": "1.3.0",
+      "author": "goldiamond",
+      "description": "除了有点可爱似乎并没有什么实际作用的按键显示",
+      "apiVersion": 1,
+      "capabilities": [
+        "只读地查询指定虚拟键的按下状态（默认 GetAsyncKeyState 轮询；可选低级键盘/鼠标钩子，只读按下状态位、立刻放行、不记录、不落盘）",
+        "显示一个置顶、透明、默认鼠标穿透的按键悬浮窗，每个按键是一枚酒狐像素头像，按下时切换表情",
+        "按键按下的瞬间播放用户指定的本地音频文件（wav/mp3/wma/m4a/aac），只在按下沿触发，不拦截、不修改任何按键",
+        "可选「OBS 直播模式」：摘掉 WS_EX_TOOLWINDOW，让悬浮窗出现在 OBS 的窗口捕获列表里；开启后窗口会出现在任务栏和 Alt+Tab",
+        "在自己目录里读写配置"
+      ],
+      "downloadUrl": "packages/goldiamond.jiuhukeys-1.3.0.zip",
+      "sha256": "CA59A6365F3C25E929F516DCE29C8E3B9C8DEC99485896BE86E87446E8287AC3",
+      "size": 48379,
+      "tags": []
+    },
+    {
+      "id": "goldiamond.keydisplay",
+      "name": "按键显示",
+      "version": "1.3.2",
+      "author": "goldiamond",
+      "description": "把指定按键的按下状态做成悬浮窗（PVP 键位显示）。只读不改：不拦按键、不记录、不落盘。默认轮询；读绝区零、原神这类走 Raw Input 的游戏可切低级键盘钩子（只观察不吞键，需管理员权限）。格子位置大小在配置页拖拽摆放，颜色、阴影、圆角、彩色循环都能自定义。另有「OBS 直播模式」。",
+      "apiVersion": 1,
+      "capabilities": [
+        "只读地查询指定虚拟键的按下状态",
+        "轮询模式：GetAsyncKeyState 轮询，不安装任何键盘钩子，对系统输入链路零介入",
+        "钩子模式（可选，需管理员权限）：安装 WH_KEYBOARD_LL 低级键盘钩子，回调只读取按下/松开状态并立即 CallNextHookEx 放行，不吞键、不拦截",
+        "显示一个置顶、透明、默认鼠标穿透的键位悬浮窗",
+        "在自己目录里读写配置",
+        "OBS 直播模式（可选开关）：摘掉 WS_EX_TOOLWINDOW，让悬浮窗出现在 OBS 窗口捕获列表里；开启后窗口会出现在任务栏和 Alt+Tab"
+      ],
+      "downloadUrl": "packages/goldiamond.keydisplay-1.3.2.zip",
+      "sha256": "8520E483AFA737C878C38799B25660FF681A98F55146703A56BF18BB2A88E2C2",
+      "size": 61802,
+      "tags": []
+    },
+    {
+      "id": "goldiamond.neteaselyrics",
+      "name": "网易云歌词",
+      "version": "1.2.1",
+      "author": "goldiamond",
+      "description": "在屏幕任意位置显示网易云正在播放的歌词（当前行 + 下一行 + 翻译），支持逐字染色。不注入、不改网易云，只读中继插件写出的进度文件。另有「OBS 直播模式」。",
+      "apiVersion": 1,
+      "capabilities": [
+        "读取网易云客户端的窗口标题（识别当前歌曲）",
+        "读取中继插件写出的播放进度文件",
+        "访问网易云公开的歌词接口",
+        "在自己目录里读写配置与歌词缓存",
+        "显示一个置顶歌词窗",
+        "OBS 直播模式（可选开关）：摘掉 WS_EX_TOOLWINDOW，让歌词窗出现在 OBS 窗口捕获列表里；开启后窗口会出现在任务栏和 Alt+Tab"
+      ],
+      "downloadUrl": "packages/goldiamond.neteaselyrics-1.2.1.zip",
+      "sha256": "3A648EA8A8C92D6662584D59EF9EE9A0E9141BD2E017CCF8463B01B62F468E20",
+      "size": 52672,
+      "tags": []
+    },
+    {
+      "id": "goldiamond.playerquery",
+      "name": "玩家查询",
+      "version": "1.0.0",
+      "author": "MinecraftChatOverlay",
+      "description": "输入布吉岛 API KEY，查询起床战争 / 空岛战争战绩。显示哪些字段可以自己挑，也能拖着排序。",
+      "apiVersion": 1,
+      "capabilities": [
+        "联网访问布吉岛接口（api.mcbjd.net）查询玩家战绩",
+        "在自己目录里读写配置"
+      ],
+      "downloadUrl": "packages/goldiamond.playerquery-1.0.0.zip",
+      "sha256": "8C548ABB34518D317ECA46CA88228323AB26A204F0BC7493A32ECEE561AD473E",
+      "size": 29272,
+      "tags": []
+    },
+    {
+      "id": "goldiamond.processfps",
+      "name": "游戏 FPS",
+      "version": "1.0.1",
+      "author": "goldiamond",
+      "description": "把目标进程的实时帧率显示成一个可自定义的悬浮窗：前缀后缀、字体字号、文字颜色、阴影、背景、圆角、位置都能改。帧率来自软件「游戏动态模糊」注入的那个钩子写进共享内存的实测值（和帧混合开关无关），所以目标进程需要先注入过一次。",
+      "apiVersion": 1,
+      "capabilities": [
+        "列出本机上带窗口的进程（用来选目标）",
+        "读取本软件动态模糊钩子写出的共享内存（帧率、画面尺寸、出帧计数）",
+        "在自己目录里读写配置",
+        "显示一个置顶的帧率悬浮窗"
+      ],
+      "downloadUrl": "packages/goldiamond.processfps-1.0.1.zip",
+      "sha256": "28F85E8FDDCEB710BA864467271D7F18A59BEF55059C4C950FF812C32535BCE0",
+      "size": 25826,
+      "tags": []
+    },
+    {
+      "id": "goldiamond.regionmagnifier",
+      "name": "区域放大",
+      "version": "1.0.0",
+      "author": "MinecraftChatOverlay",
+      "description": "框选游戏画面的一块（比如物品栏最后一格），放大后钉在屏幕某个位置。第一个从内置功能改成插件的例子。",
+      "apiVersion": 1,
+      "capabilities": [
+        "读取当前窗口列表",
+        "抓取屏幕画面",
+        "自己开一个置顶小窗",
+        "在自己目录里读写配置"
+      ],
+      "downloadUrl": "packages/goldiamond.regionmagnifier-1.0.0.zip",
+      "sha256": "17C839E6142D6D2E725D912A0733E33CDA5000AD10B1D9FC1A3130B3926236E3",
+      "size": 20390,
+      "tags": []
+    },
+    {
+      "id": "goldiamond.sample",
+      "name": "示例插件",
+      "version": "1.0.0",
+      "author": "MinecraftChatOverlay",
+      "description": "演示插件平台：加一个自己的导航页、收聊天消息、往悬浮窗发消息、存自己的配置。",
+      "apiVersion": 1,
+      "capabilities": [
+        "读取聊天消息",
+        "往悬浮窗发消息",
+        "在自己目录里读写配置"
+      ],
+      "downloadUrl": "packages/goldiamond.sample-1.0.0.zip",
+      "sha256": "FC821F3D4F2744161D7A87F485DA5B4403BC78AA0A15E0ADCFA05B8C20E406DF",
+      "size": 4729,
+      "tags": []
+    },
+    {
+      "id": "goldiamond.windowfullscreen",
+      "name": "窗口全屏",
+      "version": "1.0.0",
+      "author": "MinecraftChatOverlay",
+      "description": "把游戏窗口改成无边框全屏，这样聊天悬浮窗才能盖在游戏画面上。只改窗口样式和位置，不注入进程、不碰游戏画面。",
+      "apiVersion": 1,
+      "capabilities": [
+        "枚举系统里带窗口的进程",
+        "修改目标窗口的边框、位置和置顶状态（可还原）",
+        "在自己目录里读写配置"
+      ],
+      "downloadUrl": "packages/goldiamond.windowfullscreen-1.0.0.zip",
+      "sha256": "7C46B64EF56F78371CAB359C2AD53BDCA3F39821CA2E161470FD26D3BF9380D8",
+      "size": 14040,
+      "tags": []
+    },
+    {
+      "id": "nn.douyindanmaku",
+      "name": "抖音直播弹幕",
+      "version": "1.0.8",
+      "author": "nn",
+      "description": "接入抖音直播间的弹幕、礼物、点赞、入场、粉丝团与房间统计六类消息，转发到 MCO 聊天悬浮窗。支持关键词过滤与自定义输出模板。v1.0.3：内置 X-Bogus 推流签名（Jint 纯托管 JS 引擎），修复握手被服务端拒绝导致的连不上问题。v1.0.6：修复弹幕收得到却不出现在悬浮窗（跨线程更新 UI 集合被宿主吞异常），连接区移到页面最上面。v1.0.7：修复点「断开」后按钮永久卡在「连接中…」且点不动，连接/断开过程现在随时可以取消。v1.0.8：补上来源与致谢——插件页新增「来源与致谢」卡片，如实列出参考的开源实现、第三方组件与许可。",
+      "apiVersion": 1,
+      "capabilities": [
+        "通过 wss + protobuf 直连抖音直播推流，读取六类 webcast 消息",
+        "把解析后的弹幕文本发送到宿主聊天悬浮窗（通过 host.SendToOverlay）",
+        "读写自己的插件数据目录（房间号与各开关配置持久化）",
+        "内置抖音 webmssdk 签名 JS（约 500 KB），用 Jint 在进程内执行以计算 X-Bogus",
+        "【来源】协议与签名算法参考自 tiangalon/DyDanmaku、skmcj/dycast、saermart/DouyinLiveWebFetcher、zhonghangAlex/DySpider、XiaoMiku01/douyin-live-go 五个开源实现；两个签名 JS 取自 tiangalon/DyDanmaku",
+        "【第三方】Jint 4.17.0 (BSD-2-Clause)、Acornima 1.7.0 (BSD-3-Clause)，随插件一同分发",
+        "【灵感】需求来自 MinecraftChatOverlay 的 B 站直播插件；插件契约与页面样式照抄宿主 MCO（goldiamond1031/MinecraftChatOverlay）"
+      ],
+      "downloadUrl": "packages/nn.douyindanmaku-1.0.8.zip",
+      "sha256": "50EEF3792AEE90F91B7A868538FF67D6F0A3F955B2532660CB996BF8BA3AC2DE",
+      "size": 1295770,
+      "tags": []
+    }
+  ]
 }

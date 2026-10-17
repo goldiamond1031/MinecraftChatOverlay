@@ -1,0 +1,19 @@
+{
+  "id": "nn.douyindanmaku",
+  "name": "抖音直播弹幕",
+  "version": "1.0.8",
+  "author": "nn",
+  "description": "接入抖音直播间的弹幕、礼物、点赞、入场、粉丝团与房间统计六类消息，转发到 MCO 聊天悬浮窗。支持关键词过滤与自定义输出模板。v1.0.3：内置 X-Bogus 推流签名（Jint 纯托管 JS 引擎），修复握手被服务端拒绝导致的连不上问题。v1.0.6：修复弹幕收得到却不出现在悬浮窗（跨线程更新 UI 集合被宿主吞异常），连接区移到页面最上面。v1.0.7：修复点「断开」后按钮永久卡在「连接中…」且点不动，连接/断开过程现在随时可以取消。v1.0.8：补上来源与致谢——插件页新增「来源与致谢」卡片，如实列出参考的开源实现、第三方组件与许可。",
+  "apiVersion": 1,
+  "entry": "DouyinDanmaku.DouyinDanmakuPlugin",
+  "assembly": "DouyinDanmaku.dll",
+  "capabilities": [
+    "通过 wss + protobuf 直连抖音直播推流，读取六类 webcast 消息",
+    "把解析后的弹幕文本发送到宿主聊天悬浮窗（通过 host.SendToOverlay）",
+    "读写自己的插件数据目录（房间号与各开关配置持久化）",
+    "内置抖音 webmssdk 签名 JS（约 500 KB），用 Jint 在进程内执行以计算 X-Bogus",
+    "【来源】协议与签名算法参考自 tiangalon/DyDanmaku、skmcj/dycast、saermart/DouyinLiveWebFetcher、zhonghangAlex/DySpider、XiaoMiku01/douyin-live-go 五个开源实现；两个签名 JS 取自 tiangalon/DyDanmaku",
+    "【第三方】Jint 4.17.0 (BSD-2-Clause)、Acornima 1.7.0 (BSD-3-Clause)，随插件一同分发",
+    "【灵感】需求来自 MinecraftChatOverlay 的 B 站直播插件；插件契约与页面样式照抄宿主 MCO（goldiamond1031/MinecraftChatOverlay）"
+  ]
+}

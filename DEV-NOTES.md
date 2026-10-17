@@ -243,7 +243,28 @@ cd C:/MinecraftChatOverlayDSUI3/native
   `%APPDATA%\MinecraftChatOverlay\plugin-packages\`（可直接拖进「插件」页试装）。
 - **现有插件**（`Plugins\`）：`AutoGg`（goldiamond.autogg 自动 GG）、`NeteaseLyrics`（goldiamond.neteaselyrics）、
   `PlayerQuery`、`RegionMagnifier`、`WindowFullscreen`、`SamplePlugin`（最小示例）、`ProcessFps`（游戏 FPS）、
-  `KeyDisplay`（按键显示）。
+  `KeyDisplay`（按键显示）、`DouyinDanmaku`（`nn.douyindanmaku` 抖音直播弹幕）。
+  - **`DouyinDanmaku`（`nn.douyindanmaku`）** 把抖音直播间的弹幕 / 点赞 / 礼物 / 进场 / 在线人数 / 粉丝团
+    转发到聊天悬浮窗，六类消息各自的输出模板可自定义（`${变量}` 占位），支持关键词黑/白名单过滤。
+    协议层自己实现（`Protocol\DouyinClient.cs` + 手写 protobuf `Protocol\Pb.cs`），**不依赖任何外部程序**。
+    - **连接抖音必须带签名**：wss 握手要 `&signature=<X-Bogus>`，缺了会报
+      `The server returned status code 200 when status code 101 was expected`。签名算法 = `md5(base_string)` 小写 hex
+      喂给 `window._0x5c2014(...)['X-Bogus']`，`base_string` 见 `Protocol\Signature.cs`。
+    - **签名靠 Jint 4.17.0 跑官方 JS**（`Assets\runtime~client-entry.44b556b4.js` + `webmssdk.es5.js`，作嵌资源）。
+      走 WebView2 那条路**在本机沙箱下必失败**（`CreateCoreWebView2ControllerAsync` 恒 `E_UNEXPECTED`），别再试。
+      Jint 引擎冷启动约 440ms、热路径约 21ms；失败不重试（`_initFailed`）。
+    - **`Jint.dll` + `Acornima.dll` 必须随包分发**（宿主 `PluginLoadContext` 只从插件目录解析依赖），
+      所以 `DouyinDanmaku.csproj` 里必须有 `<CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>` ——
+      否则类库的 build 输出里没有这两个 dll，`pack-market-package.ps1` 收集不到附属 dll，**用户装上会崩**。
+    - **所有跨线程 UI 操作必须走 `Application.Current.Dispatcher.BeginInvoke`**：宿主
+      `OverlayWindow.xaml.cs` 的 `_messages.Add(vm)` 没有任何 `EnableCollectionSynchronization`，收流线程直接
+      `SendToOverlay` 会抛「该类型的 CollectionView 不支持从调度程序线程以外的线程对其 SourceCollection 进行的更改」，
+      而异常在 `PluginManager.cs` 的 `catch {}` 里被吞掉 → **表现为"连上了但悬浮窗没弹幕"**。
+    - 状态行（`StatusText`）要带上帧统计（`帧 N（心跳 M，Chat×12 …）`）：宿主 `EnableDebugLog=False` 时
+      `host.Log` 的输出用户根本看不到，关键诊断只能放状态行。
+    - 插件页是**自绘**的（`DouyinPageView.cs`，`ContentFactory` 返回 `StackPanel`）：宿主把「操作」卡片硬编码在
+      「设置」卡片之后，字段与按钮之间插不进东西，只有自绘才能把「连接」区放到最上面。
+      控件样式一律取宿主 `DynamicResource` 键，纯 C# 建控件（不用 XAML，规避 BAML 在可卸载 ALC 里回查资源的坑）。
   - **`ProcessFps`（`goldiamond.processfps`）** 显示目标进程的实时帧率悬浮窗。
     **它自己不做任何注入** —— 帧率数据直接读软件「游戏动态模糊」注入的那个钩子写出的共享内存
     （`GameMotionBlurControlBlock`，和帧混合开关无关），所以目标进程**必须先被动态模糊注入过一次**。
