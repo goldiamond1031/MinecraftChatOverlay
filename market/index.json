@@ -1,6 +1,6 @@
 {
     "schemaVersion":  1,
-    "updatedAt":  "2026-10-07T11:06:32+08:00",
+    "updatedAt":  "2026-10-31T09:33:03+08:00",
     "plugins":  [
                     {
                         "id":  "goldiamond.autogg",
@@ -17,6 +17,26 @@
                         "downloadUrl":  "packages/goldiamond.autogg-1.1.0.zip",
                         "sha256":  "5EF45BD36664F36F5EE785642524EE2358B1C703BE957AA0BE814B9AF10F5E9C",
                         "size":  10522,
+                        "tags":  [
+
+                                 ]
+                    },
+                    {
+                        "id":  "goldiamond.forcesprint",
+                        "name":  "强制疾跑",
+                        "version":  "1.0.0",
+                        "author":  "goldiamond",
+                        "description":  "按住前进键时自动帮你保持疾跑：只有在「你选定的游戏窗口在前台」且「鼠标被游戏锁定（光标隐藏）」时，才向系统注入疾跑键的按下/松开。注入是按住式的 —— 按下时发一次按下并保持、松开时发一次松开，不是高频连发。不拦截、不修改你自己的任何按键。",
+                        "apiVersion":  1,
+                        "capabilities":  [
+                                             "只读地查询你指定的虚拟键有没有按下（GetAsyncKeyState 轮询，不装钩子、不记录按键序列、不写文件）",
+                                             "只读地查询系统光标是否被隐藏、当前前台窗口属于哪个进程（用来判断游戏是否锁定了鼠标）",
+                                             "用 SendInput 向系统注入疾跑键的按下/松开事件（触发游戏自身的疾跑逻辑）；不吞键、不改键、不注入游戏进程内存",
+                                             "在自己目录里读写配置"
+                                         ],
+                        "downloadUrl":  "packages/goldiamond.forcesprint-1.0.0.zip",
+                        "sha256":  "01A220FE7A8E06F23133701D2EAD012F973009F77514A9AAAC1FFC1E92E6BD01",
+                        "size":  14525,
                         "tags":  [
 
                                  ]
@@ -178,6 +198,26 @@
                         "downloadUrl":  "packages/goldiamond.windowfullscreen-1.0.0.zip",
                         "sha256":  "7C46B64EF56F78371CAB359C2AD53BDCA3F39821CA2E161470FD26D3BF9380D8",
                         "size":  14040,
+                        "tags":  [
+
+                                 ]
+                    },
+                    {
+                        "id":  "goldiamond.wolfkill",
+                        "name":  "击杀狼嚎",
+                        "version":  "1.0.0",
+                        "author":  "goldiamond",
+                        "description":  "对局中每拿一个人头就嚎一声：狼头图标闪一下，音乐从头放一遍，而且越杀越快、越杀越尖。",
+                        "apiVersion":  1,
+                        "capabilities":  [
+                                             "只读地订阅宿主的聊天消息流（宿主给什么看什么），靠文本规则认出「开局」「对局结束」和「这是我的击杀」",
+                                             "显示一个置顶、全透明、鼠标穿透的狼头图标，按可调的淡入 / 停留 / 淡出时长闪一下",
+                                             "播放内嵌的固定音频（重采样实现变速 + 变调），每次击杀掐掉前一次从头放，倍速逐杀递增",
+                                             "在自己目录里读写配置"
+                                         ],
+                        "downloadUrl":  "packages/goldiamond.wolfkill-1.0.0.zip",
+                        "sha256":  "82E61A667BDC168DA08E3ECC46DFAE9FD3A1CD3CE9381595D62E26766623F18E",
+                        "size":  4769383,
                         "tags":  [
 
                                  ]
