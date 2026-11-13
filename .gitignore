@@ -15,6 +15,7 @@ desktop.ini
 
 # 本地的发布脚本，不进仓库
 push.bat
+push-data.bat
 
 # 发布产物（publish / publish_v110 … 都是本地打包输出）
 release_*.zip
