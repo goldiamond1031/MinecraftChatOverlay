@@ -1,6 +1,6 @@
 {
     "schemaVersion": 1,
-    "updatedAt": "2026-10-27T22:45:00+08:00",
+    "updatedAt": "2026-11-13T15:28:00+08:00",
     "rewards": [
         {
             "name": "墨染",
@@ -39,6 +39,11 @@
             "name": "雪染墨色",
             "amount": "¥15",
             "message": "怎么还没写上去"
+        },
+        {
+            "name": "永夜年",
+            "amount": "¥5",
+            "message": "就给，那咋了"
         }
     ],
     "pluginDevs": [

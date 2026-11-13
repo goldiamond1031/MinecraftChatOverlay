@@ -1,5 +1,10 @@
 # Minecraft 聊天栏悬浮窗
 
+> **关于本仓库的源码**：软件本体大部分已经趋于完善，后面的更新多是修一些小 bug、小问题，
+> 我懒得再往 GitHub 上推了，所以**本仓库的源码不再跟着版本更新**（别照着这里编译，多半不是最新版）。
+> 但软件本体如果真的有更新，仍然照常在 [Releases](https://github.com/goldiamond1031/MinecraftChatOverlay/releases) 里发布。
+> 插件、公告、打赏榜这些数据也还继续放在本仓库，不受影响。
+
 读 Minecraft 客户端日志，把聊天栏消息显示在透明置顶悬浮窗里。游戏里聊天栏出现什么，悬浮窗上就显示什么，不用切出游戏去看。
 
 在此之上还有这些功能：
@@ -24,6 +29,8 @@
 - .NET 8 桌面运行时
 
 ## 从源码编译
+
+> 本仓库的源码已停止更新（见顶部说明），想自己编译请以 [Releases](https://github.com/goldiamond1031/MinecraftChatOverlay/releases) 里的最新版本为准。
 
 ```bash
 dotnet build MinecraftChatOverlay.csproj
