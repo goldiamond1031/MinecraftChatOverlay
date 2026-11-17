@@ -576,7 +576,15 @@ footer{margin-top:70px;padding-top:22px;border-top:2px solid var(--border);
 
 <h3><span class="no">4.3</span>数据类型</h3>
 <div class="codeblock"><div class="bar"><span class="lang">C#</span><button class="copy">复制</button></div><pre><span class="c">/// 一条聊天消息。Raw 已按日志编码解码、已去掉时间戳和日志前缀。</span>
-<span class="k">public sealed record</span> ChatLine(<span class="k">string</span> Raw, DateTime Time);
+<span class="c">/// Spans = 分段样式（颜色/粗体…）。<b>只有"内存模式"才有</b>，日志模式下是 null，插件要能降级。</span>
+<span class="k">public sealed record</span> ChatLine(<span class="k">string</span> Raw, DateTime Time,
+    IReadOnlyList&lt;ChatSpan&gt;? Spans = <span class="k">null</span>);
+
+<span class="c">/// 一段文字 + 它在 Raw 里的起始下标 + 这一段的样式。</span>
+<span class="c">/// Color 是 0xRRGGBB（服务端渲染的最终颜色，队色就在这里），null 表示这一层没显式颜色。</span>
+<span class="c">/// 保证：所有 Text 按顺序拼起来 == Raw，所以 Raw.Substring(Start, Text.Length) 一定对得上。</span>
+<span class="k">public sealed record</span> ChatSpan(<span class="k">string</span> Text, <span class="k">int</span> Start, <span class="k">int</span>? Color,
+    <span class="k">bool</span> Bold, <span class="k">bool</span> Italic, <span class="k">bool</span> Underline, <span class="k">bool</span> Strikethrough);
 
 <span class="c">/// 一个候选游戏窗口。ToString() 直接给下拉框显示用。</span>
 <span class="k">public sealed record</span> GameWindowInfo(IntPtr Handle, <span class="k">int</span> ProcessId,
