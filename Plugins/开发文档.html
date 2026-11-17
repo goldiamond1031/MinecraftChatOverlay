@@ -653,6 +653,9 @@ PluginSettingsFile.Save(host.PluginDirectory, settings, <span class="s">"layouts
         <span class="k">new</span> PluginField { Key=<span class="s">"note"</span>, Label=<span class="s">"备注"</span>, Kind=PluginFieldKind.Text,
             Text=<span class="s">""</span> },
 
+        <span class="k">new</span> PluginField { Key=<span class="s">"bg"</span>, Label=<span class="s">"背景色"</span>, Kind=PluginFieldKind.Color,
+            Text=<span class="s">"#12101A"</span>, Hint=<span class="s">"左键选颜色，右键清除（空 = 跟随默认）"</span> },
+
         <span class="k">new</span> PluginField { Key=<span class="s">"info"</span>, Kind=PluginFieldKind.ReadOnly,
             Text=<span class="s">"当前版本 1.0.0，作者 yourname。"</span> },
     },
